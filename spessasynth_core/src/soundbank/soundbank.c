@@ -527,7 +527,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 	SS_BasicPreset *match = NULL;
 
 	const bool isXG = midi_system == 2;
-	const bool xgDrums = (bank_lsb == 127 || bank_msb == 127) && isXG;
+	const bool xgDrums = (bank_msb == 120 || bank_msb == 127) && isXG;
 
 	for(size_t i = 0; i < bank->preset_count; i++) {
 		SS_BasicPreset *p = &bank->presets[i];
@@ -558,15 +558,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 		/* No match, pick any matching drum */
 		for(size_t i = 0; i < bank->preset_count; i++) {
 			SS_BasicPreset *p = &bank->presets[i];
-			if(p->is_gm_gs_drum || (isXG && (p->bank_lsb == 127 || p->bank_msb == 127) && p->bank_msb != 126)) {
-				return p;
-			}
-		}
-
-		/* No match, pick the first drum preset, preferring GM/GS */
-		for(size_t i = 0; i < bank->preset_count; i++) {
-			SS_BasicPreset *p = &bank->presets[i];
-			if(p->is_gm_gs_drum) {
+			if(p->is_gm_gs_drum || (isXG && p->is_xg_drum)) {
 				return p;
 			}
 		}
@@ -583,15 +575,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 		/* No match, pick any matching drum */
 		for(size_t i = 0; i < bank->preset_count; i++) {
 			SS_BasicPreset *p = &bank->presets[i];
-			if(p->is_gm_gs_drum || (isXG && (p->bank_lsb == 127 || p->bank_msb == 127) && p->bank_msb != 126)) {
-				return p;
-			}
-		}
-
-		/* Pick any drums, preferring XG */
-		for(size_t i = 0; i < bank->preset_count; i++) {
-			SS_BasicPreset *p = &bank->presets[i];
-			if(p->is_xg_drum) {
+			if(p->is_gm_gs_drum || (isXG && p->is_xg_drum)) {
 				return p;
 			}
 		}
@@ -606,7 +590,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 		if(p->program == program && !p->is_gm_gs_drum && !p->is_xg_drum) {
 			size_t new_match_count = match_count + 1;
 			if(new_match_count > allocated_match_count) {
-				allocated_match_count += 8;
+				allocated_match_count += 16;
 				SS_BasicPreset **new_matches = (SS_BasicPreset **)realloc(matches, allocated_match_count * sizeof(SS_BasicPreset *));
 				if(!new_matches) {
 					free(matches);
@@ -684,7 +668,7 @@ static void soundbank_parse(SS_SoundBank *bank) {
 
 	for(size_t i = 0; i < bank->preset_count; i++) {
 		SS_BasicPreset *p = &bank->presets[i];
-		if(p->bank_msb == 127 || p->bank_lsb == 127) {
+		if(p->bank_msb == 120 || p->bank_msb == 127) {
 			bank->is_xg_bank = true;
 			if(p->program < 128 && !allowedPrograms[p->program]) {
 				// Not valid!
@@ -697,7 +681,7 @@ static void soundbank_parse(SS_SoundBank *bank) {
 	if(bank->is_xg_bank) {
 		for(size_t i = 0; i < bank->preset_count; i++) {
 			SS_BasicPreset *p = &bank->presets[i];
-			if(p->bank_lsb == 127 || p->bank_msb == 127) {
+			if(p->bank_msb == 120 || p->bank_msb == 127) {
 				p->is_xg_drum = true;
 			}
 		}
