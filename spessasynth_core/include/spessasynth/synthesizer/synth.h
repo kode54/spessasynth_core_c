@@ -119,6 +119,20 @@ typedef struct {
 	float current_value;
 } SS_ModulationEnvelope;
 
+/* ── Per-key drum parameters (XG / GS) ───────────────────────────────────── */
+
+typedef struct {
+	float pitch; /* pitch offset in cents (default 0) */
+	float gain; /* gain multiplier (default 1) */
+	uint8_t exclusive_class; /* exclusive class override (default 0 = off) */
+	uint8_t pan; /* pan 1-127 (64=center, 0=random), default 64 */
+	float reverb_gain; /* reverb send multiplier (default 0) */
+	float chorus_gain; /* chorus send multiplier (default 1) */
+	float delay_gain; /* delay send multiplier (default 1) */
+	bool rx_note_on; /* receive note on (default true) */
+	bool rx_note_off; /* receive note off, fast-kill on off (default false) */
+} SS_DrumParameters;
+
 /* ── Voice ───────────────────────────────────────────────────────────────── */
 
 typedef struct SS_Voice {
@@ -137,6 +151,7 @@ typedef struct SS_Voice {
 	float resonance_offset;
 	bool is_active;
 	bool is_in_release;
+	bool has_rendered; /* set to true after the first render call */
 
 	int velocity;
 	int midi_note;
@@ -156,6 +171,11 @@ typedef struct SS_Voice {
 	double portamento_duration;
 
 	int exclusive_class;
+
+	float pitch_offset; /* per-voice pitch offset in cents (drum params) */
+	float reverb_send; /* per-voice reverb send multiplier */
+	float chorus_send; /* per-voice chorus send multiplier */
+	float delay_send; /* per-voice delay send multiplier */
 } SS_Voice;
 
 SS_Voice *ss_voice_create(uint32_t sample_rate,
@@ -225,16 +245,23 @@ typedef struct SS_MIDIChannel {
 	bool drum_channel;
 	bool random_pan;
 	bool is_muted;
+	bool poly_mode; /* true = polyphonic (default), false = monophonic */
 
 	uint8_t bank_msb;
 	uint8_t bank_lsb;
 	uint8_t program;
 	bool is_gm_gs_drum;
+	uint8_t drum_map; /* GS drum map value (0 = none) */
+	uint8_t cc1; /* CC1 controller number (GS/XG, default 1) */
+	uint8_t cc2; /* CC2 controller number (GS/XG, default 2) */
+	int rx_channel; /* receive channel override (-1 = off), default = channel_number */
 
 	SS_BasicPreset *preset; /* non-owning */
 	bool lock_preset;
 
 	SS_ChannelVibrato channel_vibrato;
+
+	SS_DrumParameters drum_params[128]; /* per-key drum parameters */
 
 	SS_Voice **voices; /* owned */
 	size_t voice_count;
@@ -358,6 +385,9 @@ typedef struct SS_Processor {
 	float volume_envelope_smoothing_factor;
 	float filter_smoothing_factor;
 	float pan_smoothing_factor;
+
+	bool delay_active; /* whether the delay effect has been activated via sysex */
+	bool custom_channel_numbers; /* whether any channel uses a non-default rx_channel */
 
 	SS_EventCallback event_callback;
 	void *event_userdata;

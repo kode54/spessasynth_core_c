@@ -88,6 +88,11 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
 	v->current_tuning_calculated = 1.0;
 	v->portamento_from_key = -1;
 	v->gain = 1.0f;
+	v->pitch_offset = 0.0f;
+	v->reverb_send = 1.0f;
+	v->chorus_send = 1.0f;
+	v->delay_send = 1.0f;
+	v->has_rendered = false;
 
 	if(v->sample.loop_end < v->sample.loop_start) {
 		const size_t temp = v->sample.loop_start;
@@ -348,12 +353,12 @@ bool ss_voice_render(SS_Voice *v,
 			v->sample.is_looping = false;
 	}
 
-	/* v->has_rendered = true; */
+	v->has_rendered = true;
 	if(!v->is_active) return v->is_active;
 
 	/* ── TUNING ────────────────────────────────────────────────────────── */
 	int target_key = v->target_key;
-	float cents = (float)v->modulated_generators[SS_GEN_FINE_TUNE] + (float)ch->channel_octave_tuning[v->midi_note] + (float)ch->channel_tuning_cents;
+	float cents = (float)v->modulated_generators[SS_GEN_FINE_TUNE] + (float)ch->channel_octave_tuning[v->midi_note] + (float)ch->channel_tuning_cents + v->pitch_offset;
 	float semitones = (float)v->modulated_generators[SS_GEN_COARSE_TUNE];
 
 	/* Portamento */
@@ -477,8 +482,8 @@ bool ss_voice_render(SS_Voice *v,
 	float pan_right = sinf((pan_val + 1.0f) * (float)M_PI * 0.25f);
 
 	float gain = v->gain;
-	float reverb_amt = (float)v->modulated_generators[SS_GEN_REVERB_EFFECTS_SEND] / 1000.0f;
-	float chorus_amt = (float)v->modulated_generators[SS_GEN_CHORUS_EFFECTS_SEND] / 1000.0f;
+	float reverb_amt = (float)v->modulated_generators[SS_GEN_REVERB_EFFECTS_SEND] / 1000.0f * v->reverb_send;
+	float chorus_amt = (float)v->modulated_generators[SS_GEN_CHORUS_EFFECTS_SEND] / 1000.0f * v->chorus_send;
 
 	for(int i = 0; i < sample_count; i++) {
 		float s = buf[i] * gain;

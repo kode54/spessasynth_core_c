@@ -47,8 +47,8 @@ extern bool ss_sample_decode(SS_BasicSample *s);
 extern int16_t ss_generator_add_and_clamp(SS_GeneratorType t, int16_t p, int16_t i);
 
 static void ss_channel_update_tuning(SS_MIDIChannel *ch);
-static void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
-static void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
+void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
+void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
 static void ss_channel_set_modulation_depth(SS_MIDIChannel *ch, float cents);
 #if 0
 static float ss_portamento_time_to_seconds(float portamento_time, float distance);
@@ -230,6 +230,23 @@ SS_MIDIChannel *ss_channel_new(int channel_number, struct SS_Processor *synth) {
 	ch->channel_number = channel_number;
 	ch->synth = synth;
 	ch->drum_channel = (channel_number % 16 == 9);
+	ch->poly_mode = true;
+	ch->rx_channel = channel_number;
+	ch->drum_map = 0;
+	ch->cc1 = 1;
+	ch->cc2 = 2;
+	/* Initialize drum params to defaults */
+	for(int k = 0; k < 128; k++) {
+		ch->drum_params[k].pitch = 0.0f;
+		ch->drum_params[k].gain = 1.0f;
+		ch->drum_params[k].exclusive_class = 0;
+		ch->drum_params[k].pan = 64;
+		ch->drum_params[k].reverb_gain = 0.0f;
+		ch->drum_params[k].chorus_gain = 1.0f;
+		ch->drum_params[k].delay_gain = 1.0f;
+		ch->drum_params[k].rx_note_on = true;
+		ch->drum_params[k].rx_note_off = false;
+	}
 	reset_controllers_to_defaults(ch);
 	return ch;
 }
@@ -302,6 +319,46 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 
 	if(real_key > 127 || real_key < 0) {
 		return;
+	}
+
+	/* Drum parameter checks */
+	float drum_pitch_offset = 0.0f;
+	float drum_reverb_send = 1.0f;
+	float drum_chorus_send = 1.0f;
+	float drum_delay_send = 1.0f;
+	float drum_gain = 1.0f;
+	int drum_exclusive_override = 0;
+	float drum_pan_override = 0.0f; /* 0 = not overridden */
+
+	if(ch->drum_channel) {
+		const SS_DrumParameters *dp = &ch->drum_params[internal_midi_note];
+		if(!dp->rx_note_on) return;
+
+		drum_pitch_offset = dp->pitch;
+		drum_exclusive_override = (int)dp->exclusive_class;
+		drum_reverb_send = dp->reverb_gain;
+		drum_chorus_send = dp->chorus_gain;
+		drum_delay_send = dp->delay_gain;
+		drum_gain = dp->gain;
+
+		/* Drum pan override: 0=random, 64=channel default, else override */
+		if(dp->pan != 64) {
+			if(dp->pan == 0) {
+				/* Random pan [-500, 500] */
+				drum_pan_override = (float)(rand() % 1001) - 500.0f;
+				if(drum_pan_override == 0.0f) drum_pan_override = 1.0f;
+			} else {
+				float ch_pan = (float)(ch->midi_controllers[SS_MIDCON_PAN] >> 7) - 64.0f;
+				float target = (float)dp->pan - 64.0f + ch_pan;
+				if(target < -63.0f) target = -63.0f;
+				if(target > 63.0f) target = 63.0f;
+				if(target == 0.0f) target = 1.0f;
+				drum_pan_override = (target / 63.0f) * 500.0f;
+			}
+		}
+	} else if(ch->random_pan) {
+		drum_pan_override = (float)(rand() % 1001) - 500.0f;
+		if(drum_pan_override == 0.0f) drum_pan_override = 1.0f;
 	}
 
 	const int program = ch->preset->program;
@@ -404,9 +461,9 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		                                  sd->modulators, sd->mod_count);
 		if(!voice) continue;
 
-		/* Portamento */
-		/* Not implemented correctly */
-		#if 0
+/* Portamento */
+/* Not implemented correctly */
+#if 0
 		int portamento_from_key = -1;
 		float portamento_duration = 0;
 		// Note: the 14-bit value needs to go down to 7-bit
@@ -430,7 +487,18 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 			ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, target_key, time);
 		}
 		voice->portamento_duration = portamento_duration;
-		#endif
+#endif
+
+		/* Apply drum / random-pan parameters */
+		voice->pitch_offset = drum_pitch_offset;
+		voice->reverb_send = drum_reverb_send;
+		voice->chorus_send = drum_chorus_send;
+		voice->delay_send = drum_delay_send;
+		voice->gain *= drum_gain;
+		if(drum_pan_override != 0.0f)
+			voice->override_pan = drum_pan_override;
+		if(drum_exclusive_override != 0)
+			voice->exclusive_class = drum_exclusive_override;
 
 		/* Compute initial modulators */
 		ss_voice_compute_modulators_internal(voice, ch, def_mods, def_mod_count, time);
@@ -456,6 +524,22 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 /* ── Note off ────────────────────────────────────────────────────────────── */
 
 void ss_channel_note_off(SS_MIDIChannel *ch, int note, double time) {
+	const int real_key = note +
+	                     ch->channel_transpose_key_shift +
+	                     (int)ch->custom_controllers[SS_CUSTOM_CTRL_KEY_SHIFT];
+
+	/* Drum rx_note_off: if enabled, do a fast exclusive release */
+	if(ch->drum_channel && real_key >= 0 && real_key < 128) {
+		if(ch->drum_params[real_key].rx_note_off) {
+			for(size_t i = 0; i < ch->voice_count; i++) {
+				SS_Voice *v = ch->voices[i];
+				if(v->is_active && !v->is_in_release && v->midi_note == note)
+					ss_voice_exclusive_release(v, time);
+			}
+			return;
+		}
+	}
+
 	bool sustained = ch->midi_controllers[64] >= 64; /* CC64 sustain pedal */
 	for(size_t i = 0; i < ch->voice_count; i++) {
 		SS_Voice *v = ch->voices[i];
@@ -1212,12 +1296,12 @@ static void ss_channel_update_tuning(SS_MIDIChannel *ch) {
 	100; /* RPN channel coarse tuning */
 }
 
-static void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val) {
+void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val) {
 	ch->custom_controllers[type] = val;
 	ss_channel_update_tuning(ch);
 }
 
-static void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents) {
+void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents) {
 	cents = round(cents);
 	ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_TUNING, cents);
 }
