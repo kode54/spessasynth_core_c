@@ -1,0 +1,1292 @@
+/**
+ * midi_channel.c
+ * Per-MIDI-channel state and note management.
+ * Port of midi_channel.ts.
+ */
+
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
+#if __has_include(<spessasynth_core/spessasynth.h>)
+#include <spessasynth_core/midi_enums.h>
+#include <spessasynth_core/synth.h>
+#else
+#include "spessasynth/midi/midi_enums.h"
+#include "spessasynth/synthesizer/synth.h"
+#endif
+
+extern SS_Voice *ss_voice_create(uint32_t sr,
+                                 const SS_AudioSample *audio_sample,
+                                 int midi_note, int velocity,
+                                 double current_time, int target_key, int real_key,
+                                 const int16_t *generators,
+                                 const SS_Modulator *modulators, size_t mod_count);
+extern SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int real_key);
+extern void ss_voice_free(SS_Voice *v);
+extern void ss_voice_release(SS_Voice *v, double current_time, double min_note_length);
+extern void ss_voice_exclusive_release(SS_Voice *v, double current_time);
+extern void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch, double time);
+extern void ss_voice_compute_modulators_internal(SS_Voice *v, const SS_MIDIChannel *ch,
+                                                 const SS_Modulator *default_mods,
+                                                 size_t default_mod_count,
+                                                 double time);
+extern bool ss_voice_render(SS_Voice *v, const SS_MIDIChannel *ch,
+                            double time_now,
+                            float *ol, float *or_,
+                            float *rl, float *rr,
+                            float *cl, float *cr,
+                            int sample_count,
+                            SS_InterpolationType interp,
+                            float vol_smoothing, float filter_smoothing, float pan_smoothing);
+extern float ss_abs_cents_to_hz(int cents);
+extern size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
+                                           int midi_note, int velocity,
+                                           SS_SynthesisData **out);
+extern void ss_synthesis_data_free_array(SS_SynthesisData *data, size_t count);
+extern bool ss_sample_decode(SS_BasicSample *s);
+extern int16_t ss_generator_add_and_clamp(SS_GeneratorType t, int16_t p, int16_t i);
+
+static void ss_channel_update_tuning(SS_MIDIChannel *ch);
+static void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
+static void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
+static void ss_channel_set_modulation_depth(SS_MIDIChannel *ch, float cents);
+#if 0
+static float ss_portamento_time_to_seconds(float portamento_time, float distance);
+#endif
+
+#define VOICE_GROW_BY 16
+
+static void reset_generator_overrides(SS_MIDIChannel *ch) {
+	for(int i = 0; i < SS_GEN_COUNT; i++)
+		ch->generator_overrides[i] = GENERATOR_OVERRIDE_NO_CHANGE_VALUE;
+	ch->generator_overrides_enabled = false;
+}
+
+static void reset_generator_offsets(SS_MIDIChannel *ch) {
+	for(int i = 0; i < SS_GEN_COUNT; i++)
+		ch->generator_offsets[i] = 0;
+	ch->generator_offsets_enabled = false;
+}
+
+static void reset_parameters_to_defaults(SS_MIDIChannel *ch) {
+	ch->data_entry_state = SS_DATAENTRY_IDLE;
+	ch->midi_controllers[SS_MIDCON_NRPN_LSB] = 127 << 7;
+	ch->midi_controllers[SS_MIDCON_NRPN_MSB] = 127 << 7;
+	ch->midi_controllers[SS_MIDCON_RPN_LSB] = 127 << 7;
+	ch->midi_controllers[SS_MIDCON_RPN_MSB] = 127 << 7;
+	reset_generator_overrides(ch);
+	reset_generator_offsets(ch);
+}
+
+static bool non_resettable_controllers[128] = {
+	[SS_MIDCON_BANK_SELECT] = true,
+	[SS_MIDCON_BANK_SELECT_LSB] = true,
+	[SS_MIDCON_MAIN_VOLUME] = true,
+	[SS_MIDCON_MAIN_VOLUME_LSB] = true,
+	[SS_MIDCON_PAN] = true,
+	[SS_MIDCON_PAN_LSB] = true,
+	[SS_MIDCON_REVERB_DEPTH] = true,
+	[SS_MIDCON_TREMOLO_DEPTH] = true,
+	[SS_MIDCON_CHORUS_DEPTH] = true,
+	[SS_MIDCON_DETUNE_DEPTH] = true,
+	[SS_MIDCON_PHASER_DEPTH] = true,
+	[SS_MIDCON_SOUND_VARIATION] = true,
+	[SS_MIDCON_FILTER_RESONANCE] = true,
+	[SS_MIDCON_RELEASE_TIME] = true,
+	[SS_MIDCON_ATTACK_TIME] = true,
+	[SS_MIDCON_BRIGHTNESS] = true,
+	[SS_MIDCON_DECAY_TIME] = true,
+	[SS_MIDCON_VIBRATO_RATE] = true,
+	[SS_MIDCON_VIBRATO_DEPTH] = true,
+	[SS_MIDCON_VIBRATO_DELAY] = true,
+	[SS_MIDCON_SOUND_CONTROLLER_10] = true
+};
+
+/* Values come from Falcosoft MidiPlayer 6 */
+static const int16_t default_controller_values[128] = {
+	[SS_MIDCON_MAIN_VOLUME] = 100 << 7,
+	[SS_MIDCON_BALANCE] = 64 << 7,
+	[SS_MIDCON_EXPRESSION] = 127 << 7,
+	[SS_MIDCON_PAN] = 64 << 7,
+
+	[SS_MIDCON_PORTAMENTO_ON_OFF] = 127 << 7,
+
+	[SS_MIDCON_FILTER_RESONANCE] = 64 << 7,
+	[SS_MIDCON_RELEASE_TIME] = 64 << 7,
+	[SS_MIDCON_ATTACK_TIME] = 64 << 7,
+	[SS_MIDCON_BRIGHTNESS] = 64 << 7,
+
+	[SS_MIDCON_DECAY_TIME] = 64 << 7,
+	[SS_MIDCON_VIBRATO_RATE] = 64 << 7,
+	[SS_MIDCON_VIBRATO_DEPTH] = 64 << 7,
+	[SS_MIDCON_VIBRATO_DELAY] = 64 << 7,
+	[SS_MIDCON_GENERAL_PURPOSE_CONTROLLER_6] = 64 << 7,
+	[SS_MIDCON_GENERAL_PURPOSE_CONTROLLER_8] = 64 << 7,
+
+	[SS_MIDCON_RPN_LSB] = 127 << 7,
+	[SS_MIDCON_RPN_MSB] = 127 << 7,
+	[SS_MIDCON_NRPN_LSB] = 127 << 7,
+	[SS_MIDCON_NRPN_MSB] = 127 << 7
+};
+
+enum { PORTAMENTO_CONTROL_UNSET = 1 };
+
+static const float custom_reset_array[SS_CUSTOM_CTRL_COUNT] = {
+	[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] = 1
+};
+
+/**
+ * https://amei.or.jp/midistandardcommittee/Recommended_Practice/e/rp15.pdf
+ * Reset controllers according to RP-15 Recommended Practice.
+ */
+static void reset_controllers_rp15_compliant(SS_MIDIChannel *ch, double time) {
+	memset(ch->channel_octave_tuning, 0, sizeof(ch->channel_octave_tuning));
+
+	ss_channel_pitch_wheel(ch, 8192, time);
+
+	ch->channel_vibrato.rate = 0.0;
+	ch->channel_vibrato.depth = 0.0;
+	ch->channel_vibrato.delay = 0.0;
+
+	for(int i = 0; i < 128; i++) {
+		const int16_t reset_value = default_controller_values[i];
+		if(
+		!non_resettable_controllers[i] &&
+		reset_value != ch->midi_controllers[i]) {
+			if(i == SS_MIDCON_PORTAMENTO_CONTROL) {
+				ch->midi_controllers[i] = PORTAMENTO_CONTROL_UNSET;
+			} else {
+				ss_channel_controller(ch, i, reset_value >> 7, time);
+			}
+		}
+	}
+
+	reset_generator_overrides(ch);
+	reset_generator_offsets(ch);
+}
+
+/* Default controller values per SF2 spec */
+static void reset_controllers_to_defaults(SS_MIDIChannel *ch) {
+	memset(ch->midi_controllers, 0, sizeof(ch->midi_controllers));
+	/* Volume: CC7 default 100 */
+	ch->midi_controllers[SS_MIDCON_MAIN_VOLUME] = 100 << 7;
+	/* Balance: CC8 default 64 (center) */
+	ch->midi_controllers[SS_MIDCON_BALANCE] = 64 << 7;
+	/* Expression: CC11 default 127 */
+	ch->midi_controllers[SS_MIDCON_EXPRESSION] = 127 << 7;
+	/* Pan: CC10 default 64 (center) */
+	ch->midi_controllers[SS_MIDCON_PAN] = 64 << 7;
+	/* Pitch wheel: stored as 14-bit value */
+	ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL] = 8192; /* pitch wheel */
+	ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = 2 * 128; /* pitch wheel range */
+	/* Portamention on/off: CC65 on */
+	ch->midi_controllers[SS_MIDCON_PORTAMENTO_ON_OFF] = 127 << 7;
+
+	/* Filter resonance: CC71 (neutral) */
+	ch->midi_controllers[SS_MIDCON_FILTER_RESONANCE] = 64 << 7;
+	/* Release time: CC72 (neutral) */
+	ch->midi_controllers[SS_MIDCON_RELEASE_TIME] = 64 << 7;
+	/* Attack time: CC73 (neutral) */
+	ch->midi_controllers[SS_MIDCON_ATTACK_TIME] = 64 << 7;
+	/* brightness: CC74 (neutral) */
+	ch->midi_controllers[SS_MIDCON_BRIGHTNESS] = 64 << 7;
+
+	/* Decay time: CC75 (neutral) */
+	ch->midi_controllers[SS_MIDCON_DECAY_TIME] = 64 << 7;
+	/* Vibrato rate: CC76 (neutral) */
+	ch->midi_controllers[SS_MIDCON_VIBRATO_RATE] = 64 << 7;
+	/* Vibrato depth: CC77 (neutral) */
+	ch->midi_controllers[SS_MIDCON_VIBRATO_DEPTH] = 64 << 7;
+	/* Vibrato delay: CC78 (neutral) */
+	ch->midi_controllers[SS_MIDCON_VIBRATO_DELAY] = 64 << 7;
+	/* General purpose controller 6: CC81 (center) */
+	ch->midi_controllers[SS_MIDCON_GENERAL_PURPOSE_CONTROLLER_6] = 64 << 7;
+	/* General purpose controller 8: CC83 (center) */
+	ch->midi_controllers[SS_MIDCON_GENERAL_PURPOSE_CONTROLLER_8] = 64 << 7;
+
+	/* Sustain: CC64 off */
+	/*ch->midi_controllers[SS_MIDCON_SUSTAIN_PEDAL] = 0;*/ /* Implied reset by above memset */
+
+	/* Reset custom controllers
+	 * Special case: transpose does not get affected
+	 */
+	const float transpose =
+	ch->custom_controllers[SS_CUSTOM_CTRL_TRANSPOSE_FINE];
+	memcpy(&ch->custom_controllers, &custom_reset_array, sizeof(ch->custom_controllers));
+	ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_TRANSPOSE_FINE, transpose);
+
+	memset(ch->channel_octave_tuning, 0, sizeof(ch->channel_octave_tuning));
+	ch->channel_tuning_cents = 0;
+	ch->channel_vibrato.delay = 0.0f;
+	ch->channel_vibrato.depth = 0.0f;
+	ch->channel_vibrato.rate = 0.0f;
+
+	reset_parameters_to_defaults(ch);
+}
+
+SS_MIDIChannel *ss_channel_new(int channel_number, struct SS_Processor *synth) {
+	SS_MIDIChannel *ch = (SS_MIDIChannel *)calloc(1, sizeof(SS_MIDIChannel));
+	if(!ch) return NULL;
+	ch->channel_number = channel_number;
+	ch->synth = synth;
+	ch->drum_channel = (channel_number % 16 == 9);
+	reset_controllers_to_defaults(ch);
+	return ch;
+}
+
+void ss_channel_free(SS_MIDIChannel *ch) {
+	if(!ch) return;
+	for(size_t i = 0; i < ch->voice_count; i++)
+		ss_voice_free(ch->voices[i]);
+	free(ch->voices);
+	free(ch->sustained_voices);
+	free(ch);
+}
+
+/* ── Voice allocation ────────────────────────────────────────────────────── */
+
+static bool channel_add_voice(SS_MIDIChannel *ch, SS_Voice *v) {
+	if(ch->voice_count >= ch->voice_capacity) {
+		size_t new_cap = ch->voice_capacity + VOICE_GROW_BY;
+		SS_Voice **tmp = (SS_Voice **)realloc(ch->voices,
+		                                      new_cap * sizeof(SS_Voice *));
+		if(!tmp) return false;
+		ch->voices = tmp;
+		ch->voice_capacity = new_cap;
+	}
+	ch->voices[ch->voice_count++] = v;
+	return true;
+}
+
+static void channel_remove_finished_sustained_voices(SS_MIDIChannel *ch) {
+	size_t new_count = 0;
+	for(size_t i = 0; i < ch->sustained_count; i++) {
+		if(ch->sustained_voices[i]->is_active) {
+			ch->sustained_voices[new_count++] = ch->sustained_voices[i];
+		}
+	}
+	ch->sustained_count = new_count;
+}
+
+static void channel_remove_finished_voices(SS_MIDIChannel *ch) {
+	channel_remove_finished_sustained_voices(ch);
+
+	size_t new_count = 0;
+	for(size_t i = 0; i < ch->voice_count; i++) {
+		if(ch->voices[i]->is_active) {
+			ch->voices[new_count++] = ch->voices[i];
+		} else {
+			ss_voice_free(ch->voices[i]);
+		}
+	}
+	ch->voice_count = new_count;
+}
+
+/* ── Note on ─────────────────────────────────────────────────────────────── */
+
+void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
+	if(vel < 1) {
+		ss_channel_note_off(ch, note, time);
+		return;
+	}
+	if(vel > 127) vel = 127;
+
+	if(!ch->preset) return;
+	if(ch->is_muted) return;
+
+	const int real_key =
+	note +
+	ch->channel_transpose_key_shift +
+	ch->custom_controllers[SS_CUSTOM_CTRL_KEY_SHIFT];
+	int internal_midi_note = real_key;
+
+	if(real_key > 127 || real_key < 0) {
+		return;
+	}
+
+	const int program = ch->preset->program;
+	const int tune = ch->synth->master_params.tunings ? ch->synth->master_params.tunings[program][real_key].midi_note : 0;
+	if(tune > 0) {
+		internal_midi_note = tune;
+	}
+
+	/* Get synthesis data for this (note, velocity) */
+	SS_SynthesisData *synth_data = NULL;
+	size_t sd_count = ss_preset_get_synthesis_data(ch->preset, internal_midi_note, vel, &synth_data);
+
+	SS_Processor *proc = ch->synth;
+
+	for(size_t si = 0; si < sd_count; si++) {
+		SS_SynthesisData *sd = &synth_data[si];
+		SS_BasicSample *samp = sd->sample;
+		if(!samp) continue;
+
+		/* Decode sample data lazily */
+		if(!ss_sample_decode(samp)) continue;
+		if(!samp->audio_data || samp->audio_data_length == 0) continue;
+
+		/* Build flat generator array (sum preset + instrument, clamped) */
+		int16_t generators[SS_GEN_COUNT];
+		/* Start with instrument defaults */
+		for(int g = 0; g < SS_GEN_COUNT; g++)
+			generators[g] = SS_GENERATOR_LIMITS[g].def;
+
+		/* Apply instrument generators */
+		for(size_t g = 0; g < sd->instrument_gen_count; g++) {
+			SS_GeneratorType t = sd->instrument_generators[g].type;
+			if(t >= 0 && t < SS_GEN_COUNT)
+				generators[t] = sd->instrument_generators[g].value;
+		}
+		/* Apply preset generators on top */
+		for(size_t g = 0; g < sd->preset_gen_count; g++) {
+			SS_GeneratorType t = sd->preset_generators[g].type;
+			if(t >= 0 && t < SS_GEN_COUNT)
+				generators[t] = ss_generator_add_and_clamp(t, sd->preset_generators[g].value, generators[t]);
+		}
+
+		/* EMU initial attenuation correction: multiply by 0.4 */
+		generators[SS_GEN_INITIAL_ATTENUATION] =
+		(int16_t)((int)generators[SS_GEN_INITIAL_ATTENUATION] * 4 / 10);
+
+		int target_key = real_key;
+		if(generators[SS_GEN_KEYNUM] > -1)
+			target_key = generators[SS_GEN_KEYNUM];
+
+		/* Build AudioSample.
+		 * sample_start / end_adjustment are pre-baked address-offset fixups
+		 * applied at zone construction time (SF2 gens 0/4 and 1/12). */
+		SS_AudioSample audio;
+		memset(&audio, 0, sizeof(audio));
+		audio.sample_data = samp->audio_data + samp->sample_start;
+		audio.sample_data_len = (samp->audio_data_length > samp->sample_start) ? samp->audio_data_length - samp->sample_start : 0;
+		audio.loop_start = samp->loop_start;
+		audio.loop_end = samp->loop_end;
+
+		int root_key = samp->original_key;
+		if(generators[SS_GEN_OVERRIDING_ROOT_KEY] > -1) {
+			root_key = generators[SS_GEN_OVERRIDING_ROOT_KEY];
+		}
+		audio.root_key = root_key;
+
+		{
+			int32_t end_frame = (samp->audio_data_length > 0) ? (int32_t)(samp->audio_data_length - 1) + samp->end_adjustment : 0;
+			audio.end = (end_frame > 0) ? (size_t)end_frame : 0;
+		}
+		audio.looping_mode = (SS_SampleLoopingMode)generators[SS_GEN_SAMPLE_MODES];
+		audio.is_looping = (audio.looping_mode == SS_LOOP_LOOP ||
+		                    audio.looping_mode == SS_LOOP_LOOP_RELEASE);
+
+		/* Playback step */
+		uint32_t sr = proc ? proc->sample_rate : 44100;
+		audio.playback_step = (float)samp->sample_rate / (float)sr * powf(2.0f, (float)samp->pitch_correction / 1200.0f);
+
+		/* Velocity override */
+		int voice_vel = vel;
+		if(generators[SS_GEN_VELOCITY] > -1)
+			voice_vel = generators[SS_GEN_VELOCITY];
+
+		/* Collect modulators: use bank's default + voice mods */
+		const SS_Modulator *def_mods = SS_DEFAULT_MODULATORS;
+		size_t def_mod_count = SS_DEFAULT_MODULATOR_COUNT;
+		if(proc) {
+			for(int b = 0; b < proc->soundbank_count; b++) {
+				if(proc->soundbanks[b] && proc->soundbanks[b]->custom_default_modulators) {
+					def_mods = proc->soundbanks[b]->default_modulators;
+					def_mod_count = proc->soundbanks[b]->default_mod_count;
+					break;
+				}
+			}
+		}
+
+		SS_Voice *voice = ss_voice_create(sr, &audio, real_key, voice_vel,
+		                                  time, target_key, real_key,
+		                                  generators,
+		                                  sd->modulators, sd->mod_count);
+		if(!voice) continue;
+
+		/* Portamento */
+		/* Not implemented correctly */
+		#if 0
+		int portamento_from_key = -1;
+		float portamento_duration = 0;
+		// Note: the 14-bit value needs to go down to 7-bit
+		const int portamento_time =
+		ch->midi_controllers[SS_MIDCON_PORTAMENTO_TIME] >> 7;
+		const int control = ch->midi_controllers[SS_MIDCON_PORTAMENTO_CONTROL];
+		const int current_from_key = control >> 7;
+		if(
+		!ch->drum_channel && /* No portamento on drum channel */
+		current_from_key != target_key && /* If the same note, there's no portamento */
+		ch->midi_controllers[SS_MIDCON_PORTAMENTO_ON_OFF] >= 8192 && /* (64 << 7) */
+		portamento_time > 0 /* 0 duration is no portamento */
+		) {
+			/* A value of one means the initial portamento */
+			if(control != 1) {
+				const int diff = abs(target_key - current_from_key);
+				portamento_duration = ss_portamento_time_to_seconds(portamento_time, diff);
+				portamento_from_key = current_from_key;
+			}
+			/* Set portamento control to previous value */
+			ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, target_key, time);
+		}
+		voice->portamento_duration = portamento_duration;
+		#endif
+
+		/* Compute initial modulators */
+		ss_voice_compute_modulators_internal(voice, ch, def_mods, def_mod_count, time);
+
+		/* Handle exclusive class: cut other voices in same class */
+		if(voice->exclusive_class > 0) {
+			for(size_t vi = 0; vi < ch->voice_count; vi++) {
+				SS_Voice *ov = ch->voices[vi];
+				if(ov->is_active && ov->exclusive_class == voice->exclusive_class) {
+					ss_voice_exclusive_release(ov, time);
+				}
+			}
+		}
+
+		channel_add_voice(ch, voice);
+		if(proc) proc->total_voices++;
+	}
+
+	ss_synthesis_data_free_array(synth_data, sd_count);
+	channel_remove_finished_voices(ch);
+}
+
+/* ── Note off ────────────────────────────────────────────────────────────── */
+
+void ss_channel_note_off(SS_MIDIChannel *ch, int note, double time) {
+	bool sustained = ch->midi_controllers[64] >= 64; /* CC64 sustain pedal */
+	for(size_t i = 0; i < ch->voice_count; i++) {
+		SS_Voice *v = ch->voices[i];
+		if(!v->is_active || v->is_in_release) continue;
+		if(v->midi_note != note) continue;
+		if(sustained) {
+			/* Add to sustained list */
+			if(ch->sustained_count >= ch->sustained_capacity) {
+				size_t nc = ch->sustained_capacity + 8;
+				SS_Voice **tmp = (SS_Voice **)realloc(ch->sustained_voices,
+				                                      nc * sizeof(SS_Voice *));
+				if(tmp) {
+					ch->sustained_voices = tmp;
+					ch->sustained_capacity = nc;
+				}
+			}
+			if(ch->sustained_count < ch->sustained_capacity)
+				ch->sustained_voices[ch->sustained_count++] = v;
+		} else {
+			ss_voice_release(v, time, 0.05);
+		}
+	}
+}
+
+void ss_channel_all_notes_off(SS_MIDIChannel *ch, double time) {
+	for(size_t i = 0; i < ch->voice_count; i++) {
+		SS_Voice *v = ch->voices[i];
+		if(v->is_active && !v->is_in_release)
+			ss_voice_release(v, time, 0.05);
+	}
+	ch->sustained_count = 0;
+}
+
+void ss_channel_all_sound_off(SS_MIDIChannel *ch) {
+	for(size_t i = 0; i < ch->voice_count; i++)
+		ch->voices[i]->is_active = false;
+	channel_remove_finished_voices(ch);
+	ch->sustained_count = 0;
+}
+
+/* ── Controller change ───────────────────────────────────────────────────── */
+
+enum {
+	SS_RPN_PITCH_WHEEL_RANGE = 0x0000,
+	SS_RPN_FINE_TUNING = 0x0001,
+	SS_RPN_COARSE_TUNING = 0x0002,
+	SS_RPN_MODULATION_DEPTH = 0x0005,
+	SS_RPN_RESET_PARAMETERS = 0x3fff
+};
+
+enum {
+	SS_NRPN_MSB_PART_PARAMETER = 0x01,
+	SS_NRPN_MSB_AWE32 = 0x7f,
+	SS_NRPN_MSB_SF2 = 120
+};
+
+/**
+ * https://cdn.roland.com/assets/media/pdf/SC-88PRO_OM.pdf
+ * http://hummer.stanford.edu/sig/doc/classes/MidiOutput/rpn.html
+ * @enum {number}
+ */
+enum {
+	SS_NRPN_GS_LSB_VIBRATO_RATE = 0x08,
+	SS_NRPN_GS_LSB_VIBRATO_DEPTH = 0x09,
+	SS_NRPN_GS_LSB_VIBRATO_DELAY = 0x0a,
+
+	SS_NRPN_GS_LSB_TVF_FILTER_CUTOFF = 0x20,
+	SS_NRPN_GS_LSB_TVF_FILTER_RESONANCE = 0x21,
+
+	SS_NRPN_GS_LSB_EG_ATTACK_TIME = 0x63,
+	SS_NRPN_GS_LSB_EG_RELEASE_TIME = 0x66
+};
+
+void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time) {
+	SS_Processor *proc = ch->synth;
+	/* Collect modulators: use bank's default + voice mods */
+	const SS_Modulator *def_mods = SS_DEFAULT_MODULATORS;
+	size_t def_mod_count = SS_DEFAULT_MODULATOR_COUNT;
+	if(proc) {
+		for(int b = 0; b < proc->soundbank_count; b++) {
+			if(proc->soundbanks[b] && proc->soundbanks[b]->custom_default_modulators) {
+				def_mods = proc->soundbanks[b]->default_modulators;
+				def_mod_count = proc->soundbanks[b]->default_mod_count;
+				break;
+			}
+		}
+	}
+
+	for(size_t v = 0; v < ch->voice_count; v++) {
+		ss_voice_compute_modulators_internal(ch->voices[v], ch, def_mods, def_mod_count, time);
+	}
+}
+
+void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch, double time) {
+	SS_Processor *proc = ch->synth;
+	/* Collect modulators: use bank's default + voice mods */
+	const SS_Modulator *def_mods = SS_DEFAULT_MODULATORS;
+	size_t def_mod_count = SS_DEFAULT_MODULATOR_COUNT;
+	if(proc) {
+		for(int b = 0; b < proc->soundbank_count; b++) {
+			if(proc->soundbanks[b] && proc->soundbanks[b]->custom_default_modulators) {
+				def_mods = proc->soundbanks[b]->default_modulators;
+				def_mod_count = proc->soundbanks[b]->default_mod_count;
+				break;
+			}
+		}
+	}
+
+	ss_voice_compute_modulators_internal(v, ch, def_mods, def_mod_count, time);
+}
+
+static void ss_channel_set_generator_offset(SS_MIDIChannel *ch, SS_GeneratorType gen, int val, double time) {
+	ch->generator_offsets[gen] = val;
+	ch->generator_offsets_enabled = true;
+	ss_channel_compute_modulators(ch, time);
+}
+
+static void ss_channel_set_generator_override(SS_MIDIChannel *ch, SS_GeneratorType gen, int val, bool realtime, double time) {
+	ch->generator_overrides[gen] = val;
+	ch->generator_overrides_enabled = true;
+	if(realtime) {
+		ss_channel_compute_modulators(ch, time);
+	}
+}
+
+/**
+ * SoundBlaster AWE32 NRPN generator mappings.
+ * http://archive.gamedev.net/archive/reference/articles/article445.html
+ * https://github.com/user-attachments/files/15757220/adip301.pdf
+ */
+static const SS_GeneratorType AWE_NRPN_GENERATOR_MAPPINGS[] = {
+	SS_GEN_DELAY_MOD_LFO,
+	SS_GEN_FREQ_MOD_LFO,
+
+	SS_GEN_DELAY_VIB_LFO,
+	SS_GEN_FREQ_VIB_LFO,
+
+	SS_GEN_DELAY_MOD_ENV,
+	SS_GEN_ATTACK_MOD_ENV,
+	SS_GEN_HOLD_MOD_ENV,
+	SS_GEN_DECAY_MOD_ENV,
+	SS_GEN_SUSTAIN_MOD_ENV,
+	SS_GEN_RELEASE_MOD_ENV,
+
+	SS_GEN_DELAY_VOL_ENV,
+	SS_GEN_ATTACK_VOL_ENV,
+	SS_GEN_HOLD_VOL_ENV,
+	SS_GEN_DECAY_VOL_ENV,
+	SS_GEN_SUSTAIN_VOL_ENV,
+	SS_GEN_RELEASE_VOL_ENV,
+
+	SS_GEN_FINE_TUNE,
+
+	SS_GEN_MOD_LFO_TO_PITCH,
+	SS_GEN_VIB_LFO_TO_PITCH,
+	SS_GEN_MOD_ENV_TO_PITCH,
+	SS_GEN_MOD_LFO_TO_VOLUME,
+
+	SS_GEN_INITIAL_FILTER_FC,
+	SS_GEN_INITIAL_FILTER_Q,
+
+	SS_GEN_MOD_LFO_TO_FILTER_FC,
+	SS_GEN_MOD_ENV_TO_FILTER_FC,
+
+	SS_GEN_CHORUS_EFFECTS_SEND,
+	SS_GEN_REVERB_EFFECTS_SEND
+};
+static const int AWE_NRPN_GENERATOR_MAPPINGS_COUNT = sizeof(AWE_NRPN_GENERATOR_MAPPINGS) / sizeof(AWE_NRPN_GENERATOR_MAPPINGS[0]);
+
+/* helpers */
+static float clip(float v, float min, float max) {
+	if(v < min)
+		return min;
+	else if(v > max)
+		return max;
+	else
+		return v;
+}
+
+static double msecToTimecents(double ms) {
+	const float cents = 1200.0 * log2(ms / 1000.0);
+	if(cents < -32768)
+		return -32768;
+	else
+		return cents;
+}
+
+static double hzToCents(double hz) {
+	return 6900.0 + 1200 * log2(hz / 440.0);
+}
+
+/**
+ * Function that emulates AWE32 similarly to fluidsynth
+ * https://github.com/FluidSynth/fluidsynth/wiki/FluidFeatures
+ *
+ * Note: This makes use of findings by mrbumpy409:
+ * https://github.com/fluidSynth/fluidsynth/issues/1473
+ *
+ * The excellent test files are available here, also collected and converted by mrbumpy409:
+ * https://github.com/mrbumpy409/AWE32-midi-conversions
+ */
+static void ss_channel_nrpn_awe32(SS_MIDIChannel *ch, int awe_gen, int data_lsb, int data_msb, double time) {
+	int data_value = (data_msb << 7) | data_lsb;
+	/* Center the value
+	 * Though ranges reported as 0 to 127 only use LSB */
+	data_value -= 8192;
+	if(awe_gen >= AWE_NRPN_GENERATOR_MAPPINGS_COUNT) return; /* Protect against crash */
+
+	const SS_GeneratorType generator = AWE_NRPN_GENERATOR_MAPPINGS[awe_gen];
+
+	float milliseconds, hertz, centibels, cents;
+	switch(generator) {
+		default:
+			/* This should not happen */
+			break;
+
+		/* Delays */
+		case SS_GEN_DELAY_MOD_LFO:
+		case SS_GEN_DELAY_VIB_LFO:
+		case SS_GEN_DELAY_VOL_ENV:
+		case SS_GEN_DELAY_MOD_ENV:
+			milliseconds = 4 * clip(data_value, 0, 5900);
+			// Convert to timecents
+			ss_channel_set_generator_override(ch, generator, msecToTimecents(milliseconds), false, time);
+			break;
+
+		/* Attacks */
+		case SS_GEN_ATTACK_VOL_ENV:
+		case SS_GEN_ATTACK_MOD_ENV:
+			milliseconds = clip(data_value, 0, 5940);
+			/* Convert to timecents */
+			ss_channel_set_generator_override(ch, generator, msecToTimecents(milliseconds), false, time);
+			break;
+
+		/* Holds */
+		case SS_GEN_HOLD_VOL_ENV:
+		case SS_GEN_HOLD_MOD_ENV:
+			milliseconds = clip(data_value, 0, 8191);
+			/* Convert to timecents */
+			ss_channel_set_generator_override(ch, generator, msecToTimecents(milliseconds), false, time);
+			break;
+
+		/* Decays and releases (share clips and units) */
+		case SS_GEN_DECAY_VOL_ENV:
+		case SS_GEN_DECAY_MOD_ENV:
+		case SS_GEN_RELEASE_VOL_ENV:
+		case SS_GEN_RELEASE_MOD_ENV:
+			milliseconds = 4 * clip(data_value, 0, 5940);
+			/* Convert to timecents */
+			ss_channel_set_generator_override(ch, generator, msecToTimecents(milliseconds), false, time);
+			break;
+
+		/* LFO frequencies */
+		case SS_GEN_FREQ_VIB_LFO:
+		case SS_GEN_FREQ_MOD_LFO:
+			hertz = 0.084 * (float)data_lsb;
+			/* Convert to abs cents */
+			ss_channel_set_generator_override(ch, generator, hzToCents(hertz), true, time);
+			break;
+
+		/* Sustains */
+		case SS_GEN_SUSTAIN_VOL_ENV:
+		case SS_GEN_SUSTAIN_MOD_ENV:
+			/* 0.75 dB is 7.5 cB */
+			centibels = (float)data_lsb * 7.5;
+			ss_channel_set_generator_override(ch, generator, centibels, false, time);
+			break;
+
+		/* Pitch */
+		case SS_GEN_FINE_TUNE:
+			/* Data is already centered */
+			ss_channel_set_generator_override(ch, generator, data_value, true, time);
+			break;
+
+		/* LFO to pitch */
+		case SS_GEN_MOD_LFO_TO_PITCH:
+		case SS_GEN_VIB_LFO_TO_PITCH:
+			cents = clip(data_value, -127, 127) * 9.375;
+			ss_channel_set_generator_override(ch, generator, cents, true, time);
+			break;
+
+		/* Env to pitch */
+		case SS_GEN_MOD_ENV_TO_PITCH:
+			cents = clip(data_value, -127, 127) * 9.375;
+			ss_channel_set_generator_override(ch, generator, cents, false, time);
+			break;
+
+		/* Mod LFO to vol */
+		case SS_GEN_MOD_LFO_TO_VOLUME:
+			/* 0.1875 dB is 1.875 cB */
+			centibels = 1.875 * (float)data_lsb;
+			ss_channel_set_generator_override(ch, generator, centibels, true, time);
+			break;
+
+		/* Filter Fc */
+		case SS_GEN_INITIAL_FILTER_FC: {
+			/* Minimum: 100 Hz -> 4335 cents */
+			const float fc_cents = 4335.0 + 59 * (float)data_lsb;
+			ss_channel_set_generator_override(ch, generator, fc_cents, true, time);
+			break;
+		}
+
+		/* Filter Q */
+		case SS_GEN_INITIAL_FILTER_Q:
+			/* Note: this uses the "modulator-ish" approach proposed by mrbumpy409
+			 * Here https://github.com/FluidSynth/fluidsynth/issues/1473
+			 */
+			centibels = 215.0 * ((float)data_lsb / 127.0);
+			ss_channel_set_generator_override(ch, generator, centibels, true, time);
+			break;
+
+		/* To filter Fc */
+		case SS_GEN_MOD_LFO_TO_FILTER_FC:
+			cents = clip(data_value, -64, 63) * 56.25;
+			ss_channel_set_generator_override(ch, generator, cents, true, time);
+			break;
+
+		case SS_GEN_MOD_ENV_TO_FILTER_FC:
+			cents = clip(data_value, -64, 63) * 56.25;
+			ss_channel_set_generator_override(ch, generator, cents, false, time);
+			break;
+
+		/* Effects */
+		case SS_GEN_CHORUS_EFFECTS_SEND:
+		case SS_GEN_REVERB_EFFECTS_SEND:
+			ss_channel_set_generator_override(ch, generator, clip(data_value, 0, 255) * (1000.0 / 255.0), false, time);
+			break;
+	}
+}
+
+static void ss_channel_data_entry_fine(SS_MIDIChannel *ch, int val, double time) {
+	ch->midi_controllers[SS_MIDCON_DATA_ENTRY_LSB] = val << 7;
+	switch(ch->data_entry_state) {
+		default:
+			break;
+
+		case SS_DATAENTRY_RP_COARSE:
+		case SS_DATAENTRY_RP_FINE: {
+			const int rpn_value = ch->midi_controllers[SS_MIDCON_RPN_MSB] |
+			                      (ch->midi_controllers[SS_MIDCON_RPN_LSB] >> 7);
+			switch(rpn_value) {
+				default:
+					break;
+
+				/* Pitch bend range fine tune */
+				case SS_RPN_PITCH_WHEEL_RANGE:
+					if(val == 0) {
+						break;
+					}
+					/* 14-bit value, so upper 7 are coarse and lower 7 are fine! */
+					ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] |= val;
+					break;
+
+				/* Fine-tuning */
+				case SS_RPN_FINE_TUNING: {
+					/* Grab the data and shift */
+					const int coarse = (int)ch->custom_controllers[SS_CUSTOM_CTRL_TUNING];
+					const int final_tuning = (coarse << 7) | val;
+					ss_channel_set_tuning(ch, (float)final_tuning * 0.01220703125); /* Multiply by 8192 / 100 (cent increments)) */
+					break;
+				}
+
+				/* Modulation depth */
+				case SS_RPN_MODULATION_DEPTH: {
+					const float current_depth_cents = ch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] * 50.0;
+					const float cents = current_depth_cents + ((float)val / 128.0) * 100.0;
+					ss_channel_set_modulation_depth(ch, cents);
+					break;
+				}
+
+				case SS_RPN_RESET_PARAMETERS:
+					reset_parameters_to_defaults(ch);
+					break;
+			}
+			break;
+		}
+
+		case SS_DATAENTRY_NRP_FINE: {
+			const int nrpn_coarse = ch->midi_controllers[SS_MIDCON_NRPN_MSB] >> 7;
+			const int nrpn_fine = ch->midi_controllers[SS_MIDCON_NRPN_LSB] >> 7;
+			if(nrpn_coarse == SS_NRPN_MSB_SF2) {
+				return;
+			}
+			switch(nrpn_coarse) {
+				default:
+					/* Unsupported NRPN */
+					break;
+
+				case SS_NRPN_MSB_AWE32:
+					ss_channel_nrpn_awe32(ch, nrpn_fine, val, ch->midi_controllers[SS_MIDCON_DATA_ENTRY_MSB] >> 7, time);
+					break;
+			}
+			break;
+		}
+	}
+}
+
+static void ss_channel_data_entry_coarse(SS_MIDIChannel *ch, int val, double time) {
+	ch->midi_controllers[SS_MIDCON_DATA_ENTRY_MSB] = val << 7;
+
+/*
+A note on this vibrato.
+This is a completely custom vibrato, with its own oscillator and parameters.
+It is disabled by default,
+only being enabled when one of the NPRN messages changing it is received
+and stays on until the next system-reset.
+It was implemented very early in SpessaSynth's development,
+because I wanted support for Touhou MIDIs :-)
+ */
+#define addDefaultVibrato                \
+	if(                                  \
+	ch->channel_vibrato.delay == 0 &&    \
+	ch->channel_vibrato.rate == 0 &&     \
+	ch->channel_vibrato.depth == 0) {    \
+		ch->channel_vibrato.depth = 50;  \
+		ch->channel_vibrato.rate = 8;    \
+		ch->channel_vibrato.delay = 0.6; \
+	}
+
+	switch(ch->data_entry_state) {
+		default:
+		case SS_DATAENTRY_IDLE:
+			break;
+
+		// Process GS NRPNs
+		case SS_DATAENTRY_NRP_FINE: {
+			const int nrpn_coarse = ch->midi_controllers[SS_MIDCON_NRPN_MSB] >> 7;
+			const int nrpn_fine = ch->midi_controllers[SS_MIDCON_NRPN_LSB] >> 7;
+			const int data_entry_fine = ch->midi_controllers[SS_MIDCON_DATA_ENTRY_LSB] >> 7;
+			switch(nrpn_coarse) {
+				default:
+					if(val == 64) {
+						/* Default value */
+						return;
+					}
+					/* Unrecognized NRPN */
+					break;
+
+				case SS_NRPN_MSB_PART_PARAMETER:
+					switch(nrpn_fine) {
+						default:
+							if(val == 64) {
+								/* Default value */
+								return;
+							}
+							/* Unrecognized NRPN */
+							break;
+
+						case SS_NRPN_GS_LSB_VIBRATO_RATE:
+							if(val == 64) {
+								/* Default value */
+								return;
+							}
+							addDefaultVibrato;
+							ch->channel_vibrato.rate = ((float)val / 64.0) * 8.0;
+							break;
+
+						case SS_NRPN_GS_LSB_VIBRATO_DEPTH:
+							if(val == 64) {
+								/* Default value */
+								return;
+							}
+							addDefaultVibrato;
+							ch->channel_vibrato.depth = (float)val / 2.0;
+							break;
+
+						case SS_NRPN_GS_LSB_VIBRATO_DELAY:
+							if(val == 64) {
+								/* Default value */
+								return;
+							}
+							addDefaultVibrato;
+							ch->channel_vibrato.delay = (float)val / 64.0 / 3.0;
+							break;
+
+						case SS_NRPN_GS_LSB_TVF_FILTER_CUTOFF:
+							ss_channel_controller(ch, SS_MIDCON_BRIGHTNESS, val, time);
+							break;
+
+						case SS_NRPN_GS_LSB_EG_ATTACK_TIME:
+							ss_channel_controller(ch, SS_MIDCON_ATTACK_TIME, val, time);
+							break;
+
+						case SS_NRPN_GS_LSB_EG_RELEASE_TIME:
+							ss_channel_controller(ch, SS_MIDCON_RELEASE_TIME, val, time);
+							break;
+					}
+					break;
+
+				case SS_NRPN_MSB_AWE32:
+					break;
+
+					/* SF2 NRPN */
+				case SS_NRPN_MSB_SF2:
+					if(nrpn_fine > 100) {
+						/* Sf spec:
+						 * Note that NRPN Select LSB greater than 100 are for setup only,
+						 * and should not be used on their own to select a
+						 * Generator parameter.
+						 */
+						break;
+					}
+					const SS_GeneratorType gen = (SS_GeneratorType)ch->custom_controllers[SS_CUSTOM_CTRL_SF2_NRPN_GENERATOR_LSB];
+					const int offset = (val << 7) | data_entry_fine;
+					ss_channel_set_generator_offset(ch, gen, offset, time);
+					break;
+			}
+			break;
+		}
+
+		case SS_DATAENTRY_RP_COARSE:
+		case SS_DATAENTRY_RP_FINE: {
+			const int rpn_value = ch->midi_controllers[SS_MIDCON_RPN_MSB] |
+			                      ch->midi_controllers[SS_MIDCON_RPN_LSB] >> 7;
+			switch(rpn_value) {
+				default:
+					/* Unsupported RPN */
+					break;
+
+					/* Pitch bend range */
+				case SS_RPN_PITCH_WHEEL_RANGE:
+					ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = val << 7;
+					break;
+
+				case SS_RPN_COARSE_TUNING: {
+					/* Semitones */
+					const int semitones = val - 64;
+					ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_TUNING_SEMITONES, semitones);
+					break;
+				}
+
+					/* Fine-tuning */
+				case SS_RPN_FINE_TUNING:
+					/* Note: this will not work properly unless the lsb is sent!
+					 * Here we store the raw value to then adjust in fine
+					 */
+					ss_channel_set_tuning(ch, (float)(val - 64));
+					break;
+
+					/* Modulation depth */
+				case SS_RPN_MODULATION_DEPTH:
+					ss_channel_set_modulation_depth(ch, (float)val * 100.0);
+					break;
+
+				case SS_RPN_RESET_PARAMETERS:
+					reset_parameters_to_defaults(ch);
+					break;
+			}
+			break;
+		}
+	}
+}
+
+void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
+	if(cc < 0 || cc >= SS_MIDI_CONTROLLER_COUNT) return;
+	if(ch->locked_controllers[cc]) return;
+
+	if(
+	cc >= SS_MIDCON_MOD_WHEEL_LSB &&
+	cc <= SS_MIDCON_EFFECT_CONTROL_2_LSB &&
+	cc != SS_MIDCON_DATA_ENTRY_LSB) {
+		const int actualCCNum = cc - 32;
+		if(ch->locked_controllers[actualCCNum]) {
+			return;
+		}
+		// Append the lower nibble to the main controller
+		ch->midi_controllers[actualCCNum] =
+		(ch->midi_controllers[actualCCNum] & 0x3f80) |
+		(val & 0x7f);
+
+		ss_channel_compute_modulators(ch, time);
+	}
+
+	ch->midi_controllers[cc] = (int16_t)(val << 7);
+
+	switch(cc) {
+		case SS_MIDCON_ALL_NOTES_OFF: /* all notes off */
+			ss_channel_all_notes_off(ch, time);
+			break;
+		case SS_MIDCON_ALL_SOUND_OFF: /* all sound off */
+			ss_channel_all_sound_off(ch);
+			break;
+
+		case SS_MIDCON_BANK_SELECT:
+			ch->bank_msb = val;
+			/* Ensure that for XG, drum channels always are 127
+			 * Testcase
+			 * Dave-Rodgers-D-j-Vu-Anonymous-20200419154845-nonstop2k.com.mid
+			 */
+			if(ch->channel_number % 16 == 9 &&
+			   ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_XG) {
+				ch->bank_msb = 127;
+			}
+			break;
+
+		case SS_MIDCON_BANK_SELECT_LSB:
+			ch->bank_lsb = val;
+			break;
+
+		/* Check for RPN and NPRN and data entry */
+		case SS_MIDCON_RPN_LSB:
+			ch->data_entry_state = SS_DATAENTRY_RP_FINE;
+			break;
+
+		case SS_MIDCON_RPN_MSB:
+			ch->data_entry_state = SS_DATAENTRY_RP_COARSE;
+			break;
+
+		case SS_MIDCON_NRPN_MSB:
+			ch->custom_controllers[SS_CUSTOM_CTRL_SF2_NRPN_GENERATOR_LSB] = 0;
+			ch->data_entry_state = SS_DATAENTRY_NRP_COARSE;
+			break;
+
+		case SS_MIDCON_NRPN_LSB:
+			if(
+			ch->midi_controllers[SS_MIDCON_NRPN_MSB] >> 7 == SS_NRPN_MSB_SF2) {
+				/* If a <100 value has already been sent, reset! */
+				if(
+				(int)ch->custom_controllers[SS_CUSTOM_CTRL_SF2_NRPN_GENERATOR_LSB] % 100 != 0) {
+					ch->custom_controllers[SS_CUSTOM_CTRL_SF2_NRPN_GENERATOR_LSB] = 0;
+				}
+
+				if(val == 100) {
+					ch->custom_controllers[SS_CUSTOM_CTRL_SF2_NRPN_GENERATOR_LSB] += 100.0;
+				} else if(val == 101) {
+					ch->custom_controllers[SS_CUSTOM_CTRL_SF2_NRPN_GENERATOR_LSB] += 1000.0;
+				} else if(val == 102) {
+					ch->custom_controllers[SS_CUSTOM_CTRL_SF2_NRPN_GENERATOR_LSB] += 10000.0;
+				} else if(val < 100) {
+					ch->custom_controllers[SS_CUSTOM_CTRL_SF2_NRPN_GENERATOR_LSB] += (float)val;
+				}
+			}
+			ch->data_entry_state = SS_DATAENTRY_NRP_FINE;
+			break;
+
+		case SS_MIDCON_DATA_ENTRY_MSB:
+			ss_channel_data_entry_coarse(ch, val, time);
+			break;
+
+		case SS_MIDCON_DATA_ENTRY_LSB:
+			ss_channel_data_entry_fine(ch, val, time);
+			break;
+
+		case SS_MIDCON_SUSTAIN_PEDAL: /* sustain pedal */
+			if(val < 64 && ch->sustained_count > 0) {
+				/* Release all sustained voices */
+				for(size_t i = 0; i < ch->sustained_count; i++) {
+					SS_Voice *v = ch->sustained_voices[i];
+					if(v->is_active && !v->is_in_release)
+						ss_voice_release(v, time, 0.05);
+				}
+				ch->sustained_count = 0;
+			}
+			break;
+
+		case SS_MIDCON_RESET_ALL_CONTROLLERS: /* reset all controllers */
+			reset_controllers_rp15_compliant(ch, time);
+			break;
+
+		default: /* Compute modulators */
+			ss_channel_compute_modulators(ch, time);
+			break;
+	}
+}
+
+/* ── Program change ──────────────────────────────────────────────────────── */
+
+void ss_channel_program_change(SS_MIDIChannel *ch, int program) {
+	if(ch->lock_preset) return;
+	ch->program = (uint8_t)(program & 0x7F);
+	/* Look up preset in the soundbank(s) via processor */
+	struct SS_Processor *proc = ch->synth;
+	if(!proc) return;
+	for(int b = 0; b < proc->soundbank_count; b++) {
+		SS_SoundBank *bank = proc->soundbanks[b];
+		if(!bank) continue;
+		SS_BasicPreset *p = ss_soundbank_find_preset(bank,
+		                                             ch->program, ch->bank_msb, ch->bank_lsb,
+		                                             (int)proc->master_params.midi_system, ch->drum_channel);
+		if(p) {
+			ch->preset = p;
+			return;
+		}
+	}
+}
+
+/* ── Pitch wheel ─────────────────────────────────────────────────────────── */
+
+void ss_channel_pitch_wheel(SS_MIDIChannel *ch, int value, double time) {
+	/* value: 0..16383, 8192 = center */
+	ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL] = value;
+
+	ss_channel_compute_modulators(ch, time);
+}
+
+/* ── Reset controllers ───────────────────────────────────────────────────── */
+
+void ss_channel_reset_controllers(SS_MIDIChannel *ch) {
+	reset_controllers_to_defaults(ch);
+}
+
+/* ── Render ──────────────────────────────────────────────────────────────── */
+
+void ss_channel_render(SS_MIDIChannel *ch,
+                       double time_now,
+                       float *out_left, float *out_right,
+                       float *reverb_left, float *reverb_right,
+                       float *chorus_left, float *chorus_right,
+                       uint32_t sample_count) {
+	if(ch->is_muted) return;
+	SS_Processor *proc = ch->synth;
+
+	SS_InterpolationType interp = proc ? proc->master_params.interpolation_type : SS_INTERP_LINEAR;
+	float vol_smoothing = proc ? proc->volume_envelope_smoothing_factor : 0.01f;
+	float filter_smoothing = proc ? proc->filter_smoothing_factor : 0.1f;
+	float pan_smoothing = proc ? proc->pan_smoothing_factor : 0.1f;
+
+	const SS_Modulator *def_mods = SS_DEFAULT_MODULATORS;
+	size_t def_mod_count = SS_DEFAULT_MODULATOR_COUNT;
+	if(proc) {
+		for(int b = 0; b < proc->soundbank_count; b++) {
+			if(proc->soundbanks[b] && proc->soundbanks[b]->custom_default_modulators) {
+				def_mods = proc->soundbanks[b]->default_modulators;
+				def_mod_count = proc->soundbanks[b]->default_mod_count;
+				break;
+			}
+		}
+	}
+
+	for(size_t i = 0; i < ch->voice_count; i++) {
+		SS_Voice *v = ch->voices[i];
+		if(!v->is_active) continue;
+
+		/* Recompute modulators each render frame */
+		ss_voice_compute_modulators_internal(v, ch, def_mods, def_mod_count, proc ? proc->current_synth_time : 0.0);
+
+		ss_voice_render(v, ch, time_now,
+		                out_left, out_right,
+		                reverb_left, reverb_right,
+		                chorus_left, chorus_right,
+		                (int)sample_count, interp,
+		                vol_smoothing, filter_smoothing, pan_smoothing);
+	}
+	channel_remove_finished_voices(ch);
+	if(proc) proc->total_voices -= (proc->total_voices > (int)ch->voice_count) ? (int)(ch->voice_count - ch->voice_count) : 0;
+}
+
+static void ss_channel_update_tuning(SS_MIDIChannel *ch) {
+	ch->channel_tuning_cents =
+	ch->custom_controllers[SS_CUSTOM_CTRL_TUNING] + /* RPN channel fine tuning */
+	ch->custom_controllers[SS_CUSTOM_CTRL_TRANSPOSE_FINE] + /* User tuning (transpose) */
+	ch->custom_controllers[SS_CUSTOM_CTRL_MASTER_TUNING] + /* Master tuning, set by sysEx */
+	ch->custom_controllers[SS_CUSTOM_CTRL_TUNING_SEMITONES] *
+	100; /* RPN channel coarse tuning */
+}
+
+static void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val) {
+	ch->custom_controllers[type] = val;
+	ss_channel_update_tuning(ch);
+}
+
+static void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents) {
+	cents = round(cents);
+	ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_TUNING, cents);
+}
+
+static void ss_channel_set_modulation_depth(SS_MIDIChannel *ch, float cents) {
+	cents = round(cents);
+	ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_MODULATION_MULTIPLIER, cents / 50.0);
+}
+
+#if 0
+typedef struct SS_PortamentoLookup {
+	uint8_t key;
+	float value;
+} SS_PortamentoLookup;
+
+static const SS_PortamentoLookup portamento_lookup_table[] = {
+	{ 0, 0.0 },
+	{ 1, 0.006 },
+	{ 2, 0.023 },
+	{ 4, 0.05 },
+	{ 8, 0.11 },
+	{ 16, 0.25 },
+	{ 32, 0.5 },
+	{ 64, 2.06 },
+	{ 80, 4.2 },
+	{ 96, 8.4 },
+	{ 112, 19.5 },
+	{ 116, 26.7 },
+	{ 120, 40.0 },
+	{ 124, 80.0 },
+	{ 127, 480.0 }
+};
+static const int portamento_lookup_table_count = sizeof(portamento_lookup_table) / sizeof(portamento_lookup_table[0]);
+
+static float ss_portamento_get_lookup(int time) {
+	const int count = portamento_lookup_table_count;
+	for(int i = 0; i < count; i++) {
+		if(portamento_lookup_table[i].key == time)
+			return portamento_lookup_table[i].value;
+	}
+
+	/* The slow path */
+	int lower = -1;
+	int lower_index = 0;
+	int upper = -1;
+	int upper_index = 0;
+	for(int i = 0; i < count; i++) {
+		int key = portamento_lookup_table[i].key;
+		if(key < time && (lower == -1 || key > lower)) {
+			lower = key;
+			lower_index = i;
+		}
+		if(key > time && (upper == -1 || key < upper)) {
+			upper = key;
+			upper_index = i;
+		}
+	}
+
+	if(lower != -1 && upper != -1) {
+		const float lowerTime = portamento_lookup_table[lower_index].value;
+		const float upperTime = portamento_lookup_table[upper_index].value;
+
+		return (lowerTime + ((float)(time - lower) * (upperTime - lowerTime)) / (float)(upper - lower));
+	}
+
+	return 0;
+}
+
+static float ss_portamento_time_to_seconds(float portamento_time, float distance) {
+	return ss_portamento_get_lookup(portamento_time) * (distance / 36.0);
+}
+#endif
