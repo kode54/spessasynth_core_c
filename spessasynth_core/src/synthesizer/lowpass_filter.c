@@ -134,28 +134,35 @@ void ss_lowpass_filter_apply(SS_LowpassFilter *f,
                              float fc_excursion, float smoothing) {
 	int initial_fc = mod_gens[SS_GEN_INITIAL_FILTER_FC];
 
-	if(!f->initialized) {
+	if(f->initialized) {
+		/* Note:
+		 * We only smooth out the initialFc part,
+		 * the modulation envelope and LFO excursions are not smoothed.
+		 */
+		f->current_initial_fc += ((float)initial_fc - f->current_initial_fc) * smoothing;
+	} else {
+		/* Filter initialization, set the current fc to target */
 		f->initialized = true;
 		f->current_initial_fc = (float)initial_fc;
-	} else {
-		f->current_initial_fc += ((float)initial_fc - f->current_initial_fc) * smoothing;
 	}
 
+	/* The final cutoff for this calculation */
 	float target_cutoff = f->current_initial_fc + fc_excursion;
 	int mod_resonance = mod_gens[SS_GEN_INITIAL_FILTER_Q];
 
-	/* Filter open: skip if both initial_fc and target are near max and no resonance */
+	/* Note:
+	 * the check for initialFC is because of the filter optimization
+	 * (if cents are the maximum then the filter is open)
+	 * filter cannot use this optimization if it's dynamic (see #53), and
+	 * the filter can only be dynamic if the initial filter is not open
+	 */
 	if(f->current_initial_fc > 13499.0f && target_cutoff > 13499.0f && mod_resonance == 0) {
 		f->current_initial_fc = 13500.0f;
+		/* Filter is open */
 		return;
 	}
 
-	/* Clamp target_cutoff to the valid coefficient cache range to prevent
-	 * numerically extreme biquad parameters at very low cutoff values */
-	if(target_cutoff < (float)CACHE_CENTS_MIN) target_cutoff = (float)CACHE_CENTS_MIN;
-	if(target_cutoff > (float)CACHE_CENTS_MAX) target_cutoff = (float)CACHE_CENTS_MAX;
-
-	/* Recalculate if cutoff or resonance changed */
+	/* Check if the frequency has changed. if so, calculate new coefficients */
 	if(fabsf(f->last_target_cutoff - target_cutoff) > 1.0f || f->resonance_cb != mod_resonance) {
 		f->last_target_cutoff = target_cutoff;
 		f->resonance_cb = mod_resonance;
@@ -165,7 +172,7 @@ void ss_lowpass_filter_apply(SS_LowpassFilter *f,
 	/* Apply biquad IIR filter */
 	double x1 = f->x1, x2 = f->x2;
 	double y1 = f->y1, y2 = f->y2;
-	double a0 = f->a0, a1 = f->a1, a2 = f->a2, a3 = f->a3, a4 = f->a4;
+	const double a0 = f->a0, a1 = f->a1, a2 = f->a2, a3 = f->a3, a4 = f->a4;
 
 	for(int i = 0; i < count; i++) {
 		double input = (double)buffer[i];
