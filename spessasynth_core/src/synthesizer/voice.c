@@ -334,7 +334,7 @@ bool ss_voice_render(SS_Voice *v,
                      float *out_left, float *out_right,
                      float *reverb_left, float *reverb_right,
                      float *chorus_left, float *chorus_right,
-					 float *delay_left, float *delay_right,
+                     float *delay_left, float *delay_right,
                      int sample_count,
                      SS_InterpolationType interp,
                      float vol_smoothing,
@@ -485,14 +485,14 @@ bool ss_voice_render(SS_Voice *v,
 	float reverb_amt = (float)v->modulated_generators[SS_GEN_REVERB_EFFECTS_SEND] / 1000.0f * v->reverb_send;
 	float chorus_amt = (float)v->modulated_generators[SS_GEN_CHORUS_EFFECTS_SEND] / 1000.0f * v->chorus_send;
 
-	if (ch->synth && ch->synth->delay_active) {
+	if(ch->synth && ch->synth->delay_active) {
 		const int delaySend = ch->midi_controllers[SS_MIDCON_VARIATION_DEPTH] * v->delay_send;
-		if (delaySend > 0) {
+		if(delaySend > 0) {
 			const float delayGain =
-				gain *
-				ch->synth->master_params.delay_gain *
-				((float)(delaySend >> 7) / 127.0);
-			for (int i = 0; i < sample_count; i++) {
+			gain *
+			ch->synth->master_params.delay_gain *
+			((float)(delaySend >> 7) / 127.0);
+			for(int i = 0; i < sample_count; i++) {
 				const float delaySample = delayGain * buf[i];
 				delay_left[i] += delaySample;
 				delay_right[i] += delaySample;

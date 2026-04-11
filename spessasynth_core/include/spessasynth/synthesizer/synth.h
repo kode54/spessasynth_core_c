@@ -7,14 +7,14 @@
 #include <stdint.h>
 #if __has_include(<spessasynth_core/soundbank.h>)
 #include <spessasynth_core/chorus.h>
-#include <spessasynth_core/reverb.h>
 #include <spessasynth_core/delay.h>
+#include <spessasynth_core/reverb.h>
 #include <spessasynth_core/soundbank.h>
 #else
 #include "../soundbank/soundbank.h"
 #include "dsp/chorus.h"
-#include "dsp/reverb.h"
 #include "dsp/delay.h"
+#include "dsp/reverb.h"
 #endif
 
 #ifdef __cplusplus
@@ -299,7 +299,7 @@ void ss_channel_render(SS_MIDIChannel *ch,
                        float *out_left, float *out_right,
                        float *reverb_left, float *reverb_right,
                        float *chorus_left, float *chorus_right,
-					   float *delay_left, float *delay_right,
+                       float *delay_left, float *delay_right,
                        uint32_t sample_count);
 
 /* ── Synth processor options ─────────────────────────────────────────────── */

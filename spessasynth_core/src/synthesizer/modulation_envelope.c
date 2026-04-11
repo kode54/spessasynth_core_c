@@ -18,24 +18,24 @@ extern float ss_convex_attack(int index_0_to_999);
 float ss_modulation_envelope_get_value(const SS_ModulationEnvelope *env,
                                        double current_time);
 void ss_modulation_envelope_start_release(SS_ModulationEnvelope *env,
-										  const int16_t *mod_gens,
-										  int midi_note,
-										  double release_start_time,
-										  double start_time);
+                                          const int16_t *mod_gens,
+                                          int midi_note,
+                                          double release_start_time,
+                                          double start_time);
 
 static float tc2Sec(float timecents) {
 	/* At such low values, buffer size of 128 may cause clicks in the lowpass filter
 	 * -10114 is the lowest for it to fit at least twice in 128 samples@44.1kHz
 	 * Testcase: MS_Basic-v0.2.1.sf2 Bass & Lead
 	 */
-	if (timecents <= -10114) return 0;
+	if(timecents <= -10114) return 0;
 	return ss_timecents_to_seconds(timecents);
 }
 
 void ss_modulation_envelope_recalculate(SS_ModulationEnvelope *env,
                                         const int16_t *mod_gens,
                                         int midi_note,
-										bool is_in_release,
+                                        bool is_in_release,
                                         double release_start_time,
                                         double start_time) {
 	env->entered_release = false;
@@ -63,7 +63,7 @@ void ss_modulation_envelope_recalculate(SS_ModulationEnvelope *env,
 	env->hold_end = env->attack_end + env->hold_duration;
 	env->decay_end = env->hold_end + env->decay_duration;
 
-	if (is_in_release) {
+	if(is_in_release) {
 		ss_modulation_envelope_start_release(env, mod_gens, midi_note, release_start_time, start_time);
 	}
 }
@@ -78,7 +78,7 @@ void ss_modulation_envelope_start_release(SS_ModulationEnvelope *env,
 
 	/* Min is set to -7200 to prevent lowpass clicks */
 	float releasecents = mod_gens[SS_GEN_RELEASE_MOD_ENV];
-	if (releasecents < -7200) releasecents = -7200;
+	if(releasecents < -7200) releasecents = -7200;
 	const float release_time = tc2Sec(releasecents);
 
 	/* Release time is from the full level to 0%
@@ -95,26 +95,28 @@ float ss_modulation_envelope_get_value(const SS_ModulationEnvelope *env,
 		/* If the voice is still in the delay phase,
 		 * Start level will be 0 that will result in divide by zero
 		 */
-		if (e->release_start_level == 0) {
+		if(e->release_start_level == 0) {
 			return 0;
 		}
 		float value = (1.0 - (current_time - e->release_start_time) / e->release_duration) * e->release_start_level;
-		if (value < 0.0) value = 0.0;
+		if(value < 0.0) value = 0.0;
 		return value;
 	}
 
-	if (current_time < e->delay_end) {
+	if(current_time < e->delay_end) {
 		e->current_value = 0;
-	} else if (current_time < e->attack_end) {
+	} else if(current_time < e->attack_end) {
 		/* Modulation envelope uses convex curve for attack */
 		int idx = (int)((1.0 - (e->attack_end - current_time) / e->attack_duration) * 1000.0);
-		if (idx < 0) idx = 0;
-		else if (idx > 999) idx = 999;
+		if(idx < 0)
+			idx = 0;
+		else if(idx > 999)
+			idx = 999;
 		e->current_value = ss_convex_attack(idx);
-	} else if (current_time < e->hold_end) {
+	} else if(current_time < e->hold_end) {
 		/* Hold: stay at 1 */
 		e->current_value = 1;
-	} else if (current_time < e->decay_end) {
+	} else if(current_time < e->decay_end) {
 		/* Decay: linear ramp from 1 to sustain level */
 		e->current_value = (1.0 - (e->decay_end - current_time) / e->decay_duration) * (e->sustain_level - 1.0) + 1.0;
 	} else {

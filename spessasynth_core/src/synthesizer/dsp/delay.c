@@ -5,7 +5,6 @@
 
 #include <math.h>
 #include <stdbool.h>
-#include <string.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -39,9 +38,8 @@ static const int delay_time_segments_count = sizeof(delay_time_segments) / sizeo
 
 static const int DELAY_GAIN = 1.66;
 
-SS_Delay *ss_delay_create(float sample_rate, int max_buffer_size)
-{
-	SS_Delay *delay = (SS_Delay *) calloc(1, sizeof(*delay));
+SS_Delay *ss_delay_create(float sample_rate, int max_buffer_size) {
+	SS_Delay *delay = (SS_Delay *)calloc(1, sizeof(*delay));
 	if(!delay) return NULL;
 
 	/* constructed preset */
@@ -59,9 +57,9 @@ SS_Delay *ss_delay_create(float sample_rate, int max_buffer_size)
 	delay->sample_rate = sample_rate;
 	delay->max_buffer_size = max_buffer_size;
 
-	delay->delay_center_output = (float *) calloc(max_buffer_size, sizeof(float));
+	delay->delay_center_output = (float *)calloc(max_buffer_size, sizeof(float));
 	if(!delay->delay_center_output) goto out_of_memory;
-	delay->delay_pre_lpf = (float *) calloc(max_buffer_size, sizeof(float));
+	delay->delay_pre_lpf = (float *)calloc(max_buffer_size, sizeof(float));
 	if(!delay->delay_pre_lpf) goto out_of_memory;
 
 	delay->delay_center_time = 0.34 * sample_rate;
@@ -82,8 +80,7 @@ out_of_memory:
 	return NULL;
 }
 
-void ss_delay_clear(SS_Delay *delay)
-{
+void ss_delay_clear(SS_Delay *delay) {
 	if(!delay || !delay->delay_center_output || !delay->delay_pre_lpf) return;
 	memset(delay->delay_center_output, 0, delay->max_buffer_size * sizeof(float));
 	memset(delay->delay_pre_lpf, 0, delay->max_buffer_size * sizeof(float));
@@ -92,8 +89,7 @@ void ss_delay_clear(SS_Delay *delay)
 	ss_delay_line_clear(delay->delayRight);
 }
 
-void ss_delay_free(SS_Delay *delay)
-{
+void ss_delay_free(SS_Delay *delay) {
 	if(!delay) return;
 	free(delay->delay_center_output);
 	free(delay->delay_pre_lpf);
@@ -103,14 +99,12 @@ void ss_delay_free(SS_Delay *delay)
 	free(delay);
 }
 
-void ss_delay_set_send_level_to_reverb(SS_Delay *delay, unsigned char value)
-{
+void ss_delay_set_send_level_to_reverb(SS_Delay *delay, unsigned char value) {
 	delay->parameters.send_level_to_reverb = value;
 	delay->reverb_gain = (float)value / 127.0;
 }
 
-void ss_delay_set_pre_lowpass(SS_Delay *delay, unsigned char value)
-{
+void ss_delay_set_pre_lowpass(SS_Delay *delay, unsigned char value) {
 	delay->parameters.pre_lowpass = value;
 
 	// GS sure loves weird mappings, huh?
@@ -120,39 +114,33 @@ void ss_delay_set_pre_lowpass(SS_Delay *delay, unsigned char value)
 	delay->preLPFa = 1.0 - decay;
 }
 
-static void ss_delay_update_gain(SS_Delay *delay)
-{
+static void ss_delay_update_gain(SS_Delay *delay) {
 	delay->delayCenter->gain = (float)delay->parameters.level_center / 127.0;
 	delay->delayLeft->gain = (float)delay->parameters.level_left / 127.0;
 	delay->delayLeft->gain = (float)delay->parameters.level_right / 127.0;
 }
 
-void ss_delay_set_level_right(SS_Delay *delay, unsigned char value)
-{
+void ss_delay_set_level_right(SS_Delay *delay, unsigned char value) {
 	delay->parameters.level_right = value;
 	ss_delay_update_gain(delay);
 }
 
-void ss_delay_set_level(SS_Delay *delay, unsigned char value)
-{
+void ss_delay_set_level(SS_Delay *delay, unsigned char value) {
 	delay->parameters.level = value;
 	delay->gain = ((float)value / 127.0) * DELAY_GAIN;
 }
 
-void ss_delay_set_level_center(SS_Delay *delay, unsigned char value)
-{
+void ss_delay_set_level_center(SS_Delay *delay, unsigned char value) {
 	delay->parameters.level_center = value;
 	ss_delay_update_gain(delay);
 }
 
-void ss_delay_set_level_left(SS_Delay *delay, unsigned char value)
-{
+void ss_delay_set_level_left(SS_Delay *delay, unsigned char value) {
 	delay->parameters.level_left = value;
 	ss_delay_update_gain(delay);
 }
 
-void ss_delay_set_feedback(SS_Delay *delay, unsigned char value)
-{
+void ss_delay_set_feedback(SS_Delay *delay, unsigned char value) {
 	delay->parameters.feedback = value;
 
 	/* Only the center delay has feedback */
@@ -163,8 +151,7 @@ void ss_delay_set_feedback(SS_Delay *delay, unsigned char value)
 	delay->delayCenter->feedback = ((float)value - 64.0) / 66.0;
 }
 
-void ss_delay_set_time_ratio_right(SS_Delay *delay, unsigned char value)
-{
+void ss_delay_set_time_ratio_right(SS_Delay *delay, unsigned char value) {
 	delay->parameters.time_ratio_right = value;
 
 	/* DELAY TIME RATIO LEFT and DELAY TIME RATIO RIGHT specify the ratio in relation to DELAY TIME CENTER.
@@ -175,10 +162,9 @@ void ss_delay_set_time_ratio_right(SS_Delay *delay, unsigned char value)
 	delay->delayRight->time = delay->delay_center_time * delay->delay_right_multiplier;
 }
 
-void ss_delay_set_time_ratio_left(SS_Delay *delay, unsigned char value)
-{
+void ss_delay_set_time_ratio_left(SS_Delay *delay, unsigned char value) {
 	delay->parameters.time_ratio_left = value;
-	
+
 	/* DELAY TIME RATIO LEFT and DELAY TIME RATIO RIGHT specify the ratio in relation to DELAY TIME CENTER.
 	 * The resolution is 100/24(%).
 	 * Turn that into multiplier
@@ -187,17 +173,16 @@ void ss_delay_set_time_ratio_left(SS_Delay *delay, unsigned char value)
 	delay->delayLeft->time = delay->delay_center_time * delay->delay_left_multiplier;
 }
 
-void ss_delay_set_time_center(SS_Delay *delay, unsigned char value)
-{
+void ss_delay_set_time_center(SS_Delay *delay, unsigned char value) {
 	delay->parameters.time_center = value;
 
 	float delayMs = 0.1;
-	for (size_t i = 0; i < delay_time_segments_count; i++) {
+	for(size_t i = 0; i < delay_time_segments_count; i++) {
 		const SS_DelayTimeSegment *segment = &delay_time_segments[i];
-		if (value >= segment->start && value < segment->end) {
+		if(value >= segment->start && value < segment->end) {
 			delayMs =
-				segment->time_start +
-				(value - segment->start) * segment->resolution;
+			segment->time_start +
+			(value - segment->start) * segment->resolution;
 			break;
 		}
 	}
@@ -209,8 +194,7 @@ void ss_delay_set_time_center(SS_Delay *delay, unsigned char value)
 	delay->delayRight->time = delay->delay_center_time * delay->delay_right_multiplier;
 }
 
-void ss_delay_set_macro(SS_Delay *delay, unsigned char value)
-{
+void ss_delay_set_macro(SS_Delay *delay, unsigned char value) {
 	// SC-8850 manual page 85
 	ss_delay_set_level(delay, 64);
 	ss_delay_set_pre_lowpass(delay, 0);
@@ -218,7 +202,7 @@ void ss_delay_set_macro(SS_Delay *delay, unsigned char value)
 	ss_delay_set_level_right(delay, 0);
 	ss_delay_set_level_left(delay, 0);
 	ss_delay_set_level_center(delay, 127);
-	switch (value) {
+	switch(value) {
 		/**
 		 * DELAY MACRO is a macro parameter that allows global setting of delay parameters. When you select the delay type with DELAY MACRO, each delay parameter will be set to their most
 		 * suitable value.
@@ -361,18 +345,16 @@ void ss_delay_set_macro(SS_Delay *delay, unsigned char value)
 }
 
 void ss_delay_process(SS_Delay *delay,
-					  const float *inputL, const float *inputR,
-					  float *outputL, float *outputR,
-					  float *reverbL, float *reverbR,
-					  int sample_count
-					  )
-{
+                      const float *inputL, const float *inputR,
+                      float *outputL, float *outputR,
+                      float *reverbL, float *reverbR,
+                      int sample_count) {
 	float *delayIn;
-	if (delay->parameters.pre_lowpass > 0) {
+	if(delay->parameters.pre_lowpass > 0) {
 		float *preLPF = delay->delay_pre_lpf;
 		float z = delay->preLPFz;
 		const float a = delay->preLPFa;
-		for (int i = 0; i < sample_count; i++) {
+		for(int i = 0; i < sample_count; i++) {
 			const float x = (inputL[i] + inputR[i]) / 2.0;
 			z += a * (x - z);
 			preLPF[i] = z;
@@ -382,7 +364,7 @@ void ss_delay_process(SS_Delay *delay,
 	} else {
 		/* Use the buffer just to downmix */
 		float *downmix = delay->delay_pre_lpf;
-		for (int i = 0; i < sample_count; i++) {
+		for(int i = 0; i < sample_count; i++) {
 			downmix[i] = (inputL[i] + inputR[i]) / 2.0;
 		}
 		delayIn = downmix;
@@ -404,7 +386,7 @@ void ss_delay_process(SS_Delay *delay,
 
 	/* Mix into output */
 	float *center = delay->delay_center_output;
-	for (int i = 0; i < sample_count; i++) {
+	for(int i = 0; i < sample_count; i++) {
 		const float sample = center[i];
 		const float outReverb = sample * reverbGain;
 		reverbL[i] += outReverb;
@@ -415,7 +397,7 @@ void ss_delay_process(SS_Delay *delay,
 	}
 
 	/* Add input into delay (stereo delays take input from both) */
-	for (int i = 0; i < sample_count; i++) {
+	for(int i = 0; i < sample_count; i++) {
 		center[i] += (inputL[i] + inputR[i]) / 2.0;
 	}
 
@@ -423,14 +405,14 @@ void ss_delay_process(SS_Delay *delay,
 	float *stereoOut = delay->delay_pre_lpf;
 	/* Left */
 	ss_delay_line_process(delay->delayLeft, center, stereoOut, sample_count);
-	for (int i = 0; i < sample_count; i++) {
+	for(int i = 0; i < sample_count; i++) {
 		const float sample = stereoOut[i];
 		outputL[i] += sample * gain;
 		reverbL[i] += sample * reverbGain;
 	}
 	/* Right */
 	ss_delay_line_process(delay->delayRight, center, stereoOut, sample_count);
-	for (int i = 0; i < sample_count; i++) {
+	for(int i = 0; i < sample_count; i++) {
 		const float sample = stereoOut[i];
 		outputR[i] += sample * gain;
 		reverbR[i] += sample * reverbGain;

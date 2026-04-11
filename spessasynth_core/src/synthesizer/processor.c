@@ -231,14 +231,14 @@ static void ss_processor_render_internal(SS_Processor *proc,
                                          float *out_left, float *out_right,
                                          float *reverb_left, float *reverb_right,
                                          float *chorus_left, float *chorus_right,
-										 float *delay_left, float *delay_right,
+                                         float *delay_left, float *delay_right,
                                          uint32_t sample_count) {
 	if(!proc || sample_count == 0) return;
 
 	/* Use silent scratch buffers when caller passes NULL for effects */
 	float *rl = reverb_left, *rr = reverb_right;
 	float *cl = chorus_left, *cr = chorus_right;
-	float *dl = delay_left,  *dr = delay_right;
+	float *dl = delay_left, *dr = delay_right;
 
 	proc->total_voices = 0;
 
@@ -1090,7 +1090,7 @@ void ss_processor_system_reset(SS_Processor *proc) {
 	ss_chorus_set_macro(proc->chorus, 2);
 	// Delay1 default
 	ss_delay_set_macro(proc->delay, 0);
-	if (proc->master_params.delay_enabled) proc->delay_active = false;
+	if(proc->master_params.delay_enabled) proc->delay_active = false;
 
 	(void)t;
 	proc_emit(proc, SS_EVENT_STOP_ALL, -1, 0, 0);

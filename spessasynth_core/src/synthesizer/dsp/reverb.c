@@ -7,10 +7,10 @@
 
 #include <math.h>
 #include <stdbool.h>
-#include <string.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #if __has_include(<spessasynth_core/spessasynth.h>)
 #include <spessasynth_core/reverb.h>

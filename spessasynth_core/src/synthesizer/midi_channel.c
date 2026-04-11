@@ -35,7 +35,7 @@ extern bool ss_voice_render(SS_Voice *v, const SS_MIDIChannel *ch,
                             float *ol, float *or_,
                             float *rl, float *rr,
                             float *cl, float *cr,
-							float *dl, float *dr,
+                            float *dl, float *dr,
                             int sample_count,
                             SS_InterpolationType interp,
                             float vol_smoothing, float filter_smoothing, float pan_smoothing);
@@ -150,7 +150,7 @@ static void reset_controllers_rp15_compliant(SS_MIDIChannel *ch, double time) {
 		if(
 		!non_resettable_controllers[i] &&
 		reset_value != ch->midi_controllers[i] &&
-		   i != SS_MIDCON_PORTAMENTO_CONTROL) {
+		i != SS_MIDCON_PORTAMENTO_CONTROL) {
 			ss_channel_controller(ch, i, reset_value >> 7, time);
 		}
 	}
@@ -166,8 +166,10 @@ static void reset_controllers_rp15_compliant(SS_MIDIChannel *ch, double time) {
 }
 
 static inline float drum_params_reverb(int note) {
-	if (note == 35 || note == 36) return 0.0;
-	else return 1.0;
+	if(note == 35 || note == 36)
+		return 0.0;
+	else
+		return 1.0;
 }
 
 static void reset_drum_params(SS_MIDIChannel *ch) {
@@ -186,9 +188,9 @@ static void reset_drum_params(SS_MIDIChannel *ch) {
 }
 
 static void reset_portamento(SS_MIDIChannel *ch) {
-	if (ch->locked_controllers[SS_MIDCON_PORTAMENTO_CONTROL]) return;
+	if(ch->locked_controllers[SS_MIDCON_PORTAMENTO_CONTROL]) return;
 
-	if (ch->synth && ch->synth->master_params.midi_system == 2) { /* XG */
+	if(ch->synth && ch->synth->master_params.midi_system == 2) { /* XG */
 		ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, 60, 0);
 	} else {
 		ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, 0, 0);
@@ -200,13 +202,12 @@ static void reset_controllers_to_defaults(SS_MIDIChannel *ch) {
 	for(int cc = 0; cc < 128; cc++) {
 		const int16_t reset_value = default_controller_values[cc];
 		if(ch->midi_controllers[cc] != reset_value && cc < 127) {
-			if (cc != SS_MIDCON_PORTAMENTO_CONTROL &&
-				cc != SS_MIDCON_DATA_ENTRY_MSB &&
-				cc != SS_MIDCON_RPN_MSB &&
-				cc != SS_MIDCON_RPN_LSB &&
-				cc != SS_MIDCON_NRPN_MSB &&
-				cc != SS_MIDCON_NRPN_LSB)
-			{
+			if(cc != SS_MIDCON_PORTAMENTO_CONTROL &&
+			   cc != SS_MIDCON_DATA_ENTRY_MSB &&
+			   cc != SS_MIDCON_RPN_MSB &&
+			   cc != SS_MIDCON_RPN_LSB &&
+			   cc != SS_MIDCON_NRPN_MSB &&
+			   cc != SS_MIDCON_NRPN_LSB) {
 				ss_channel_controller(ch, cc, reset_value >> 7, 0);
 			}
 		} else {
@@ -500,21 +501,21 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 
 		/* Modulate sample offsets (these are not real time) */
 		const ssize_t cursorStartOffset =
-			voice->modulated_generators[SS_GEN_START_ADDRS_OFFSET] +
-			voice->modulated_generators[SS_GEN_START_ADDRS_COARSE_OFFSET] *
-				32768;
+		voice->modulated_generators[SS_GEN_START_ADDRS_OFFSET] +
+		voice->modulated_generators[SS_GEN_START_ADDRS_COARSE_OFFSET] *
+		32768;
 		const ssize_t endOffset =
-			voice->modulated_generators[SS_GEN_END_ADDR_OFFSET] +
-			voice->modulated_generators[SS_GEN_END_ADDRS_COARSE_OFFSET] *
-				32768;
+		voice->modulated_generators[SS_GEN_END_ADDR_OFFSET] +
+		voice->modulated_generators[SS_GEN_END_ADDRS_COARSE_OFFSET] *
+		32768;
 		const ssize_t loopStartOffset =
-			voice->modulated_generators[SS_GEN_STARTLOOP_ADDRS_OFFSET] +
-			voice->modulated_generators[SS_GEN_STARTLOOP_ADDRS_COARSE_OFFSET] *
-				32768;
+		voice->modulated_generators[SS_GEN_STARTLOOP_ADDRS_OFFSET] +
+		voice->modulated_generators[SS_GEN_STARTLOOP_ADDRS_COARSE_OFFSET] *
+		32768;
 		const ssize_t loopEndOffset =
-			voice->modulated_generators[SS_GEN_ENDLOOP_ADDRS_OFFSET] +
-			voice->modulated_generators[SS_GEN_ENDLOOP_ADDRS_COARSE_OFFSET] *
-				32768;
+		voice->modulated_generators[SS_GEN_ENDLOOP_ADDRS_OFFSET] +
+		voice->modulated_generators[SS_GEN_ENDLOOP_ADDRS_COARSE_OFFSET] *
+		32768;
 
 #define clamp(a, min, max) ((a) < (min) ? (min) : (((a) > (max) ? (max) : (a))))
 		/* Clamp the sample offsets */
@@ -526,22 +527,21 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 #undef clamp
 
 		// Swap loops if needed
-		if (voice->sample.loop_end < voice->sample.loop_start) {
+		if(voice->sample.loop_end < voice->sample.loop_start) {
 			const size_t temp = voice->sample.loop_start;
 			voice->sample.loop_start = voice->sample.loop_end;
 			voice->sample.loop_end = temp;
 		}
-		if (
-			voice->sample.loop_end - voice->sample.loop_start < 1 && /* Disable loop if enabled */
-			/* Don't disable on release mode. Testcase:
-			 * https://github.com/spessasus/SpessaSynth/issues/174
-			 */
-			(voice->sample.looping_mode == SS_LOOP_LOOP || voice->sample.looping_mode == SS_LOOP_LOOP_RELEASE)
-		) {
+		if(
+		voice->sample.loop_end - voice->sample.loop_start < 1 && /* Disable loop if enabled */
+		/* Don't disable on release mode. Testcase:
+		 * https://github.com/spessasus/SpessaSynth/issues/174
+		 */
+		(voice->sample.looping_mode == SS_LOOP_LOOP || voice->sample.looping_mode == SS_LOOP_LOOP_RELEASE)) {
 			voice->sample.looping_mode = SS_LOOP_NONE;
 		}
 		voice->sample.is_looping = (voice->sample.looping_mode == SS_LOOP_LOOP ||
-									voice->sample.looping_mode == SS_LOOP_LOOP_RELEASE);
+		                            voice->sample.looping_mode == SS_LOOP_LOOP_RELEASE);
 
 		/* Apply portamento */
 		voice->portamento_duration = portamento_duration;
@@ -1292,7 +1292,7 @@ void ss_channel_render(SS_MIDIChannel *ch,
                        float *out_left, float *out_right,
                        float *reverb_left, float *reverb_right,
                        float *chorus_left, float *chorus_right,
-					   float *delay_left, float *delay_right,
+                       float *delay_left, float *delay_right,
                        uint32_t sample_count) {
 	if(ch->is_muted) return;
 	SS_Processor *proc = ch->synth;
@@ -1310,7 +1310,7 @@ void ss_channel_render(SS_MIDIChannel *ch,
 		                out_left, out_right,
 		                reverb_left, reverb_right,
 		                chorus_left, chorus_right,
-						delay_left, delay_right,
+		                delay_left, delay_right,
 		                (int)sample_count, interp,
 		                vol_smoothing, filter_smoothing, pan_smoothing);
 	}
