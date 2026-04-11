@@ -373,6 +373,8 @@ typedef struct {
 
 #define SS_MAX_SOUNDBANKS 16
 
+#define SS_MAX_SOUND_CHUNK 2048
+
 typedef struct SS_Processor {
 	uint32_t sample_rate;
 	SS_MIDIChannel *midi_channels[SS_CHANNEL_COUNT * 3]; /* up to 3 ports */
@@ -388,14 +390,18 @@ typedef struct SS_Processor {
 	SS_Reverb *reverb;
 	SS_Chorus *chorus;
 	SS_Delay *delay;
+	SS_InsertionProcessor *insertion; /* active insertion effect processor (owned) */
 
-	size_t effects_allocated;
-	float *reverb_left;
-	float *reverb_right;
-	float *chorus_left;
-	float *chorus_right;
-	float *delay_left;
-	float *delay_right;
+	float reverb_left[SS_MAX_SOUND_CHUNK];
+	float reverb_right[SS_MAX_SOUND_CHUNK];
+	float chorus_left[SS_MAX_SOUND_CHUNK];
+	float chorus_right[SS_MAX_SOUND_CHUNK];
+	float delay_left[SS_MAX_SOUND_CHUNK];
+	float delay_right[SS_MAX_SOUND_CHUNK];
+	float insertion_left[SS_MAX_SOUND_CHUNK]; /* per-block insertion input accumulation buffer */
+	float insertion_right[SS_MAX_SOUND_CHUNK];
+
+	float mix_buffer[SS_MAX_SOUND_CHUNK];
 
 	SS_MasterParameters master_params;
 	float volume_envelope_smoothing_factor;
@@ -405,10 +411,6 @@ typedef struct SS_Processor {
 	bool delay_active; /* whether the delay effect has been activated via sysex */
 	bool custom_channel_numbers; /* whether any channel uses a non-default rx_channel */
 	bool insertion_active; /* true once any channel has insertion_enabled */
-
-	SS_InsertionProcessor *insertion; /* active insertion effect processor (owned) */
-	float *insertion_left; /* per-block insertion input accumulation buffer */
-	float *insertion_right;
 
 	SS_EventCallback event_callback;
 	void *event_userdata;

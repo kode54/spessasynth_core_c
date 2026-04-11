@@ -110,9 +110,9 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 		proc->channel_count++;
 	}
 
-	proc->reverb = ss_reverb_create((float)sample_rate, 512);
-	proc->chorus = ss_chorus_create((float)sample_rate, 512);
-	proc->delay = ss_delay_create((float)sample_rate, 512);
+	proc->reverb = ss_reverb_create((float)sample_rate, SS_MAX_SOUND_CHUNK);
+	proc->chorus = ss_chorus_create((float)sample_rate, SS_MAX_SOUND_CHUNK);
+	proc->delay = ss_delay_create((float)sample_rate, SS_MAX_SOUND_CHUNK);
 	if(!proc->reverb || !proc->chorus || !proc->delay) {
 		ss_processor_free(proc);
 		return NULL;
@@ -146,14 +146,6 @@ void ss_processor_free(SS_Processor *proc) {
 	ss_chorus_free(proc->chorus);
 	ss_delay_free(proc->delay);
 	ss_insertion_free(proc->insertion);
-	free(proc->reverb_left);
-	free(proc->reverb_right);
-	free(proc->chorus_left);
-	free(proc->chorus_right);
-	free(proc->delay_left);
-	free(proc->delay_right);
-	free(proc->insertion_left);
-	free(proc->insertion_right);
 
 	free(proc);
 }
@@ -255,7 +247,7 @@ static void ss_processor_render_internal(SS_Processor *proc,
 		if(!ch || ch->is_muted || ch->voice_count == 0) continue;
 
 		if(proc->options.enable_effects && ch->insertion_enabled &&
-		   proc->insertion_active && proc->insertion_left) {
+		   proc->insertion_active) {
 			/* Route this channel's voices into the insertion input buffers.
 			 * Skip reverb/chorus/delay sends: the insertion processor handles them. */
 			ss_channel_render(ch, time_now,
@@ -297,43 +289,15 @@ void ss_processor_render(SS_Processor *proc,
 	float *chorus_left, *chorus_right;
 	float *delay_left, *delay_right;
 
-	if(proc->effects_allocated < 512) {
-		reverb_left = (float *)realloc(proc->reverb_left, sizeof(float) * 512);
-		if(!reverb_left) return;
-		proc->reverb_left = reverb_left;
-		reverb_right = (float *)realloc(proc->reverb_right, sizeof(float) * 512);
-		if(!reverb_right) return;
-		proc->reverb_right = reverb_right;
-		chorus_left = (float *)realloc(proc->chorus_left, sizeof(float) * 512);
-		if(!chorus_left) return;
-		proc->chorus_left = chorus_left;
-		chorus_right = (float *)realloc(proc->chorus_right, sizeof(float) * 512);
-		if(!chorus_right) return;
-		delay_left = (float *)realloc(proc->delay_left, sizeof(float) * 512);
-		if(!delay_left) return;
-		proc->delay_left = delay_left;
-		delay_right = (float *)realloc(proc->delay_right, sizeof(float) * 512);
-		if(!delay_right) return;
-		proc->delay_right = delay_right;
-		proc->chorus_right = chorus_right;
-		float *ins_l = (float *)realloc(proc->insertion_left, sizeof(float) * 512);
-		if(!ins_l) return;
-		proc->insertion_left = ins_l;
-		float *ins_r = (float *)realloc(proc->insertion_right, sizeof(float) * 512);
-		if(!ins_r) return;
-		proc->insertion_right = ins_r;
-		proc->effects_allocated = 512;
-	} else {
-		reverb_left = proc->reverb_left;
-		reverb_right = proc->reverb_right;
-		chorus_left = proc->chorus_left;
-		chorus_right = proc->chorus_right;
-		delay_left = proc->delay_left;
-		delay_right = proc->delay_right;
-	}
+	reverb_left = proc->reverb_left;
+	reverb_right = proc->reverb_right;
+	chorus_left = proc->chorus_left;
+	chorus_right = proc->chorus_right;
+	delay_left = proc->delay_left;
+	delay_right = proc->delay_right;
 
 	while(sample_count) {
-		const int block_count = sample_count > 512 ? 512 : sample_count;
+		const int block_count = sample_count > SS_MAX_SOUND_CHUNK ? SS_MAX_SOUND_CHUNK : sample_count;
 		sample_count -= block_count;
 
 		memset(reverb_left, 0, sizeof(float) * block_count);
@@ -775,9 +739,9 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 							if(len < 9) break;
 							uint32_t efx_type = ((uint32_t)data[7] << 8) | (uint32_t)data[8];
 							ss_insertion_free(proc->insertion);
-							proc->insertion = ss_insertion_create(efx_type, proc->sample_rate, 512);
+							proc->insertion = ss_insertion_create(efx_type, proc->sample_rate, SS_MAX_SOUND_CHUNK);
 							if(!proc->insertion)
-								proc->insertion = ss_insertion_create(0x0000, proc->sample_rate, 512);
+								proc->insertion = ss_insertion_create(0x0000, proc->sample_rate, SS_MAX_SOUND_CHUNK);
 							if(proc->insertion) {
 								proc->insertion->reset(proc->insertion);
 								proc->insertion->send_level_to_reverb = (40.0f / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
@@ -1180,7 +1144,7 @@ void ss_processor_system_reset(SS_Processor *proc) {
 
 	/* Reset insertion: free old processor, create default Thru */
 	ss_insertion_free(proc->insertion);
-	proc->insertion = ss_insertion_create(0x0000, proc->sample_rate, 512);
+	proc->insertion = ss_insertion_create(0x0000, proc->sample_rate, SS_MAX_SOUND_CHUNK);
 	if(proc->insertion) {
 		proc->insertion->send_level_to_reverb = (40.0f / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
 		proc->insertion->send_level_to_chorus = 0.0f;

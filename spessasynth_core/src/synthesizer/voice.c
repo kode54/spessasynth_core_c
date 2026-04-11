@@ -462,10 +462,20 @@ bool ss_voice_render(SS_Voice *v,
 	                          ss_centibel_attenuation_to_gain(volume_excursion_cb);
 
 	/* ── SYNTHESIS ───────────────────────────────────────────────────── */
-	float *buf = (float *)calloc((size_t)sample_count, sizeof(float));
-	if(!buf) {
-		v->is_active = false;
-		return false;
+	bool owned_buf;
+	float *buf;
+
+	if(ch->synth) {
+		buf = &ch->synth->mix_buffer[0];
+		memset(buf, 0, sizeof(float) * SS_MAX_SOUND_CHUNK);
+		owned_buf = false;
+	} else {
+		buf = (float *)calloc((size_t)sample_count, sizeof(float));
+		if(!buf) {
+			v->is_active = false;
+			return false;
+		}
+		owned_buf = true;
 	}
 
 	/* Looping mode 2 (start-on-release): no oscillator, only envelope */
@@ -473,7 +483,7 @@ bool ss_voice_render(SS_Voice *v,
 		bool active = ss_volume_envelope_apply(&v->volume_env, buf, sample_count,
 		                                       gain_target);
 		if(!active) v->is_active = false;
-		free(buf);
+		if(owned_buf) free(buf);
 		return v->is_active;
 	}
 
@@ -544,6 +554,6 @@ bool ss_voice_render(SS_Voice *v,
 		}
 	}
 
-	free(buf);
+	if(owned_buf) free(buf);
 	return v->is_active;
 }
