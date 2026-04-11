@@ -29,6 +29,7 @@
 				include/spessasynth/synthesizer/dsp/chorus.h,
 				include/spessasynth/synthesizer/dsp/dattorro_reverb.h,
 				include/spessasynth/synthesizer/dsp/delay_line.h,
+				include/spessasynth/synthesizer/dsp/delay.h,
 				include/spessasynth/synthesizer/dsp/reverb.h,
 				include/spessasynth/synthesizer/synth.h,
 				include/spessasynth/utils/indexed_byte_array.h,

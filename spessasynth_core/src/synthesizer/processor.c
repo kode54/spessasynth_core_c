@@ -83,10 +83,12 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 	proc->master_params.master_pan = 0.0f;
 	proc->master_params.master_pitch = 0.0f;
 	proc->master_params.master_tuning = 0.0f;
+	proc->master_params.delay_gain = 1.0f;
 	proc->master_params.interpolation_type = proc->options.interpolation;
 	proc->master_params.midi_system = SS_SYSTEM_GS;
 	proc->master_params.reverb_enabled = true;
 	proc->master_params.chorus_enabled = true;
+	proc->master_params.delay_enabled = true;
 
 	/* Smoothing factors — scale relative to 44 100 Hz reference */
 	float sr_scale = 44100.0f / (float)sample_rate;
@@ -107,7 +109,8 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 
 	proc->reverb = ss_reverb_create((float)sample_rate, 512);
 	proc->chorus = ss_chorus_create((float)sample_rate, 512);
-	if(!proc->reverb || !proc->chorus) {
+	proc->delay = ss_delay_create((float)sample_rate, 512);
+	if(!proc->reverb || !proc->chorus || !proc->delay) {
 		ss_processor_free(proc);
 		return NULL;
 	}
@@ -138,10 +141,13 @@ void ss_processor_free(SS_Processor *proc) {
 
 	ss_reverb_free(proc->reverb);
 	ss_chorus_free(proc->chorus);
+	ss_delay_free(proc->delay);
 	free(proc->reverb_left);
 	free(proc->reverb_right);
 	free(proc->chorus_left);
 	free(proc->chorus_right);
+	free(proc->delay_left);
+	free(proc->delay_right);
 
 	free(proc);
 }
@@ -225,12 +231,14 @@ static void ss_processor_render_internal(SS_Processor *proc,
                                          float *out_left, float *out_right,
                                          float *reverb_left, float *reverb_right,
                                          float *chorus_left, float *chorus_right,
+										 float *delay_left, float *delay_right,
                                          uint32_t sample_count) {
 	if(!proc || sample_count == 0) return;
 
 	/* Use silent scratch buffers when caller passes NULL for effects */
 	float *rl = reverb_left, *rr = reverb_right;
 	float *cl = chorus_left, *cr = chorus_right;
+	float *dl = delay_left,  *dr = delay_right;
 
 	proc->total_voices = 0;
 
@@ -242,7 +250,7 @@ static void ss_processor_render_internal(SS_Processor *proc,
 
 		ss_channel_render(ch, time_now,
 		                  out_left, out_right,
-		                  rl, rr, cl, cr,
+		                  rl, rr, cl, cr, dl, dr,
 		                  sample_count);
 
 		proc->total_voices += (int)ch->voice_count;
@@ -271,6 +279,7 @@ void ss_processor_render(SS_Processor *proc,
 
 	float *reverb_left, *reverb_right;
 	float *chorus_left, *chorus_right;
+	float *delay_left, *delay_right;
 
 	if(proc->effects_allocated < 512) {
 		reverb_left = (float *)realloc(proc->reverb_left, sizeof(float) * 512);
@@ -284,6 +293,12 @@ void ss_processor_render(SS_Processor *proc,
 		proc->chorus_left = chorus_left;
 		chorus_right = (float *)realloc(proc->chorus_right, sizeof(float) * 512);
 		if(!chorus_right) return;
+		delay_left = (float *)realloc(proc->delay_left, sizeof(float) * 512);
+		if(!delay_left) return;
+		proc->delay_left = delay_left;
+		delay_right = (float *)realloc(proc->delay_right, sizeof(float) * 512);
+		if(!delay_right) return;
+		proc->delay_right = delay_right;
 		proc->chorus_right = chorus_right;
 		proc->effects_allocated = 512;
 	} else {
@@ -291,6 +306,8 @@ void ss_processor_render(SS_Processor *proc,
 		reverb_right = proc->reverb_right;
 		chorus_left = proc->chorus_left;
 		chorus_right = proc->chorus_right;
+		delay_left = proc->delay_left;
+		delay_right = proc->delay_right;
 	}
 
 	while(sample_count) {
@@ -301,11 +318,18 @@ void ss_processor_render(SS_Processor *proc,
 		memset(reverb_right, 0, sizeof(float) * block_count);
 		memset(chorus_left, 0, sizeof(float) * block_count);
 		memset(chorus_right, 0, sizeof(float) * block_count);
+		if(proc->delay_active) {
+			memset(delay_left, 0, sizeof(float) * block_count);
+			memset(delay_right, 0, sizeof(float) * block_count);
+		}
 
-		ss_processor_render_internal(proc, out_left, out_right, reverb_left, reverb_right, chorus_left, chorus_right, block_count);
+		ss_processor_render_internal(proc, out_left, out_right, reverb_left, reverb_right, chorus_left, chorus_right, delay_left, delay_right, block_count);
 
-		/* These mix into the output, with the option of chorus emitting into the reverb buffers */
-		ss_chorus_process(proc->chorus, chorus_left, chorus_right, out_left, out_right, reverb_left, reverb_right, NULL, NULL, block_count);
+		/* These mix into the output, with the option of chorus and/or delay emitting into the reverb buffers */
+		ss_chorus_process(proc->chorus, chorus_left, chorus_right, out_left, out_right, reverb_left, reverb_right, delay_left, delay_right, block_count);
+		if(proc->delay_active && proc->master_params.midi_system != 2 /* XG */) {
+			ss_delay_process(proc->delay, delay_left, delay_right, out_left, out_right, reverb_left, reverb_right, block_count);
+		}
 		ss_reverb_process(proc->reverb, reverb_left, reverb_right, out_left, out_right, block_count);
 
 		out_left += block_count;
@@ -570,6 +594,8 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 							return;
 						if(is_chorus && !proc->master_params.chorus_enabled)
 							return;
+						if(is_delay && !proc->master_params.delay_enabled)
+							return;
 						/*
 						 0x40 - chorus to delay; any delay param activates delay
 						 */
@@ -653,19 +679,49 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 								ss_chorus_set_send_level_to_delay(proc->chorus, value);
 								break;
 
-							/* Delay — no delay unit yet; params accepted and ignored */
+							/* Delay */
 							case 0x50: /* Delay macro */
+								ss_delay_set_macro(proc->delay, value);
+								break;
+
 							case 0x51: /* Delay pre-LPF */
+								ss_delay_set_pre_lowpass(proc->delay, value);
+								break;
+
 							case 0x52: /* Delay time center */
+								ss_delay_set_time_center(proc->delay, value);
+								break;
+
 							case 0x53: /* Delay time ratio left */
+								ss_delay_set_time_ratio_left(proc->delay, value);
+								break;
+
 							case 0x54: /* Delay time ratio right */
+								ss_delay_set_time_ratio_right(proc->delay, value);
+								break;
+
 							case 0x55: /* Delay level center */
+								ss_delay_set_level_center(proc->delay, value);
+								break;
+
 							case 0x56: /* Delay level left */
+								ss_delay_set_level_left(proc->delay, value);
+								break;
+
 							case 0x57: /* Delay level right */
+								ss_delay_set_level_right(proc->delay, value);
+								break;
+
 							case 0x58: /* Delay level */
+								ss_delay_set_level(proc->delay, value);
+								break;
+
 							case 0x59: /* Delay feedback */
+								ss_delay_set_feedback(proc->delay, value);
+								break;
+
 							case 0x5a: /* Delay send level to reverb */
-								(void)value;
+								ss_delay_set_send_level_to_reverb(proc->delay, value);
 								break;
 						}
 					}
@@ -1026,11 +1082,15 @@ void ss_processor_system_reset(SS_Processor *proc) {
 	// Reset the effects processors' buffers
 	ss_reverb_clear(proc->reverb);
 	ss_chorus_clear(proc->chorus);
+	ss_delay_clear(proc->delay);
 
 	// Hall2 default
 	ss_reverb_set_macro(proc->reverb, 4);
 	// Chorus3 default
 	ss_chorus_set_macro(proc->chorus, 2);
+	// Delay1 default
+	ss_delay_set_macro(proc->delay, 0);
+	if (proc->master_params.delay_enabled) proc->delay_active = false;
 
 	(void)t;
 	proc_emit(proc, SS_EVENT_STOP_ALL, -1, 0, 0);

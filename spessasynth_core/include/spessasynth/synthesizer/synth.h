@@ -8,11 +8,13 @@
 #if __has_include(<spessasynth_core/soundbank.h>)
 #include <spessasynth_core/chorus.h>
 #include <spessasynth_core/reverb.h>
+#include <spessasynth_core/delay.h>
 #include <spessasynth_core/soundbank.h>
 #else
 #include "../soundbank/soundbank.h"
 #include "dsp/chorus.h"
 #include "dsp/reverb.h"
+#include "dsp/delay.h"
 #endif
 
 #ifdef __cplusplus
@@ -296,6 +298,7 @@ void ss_channel_render(SS_MIDIChannel *ch,
                        float *out_left, float *out_right,
                        float *reverb_left, float *reverb_right,
                        float *chorus_left, float *chorus_right,
+					   float *delay_left, float *delay_right,
                        uint32_t sample_count);
 
 /* ── Synth processor options ─────────────────────────────────────────────── */
@@ -349,10 +352,12 @@ typedef struct {
 	float master_pan; /* -1 to +1 */
 	float master_pitch; /* semitones */
 	float master_tuning; /* cents */
+	float delay_gain;
 	SS_InterpolationType interpolation_type;
 	SS_MIDISystem midi_system;
 	bool reverb_enabled;
 	bool chorus_enabled;
+	bool delay_enabled;
 	SS_TuningEntry **tunings; /* [128][128] tuning grid, or NULL */
 } SS_MasterParameters;
 
@@ -374,12 +379,15 @@ typedef struct SS_Processor {
 
 	SS_Reverb *reverb;
 	SS_Chorus *chorus;
+	SS_Delay *delay;
 
 	size_t effects_allocated;
 	float *reverb_left;
 	float *reverb_right;
 	float *chorus_left;
 	float *chorus_right;
+	float *delay_left;
+	float *delay_right;
 
 	SS_MasterParameters master_params;
 	float volume_envelope_smoothing_factor;

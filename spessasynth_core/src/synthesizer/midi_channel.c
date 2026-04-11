@@ -35,6 +35,7 @@ extern bool ss_voice_render(SS_Voice *v, const SS_MIDIChannel *ch,
                             float *ol, float *or_,
                             float *rl, float *rr,
                             float *cl, float *cr,
+							float *dl, float *dr,
                             int sample_count,
                             SS_InterpolationType interp,
                             float vol_smoothing, float filter_smoothing, float pan_smoothing);
@@ -1253,6 +1254,7 @@ void ss_channel_render(SS_MIDIChannel *ch,
                        float *out_left, float *out_right,
                        float *reverb_left, float *reverb_right,
                        float *chorus_left, float *chorus_right,
+					   float *delay_left, float *delay_right,
                        uint32_t sample_count) {
 	if(ch->is_muted) return;
 	SS_Processor *proc = ch->synth;
@@ -1270,6 +1272,7 @@ void ss_channel_render(SS_MIDIChannel *ch,
 		                out_left, out_right,
 		                reverb_left, reverb_right,
 		                chorus_left, chorus_right,
+						delay_left, delay_right,
 		                (int)sample_count, interp,
 		                vol_smoothing, filter_smoothing, pan_smoothing);
 	}
