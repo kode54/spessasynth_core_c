@@ -1262,24 +1262,9 @@ void ss_channel_render(SS_MIDIChannel *ch,
 	float filter_smoothing = proc ? proc->filter_smoothing_factor : 0.1f;
 	float pan_smoothing = proc ? proc->pan_smoothing_factor : 0.1f;
 
-	const SS_Modulator *def_mods = SS_DEFAULT_MODULATORS;
-	size_t def_mod_count = SS_DEFAULT_MODULATOR_COUNT;
-	if(proc) {
-		for(int b = 0; b < proc->soundbank_count; b++) {
-			if(proc->soundbanks[b] && proc->soundbanks[b]->custom_default_modulators) {
-				def_mods = proc->soundbanks[b]->default_modulators;
-				def_mod_count = proc->soundbanks[b]->default_mod_count;
-				break;
-			}
-		}
-	}
-
 	for(size_t i = 0; i < ch->voice_count; i++) {
 		SS_Voice *v = ch->voices[i];
 		if(!v->is_active) continue;
-
-		/* Recompute modulators each render frame */
-		ss_voice_compute_modulators_internal(v, ch, def_mods, def_mod_count, proc ? proc->current_synth_time : 0.0);
 
 		ss_voice_render(v, ch, time_now,
 		                out_left, out_right,
