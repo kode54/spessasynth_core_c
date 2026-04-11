@@ -74,6 +74,7 @@ void ss_modulation_envelope_start_release(SS_ModulationEnvelope *env,
                                           double release_start_time,
                                           double start_time) {
 	env->release_start_level = env->current_value;
+	env->release_start_time = release_start_time;
 	env->entered_release = true;
 
 	/* Min is set to -7200 to prevent lowpass clicks */
