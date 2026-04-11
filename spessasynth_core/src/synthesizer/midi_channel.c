@@ -51,9 +51,7 @@ static void ss_channel_update_tuning(SS_MIDIChannel *ch);
 void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
 void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
 static void ss_channel_set_modulation_depth(SS_MIDIChannel *ch, float cents);
-#if 0
 static float ss_portamento_time_to_seconds(float portamento_time, float distance);
-#endif
 
 #define VOICE_GROW_BY 16
 
@@ -136,77 +134,96 @@ static const float custom_reset_array[SS_CUSTOM_CTRL_COUNT] = {
 	[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] = 1
 };
 
+static void reset_vibrato_params(SS_MIDIChannel *ch) {
+	ch->channel_vibrato.rate = 0;
+	ch->channel_vibrato.depth = 0;
+	ch->channel_vibrato.delay = 0;
+}
+
 /**
  * https://amei.or.jp/midistandardcommittee/Recommended_Practice/e/rp15.pdf
  * Reset controllers according to RP-15 Recommended Practice.
  */
 static void reset_controllers_rp15_compliant(SS_MIDIChannel *ch, double time) {
-	memset(ch->channel_octave_tuning, 0, sizeof(ch->channel_octave_tuning));
-
-	ss_channel_pitch_wheel(ch, 8192, time);
-
-	ch->channel_vibrato.rate = 0.0;
-	ch->channel_vibrato.depth = 0.0;
-	ch->channel_vibrato.delay = 0.0;
-
 	for(int i = 0; i < 128; i++) {
 		const int16_t reset_value = default_controller_values[i];
 		if(
 		!non_resettable_controllers[i] &&
-		reset_value != ch->midi_controllers[i]) {
-			if(i == SS_MIDCON_PORTAMENTO_CONTROL) {
-				ch->midi_controllers[i] = PORTAMENTO_CONTROL_UNSET;
-			} else {
-				ss_channel_controller(ch, i, reset_value >> 7, time);
-			}
+		reset_value != ch->midi_controllers[i] &&
+		   i != SS_MIDCON_PORTAMENTO_CONTROL) {
+			ss_channel_controller(ch, i, reset_value >> 7, time);
 		}
 	}
+
+	memset(ch->channel_octave_tuning, 0, sizeof(ch->channel_octave_tuning));
+
+	ss_channel_pitch_wheel(ch, 8192, time);
+
+	reset_vibrato_params(ch);
 
 	reset_generator_overrides(ch);
 	reset_generator_offsets(ch);
 }
 
+static inline float drum_params_reverb(int note) {
+	if (note == 35 || note == 36) return 0.0;
+	else return 1.0;
+}
+
+static void reset_drum_params(SS_MIDIChannel *ch) {
+	/* Initialize drum params to defaults */
+	for(int k = 0; k < 128; k++) {
+		ch->drum_params[k].pitch = 0.0f;
+		ch->drum_params[k].gain = 1.0f;
+		ch->drum_params[k].exclusive_class = 0;
+		ch->drum_params[k].pan = 64;
+		ch->drum_params[k].reverb_gain = drum_params_reverb(k);
+		ch->drum_params[k].chorus_gain = 0.0f; /* No drums have chorus */
+		ch->drum_params[k].delay_gain = 0.0f; /* No drums have delay */
+		ch->drum_params[k].rx_note_on = true;
+		ch->drum_params[k].rx_note_off = false;
+	}
+}
+
+static void reset_portamento(SS_MIDIChannel *ch) {
+	if (ch->locked_controllers[SS_MIDCON_PORTAMENTO_CONTROL]) return;
+
+	if (ch->synth && ch->synth->master_params.midi_system == 2) { /* XG */
+		ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, 60, 0);
+	} else {
+		ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, 0, 0);
+	}
+}
+
 /* Default controller values per SF2 spec */
 static void reset_controllers_to_defaults(SS_MIDIChannel *ch) {
-	memset(ch->midi_controllers, 0, sizeof(ch->midi_controllers));
-	/* Volume: CC7 default 100 */
-	ch->midi_controllers[SS_MIDCON_MAIN_VOLUME] = 100 << 7;
-	/* Balance: CC8 default 64 (center) */
-	ch->midi_controllers[SS_MIDCON_BALANCE] = 64 << 7;
-	/* Expression: CC11 default 127 */
-	ch->midi_controllers[SS_MIDCON_EXPRESSION] = 127 << 7;
-	/* Pan: CC10 default 64 (center) */
-	ch->midi_controllers[SS_MIDCON_PAN] = 64 << 7;
-	/* Pitch wheel: stored as 14-bit value */
-	ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL] = 8192; /* pitch wheel */
-	ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = 2 * 128; /* pitch wheel range */
-	/* Portamention on/off: CC65 on */
-	ch->midi_controllers[SS_MIDCON_PORTAMENTO_ON_OFF] = 127 << 7;
+	for(int cc = 0; cc < 128; cc++) {
+		const int16_t reset_value = default_controller_values[cc];
+		if(ch->midi_controllers[cc] != reset_value && cc < 127) {
+			if (cc != SS_MIDCON_PORTAMENTO_CONTROL &&
+				cc != SS_MIDCON_DATA_ENTRY_MSB &&
+				cc != SS_MIDCON_RPN_MSB &&
+				cc != SS_MIDCON_RPN_LSB &&
+				cc != SS_MIDCON_NRPN_MSB &&
+				cc != SS_MIDCON_NRPN_LSB)
+			{
+				ss_channel_controller(ch, cc, reset_value >> 7, 0);
+			}
+		} else {
+			ch->midi_controllers[cc] = reset_value;
+		}
+	}
 
-	/* Filter resonance: CC71 (neutral) */
-	ch->midi_controllers[SS_MIDCON_FILTER_RESONANCE] = 64 << 7;
-	/* Release time: CC72 (neutral) */
-	ch->midi_controllers[SS_MIDCON_RELEASE_TIME] = 64 << 7;
-	/* Attack time: CC73 (neutral) */
-	ch->midi_controllers[SS_MIDCON_ATTACK_TIME] = 64 << 7;
-	/* brightness: CC74 (neutral) */
-	ch->midi_controllers[SS_MIDCON_BRIGHTNESS] = 64 << 7;
+	memset(ch->channel_octave_tuning, 0, sizeof(ch->channel_octave_tuning));
+	ch->channel_tuning_cents = 0;
 
-	/* Decay time: CC75 (neutral) */
-	ch->midi_controllers[SS_MIDCON_DECAY_TIME] = 64 << 7;
-	/* Vibrato rate: CC76 (neutral) */
-	ch->midi_controllers[SS_MIDCON_VIBRATO_RATE] = 64 << 7;
-	/* Vibrato depth: CC77 (neutral) */
-	ch->midi_controllers[SS_MIDCON_VIBRATO_DEPTH] = 64 << 7;
-	/* Vibrato delay: CC78 (neutral) */
-	ch->midi_controllers[SS_MIDCON_VIBRATO_DELAY] = 64 << 7;
-	/* General purpose controller 6: CC81 (center) */
-	ch->midi_controllers[SS_MIDCON_GENERAL_PURPOSE_CONTROLLER_6] = 64 << 7;
-	/* General purpose controller 8: CC83 (center) */
-	ch->midi_controllers[SS_MIDCON_GENERAL_PURPOSE_CONTROLLER_8] = 64 << 7;
+	reset_portamento(ch);
+	reset_drum_params(ch);
+	reset_vibrato_params(ch);
 
-	/* Sustain: CC64 off */
-	/*ch->midi_controllers[SS_MIDCON_SUSTAIN_PEDAL] = 0;*/ /* Implied reset by above memset */
+	ch->poly_mode = true;
+
+	reset_parameters_to_defaults(ch);
 
 	/* Reset custom controllers
 	 * Special case: transpose does not get affected
@@ -215,19 +232,6 @@ static void reset_controllers_to_defaults(SS_MIDIChannel *ch) {
 	ch->custom_controllers[SS_CUSTOM_CTRL_TRANSPOSE_FINE];
 	memcpy(&ch->custom_controllers, &custom_reset_array, sizeof(ch->custom_controllers));
 	ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_TRANSPOSE_FINE, transpose);
-
-	memset(ch->channel_octave_tuning, 0, sizeof(ch->channel_octave_tuning));
-	ch->channel_tuning_cents = 0;
-	ch->channel_vibrato.delay = 0.0f;
-	ch->channel_vibrato.depth = 0.0f;
-	ch->channel_vibrato.rate = 0.0f;
-
-	reset_parameters_to_defaults(ch);
-}
-
-static inline float drum_params_reverb(int note) {
-	if (note == 35 || note == 36) return 0.0;
-	else return 1.0;
 }
 
 SS_MIDIChannel *ss_channel_new(int channel_number, struct SS_Processor *synth) {
@@ -241,18 +245,7 @@ SS_MIDIChannel *ss_channel_new(int channel_number, struct SS_Processor *synth) {
 	ch->drum_map = 0;
 	ch->cc1 = 1;
 	ch->cc2 = 2;
-	/* Initialize drum params to defaults */
-	for(int k = 0; k < 128; k++) {
-		ch->drum_params[k].pitch = 0.0f;
-		ch->drum_params[k].gain = 1.0f;
-		ch->drum_params[k].exclusive_class = 0;
-		ch->drum_params[k].pan = 64;
-		ch->drum_params[k].reverb_gain = drum_params_reverb(k);
-		ch->drum_params[k].chorus_gain = 0.0f; /* No drums have chorus */
-		ch->drum_params[k].delay_gain = 0.0f; /* No drums have delay */
-		ch->drum_params[k].rx_note_on = true;
-		ch->drum_params[k].rx_note_off = false;
-	}
+	reset_drum_params(ch);
 	reset_controllers_to_defaults(ch);
 	return ch;
 }
@@ -467,33 +460,29 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		                                  sd->modulators, sd->mod_count);
 		if(!voice) continue;
 
-/* Portamento */
-/* Not implemented correctly */
-#if 0
+		/* Portamento */
+		/* Not implemented correctly */
 		int portamento_from_key = -1;
 		float portamento_duration = 0;
 		// Note: the 14-bit value needs to go down to 7-bit
 		const int portamento_time =
 		ch->midi_controllers[SS_MIDCON_PORTAMENTO_TIME] >> 7;
-		const int control = ch->midi_controllers[SS_MIDCON_PORTAMENTO_CONTROL];
-		const int current_from_key = control >> 7;
+		const int porta_control = ch->midi_controllers[SS_MIDCON_PORTAMENTO_CONTROL] >> 7;
 		if(
 		!ch->drum_channel && /* No portamento on drum channel */
-		current_from_key != target_key && /* If the same note, there's no portamento */
+		porta_control != internal_midi_note && /* If the same note, there's no portamento */
 		ch->midi_controllers[SS_MIDCON_PORTAMENTO_ON_OFF] >= 8192 && /* (64 << 7) */
 		portamento_time > 0 /* 0 duration is no portamento */
 		) {
 			/* A value of one means the initial portamento */
-			if(control != 1) {
-				const int diff = abs(target_key - current_from_key);
+			if(porta_control > 0) {
+				const int diff = abs(internal_midi_note - porta_control);
 				portamento_duration = ss_portamento_time_to_seconds(portamento_time, diff);
-				portamento_from_key = current_from_key;
+				portamento_from_key = porta_control;
 			}
 			/* Set portamento control to previous value */
-			ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, target_key, time);
+			ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, internal_midi_note, time);
 		}
-		voice->portamento_duration = portamento_duration;
-#endif
 
 		/* Apply drum / random-pan parameters */
 		voice->pitch_offset = drum_pitch_offset;
@@ -508,6 +497,9 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 
 		/* Compute initial modulators */
 		ss_voice_compute_modulators_internal(voice, ch, def_mods, def_mod_count, time);
+
+		voice->portamento_duration = portamento_duration;
+		voice->portamento_from_key = portamento_from_key;
 
 		/* Handle exclusive class: cut other voices in same class */
 		if(voice->exclusive_class > 0) {
@@ -1304,7 +1296,6 @@ static void ss_channel_set_modulation_depth(SS_MIDIChannel *ch, float cents) {
 	ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_MODULATION_MULTIPLIER, cents / 50.0);
 }
 
-#if 0
 typedef struct SS_PortamentoLookup {
 	uint8_t key;
 	float value;
@@ -1366,4 +1357,3 @@ static float ss_portamento_get_lookup(int time) {
 static float ss_portamento_time_to_seconds(float portamento_time, float distance) {
 	return ss_portamento_get_lookup(portamento_time) * (distance / 36.0);
 }
-#endif
