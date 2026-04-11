@@ -498,6 +498,52 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		/* Compute initial modulators */
 		ss_voice_compute_modulators_internal(voice, ch, def_mods, def_mod_count, time);
 
+		/* Modulate sample offsets (these are not real time) */
+		const ssize_t cursorStartOffset =
+			voice->modulated_generators[SS_GEN_START_ADDRS_OFFSET] +
+			voice->modulated_generators[SS_GEN_START_ADDRS_COARSE_OFFSET] *
+				32768;
+		const ssize_t endOffset =
+			voice->modulated_generators[SS_GEN_END_ADDR_OFFSET] +
+			voice->modulated_generators[SS_GEN_END_ADDRS_COARSE_OFFSET] *
+				32768;
+		const ssize_t loopStartOffset =
+			voice->modulated_generators[SS_GEN_STARTLOOP_ADDRS_OFFSET] +
+			voice->modulated_generators[SS_GEN_STARTLOOP_ADDRS_COARSE_OFFSET] *
+				32768;
+		const ssize_t loopEndOffset =
+			voice->modulated_generators[SS_GEN_ENDLOOP_ADDRS_OFFSET] +
+			voice->modulated_generators[SS_GEN_ENDLOOP_ADDRS_COARSE_OFFSET] *
+				32768;
+
+#define clamp(a, min, max) ((a) < (min) ? (min) : (((a) > (max) ? (max) : (a))))
+		/* Clamp the sample offsets */
+		const size_t lastSample = audio.sample_data_len - 1;
+		voice->sample.cursor = clamp(cursorStartOffset, 0, lastSample);
+		voice->sample.end = clamp(lastSample + endOffset, 0, lastSample);
+		voice->sample.loop_start = clamp(audio.loop_start + loopStartOffset, 0, lastSample);
+		voice->sample.loop_end = clamp(audio.loop_end + loopEndOffset, 0, lastSample);
+#undef clamp
+
+		// Swap loops if needed
+		if (voice->sample.loop_end < voice->sample.loop_start) {
+			const size_t temp = voice->sample.loop_start;
+			voice->sample.loop_start = voice->sample.loop_end;
+			voice->sample.loop_end = temp;
+		}
+		if (
+			voice->sample.loop_end - voice->sample.loop_start < 1 && /* Disable loop if enabled */
+			/* Don't disable on release mode. Testcase:
+			 * https://github.com/spessasus/SpessaSynth/issues/174
+			 */
+			(voice->sample.looping_mode == SS_LOOP_LOOP || voice->sample.looping_mode == SS_LOOP_LOOP_RELEASE)
+		) {
+			voice->sample.looping_mode = SS_LOOP_NONE;
+		}
+		voice->sample.is_looping = (voice->sample.looping_mode == SS_LOOP_LOOP ||
+									voice->sample.looping_mode == SS_LOOP_LOOP_RELEASE);
+
+		/* Apply portamento */
 		voice->portamento_duration = portamento_duration;
 		voice->portamento_from_key = portamento_from_key;
 
