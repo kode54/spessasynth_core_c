@@ -79,6 +79,15 @@ typedef struct {
 	size_t creation_date_len;
 	uint8_t *info_encoding;
 	size_t info_encoding_len;
+	/* Additional fields matching TypeScript rmidiInfo */
+	uint8_t *engineer;
+	size_t engineer_len;
+	uint8_t *software;
+	size_t software_len;
+	uint8_t *subject;
+	size_t subject_len;
+	uint8_t *midi_encoding;
+	size_t midi_encoding_len;
 } SS_RMIDIInfo;
 
 void ss_rmidi_info_free(SS_RMIDIInfo *info);

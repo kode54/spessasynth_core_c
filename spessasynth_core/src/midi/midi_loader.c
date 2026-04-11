@@ -103,6 +103,10 @@ void ss_rmidi_info_free(SS_RMIDIInfo *info) {
 	free(info->copyright);
 	free(info->creation_date);
 	free(info->info_encoding);
+	free(info->engineer);
+	free(info->software);
+	free(info->subject);
+	free(info->midi_encoding);
 	memset(info, 0, sizeof(*info));
 }
 
@@ -677,6 +681,14 @@ SS_MIDIFile *ss_midi_load(const uint8_t *data, size_t size, const char *file_nam
 						RMIDI_SET(creation_date);
 					} else if(strcmp(ifid, "IENC") == 0) {
 						RMIDI_SET(info_encoding);
+					} else if(strcmp(ifid, "IENG") == 0) {
+						RMIDI_SET(engineer);
+					} else if(strcmp(ifid, "ISFT") == 0) {
+						RMIDI_SET(software);
+					} else if(strcmp(ifid, "ISBJ") == 0) {
+						RMIDI_SET(subject);
+					} else if(strcmp(ifid, "MENC") == 0) {
+						RMIDI_SET(midi_encoding);
 					} else if(strcmp(ifid, "DBNK") == 0) {
 						/* 2-byte little-endian bank offset */
 						if(ifdlen >= 2)
