@@ -114,22 +114,20 @@ float ss_lfo_value(double start_time, float freq_hz, double current_time) {
 static float convex_attack_table[1000];
 static bool convex_initialized = false;
 
-static float modenv_curve_convex(float x) {
-	/* SF2 convex curve: transforms linear 0..1 to convex shape.
-	 * Based on the FluidSynth/spessasynth implementation:
-	 *   f(x) = 1 - (1 - x)^2  (simplified convex)
-	 * Actual formula from modulatorCurveTypes.convex in the TypeScript code.
-	 */
-	if(x <= 0.0f) return 0.0f;
-	if(x >= 1.0f) return 1.0f;
-	return 1.0f - (1.0f - x) * (1.0f - x);
-}
-
 static void init_convex_table(void) {
 	if(convex_initialized) return;
-	for(int i = 0; i < 1000; i++) {
-		float t = (float)i / 1000.0f;
-		convex_attack_table[i] = modenv_curve_convex(t);
+	/* Same SF2 log-based convex formula used in modulator_curves.ts / init_modcurve_table.
+	 * convex[i] = 1 - ((-400/960) * log10(i / 1000))
+	 * Matches: CONVEX_ATTACK[i] = getModulatorCurveValue(0, convex, i/1000)
+	 */
+	convex_attack_table[0] = 0.0f;
+	convex_attack_table[999] = 1.0f;
+	for(int i = 1; i < 999; i++) {
+		float x = (float)((-400.0 / 960.0) * log10((double)i / 1000.0));
+		float v = 1.0f - x;
+		if(v < 0.0f) v = 0.0f;
+		if(v > 1.0f) v = 1.0f;
+		convex_attack_table[i] = v;
 	}
 	convex_initialized = true;
 }
