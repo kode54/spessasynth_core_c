@@ -18,6 +18,8 @@ SS_DattorroDelayLine *ss_dattorro_delay_line_create(
 double delay, float sampleRate);
 void ss_dattorro_delay_line_free(
 SS_DattorroDelayLine *delayLine);
+void ss_dattorro_delay_line_clear(
+SS_DattorroDelayLine *delayLine);
 
 /* ── Dattoro Reverb type ─────────────────────────────────────────────────── */
 
@@ -42,6 +44,7 @@ typedef struct {
 } SS_DattorroReverb;
 
 SS_DattorroReverb *ss_dattorro_reverb_create(float sampleRate);
+void ss_dattorro_reverb_clear(SS_DattorroReverb *reverb);
 void ss_dattorro_reverb_free(SS_DattorroReverb *reverb);
 void ss_dattorro_reverb_process(SS_DattorroReverb *reverb,
                                 const float *inputLeft, const float *inputRight,

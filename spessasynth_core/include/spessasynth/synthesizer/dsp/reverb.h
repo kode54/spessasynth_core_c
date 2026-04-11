@@ -51,6 +51,7 @@ typedef struct {
 } SS_Reverb;
 
 SS_Reverb *ss_reverb_create(float sampleRate, int maxBufferSize);
+void ss_reverb_clear(SS_Reverb *reverb);
 void ss_reverb_free(SS_Reverb *reverb);
 
 void ss_reverb_set_delay_feedback(SS_Reverb *reverb, unsigned char delayFeedback);

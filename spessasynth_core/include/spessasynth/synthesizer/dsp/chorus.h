@@ -44,6 +44,7 @@ typedef struct {
 } SS_Chorus;
 
 SS_Chorus *ss_chorus_create(float sampleRate, int maxBufferSize);
+void ss_chorus_clear(SS_Chorus *chorus);
 void ss_chorus_free(SS_Chorus *chorus);
 
 void ss_chorus_set_send_level_to_reverb(SS_Chorus *chorus, unsigned char value);

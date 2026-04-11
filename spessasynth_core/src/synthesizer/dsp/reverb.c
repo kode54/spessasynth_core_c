@@ -7,6 +7,7 @@
 
 #include <math.h>
 #include <stdbool.h>
+#include <string.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -69,6 +70,18 @@ SS_Reverb *ss_reverb_create(float sampleRate, int maxBufferSize) {
 out_of_memory:
 	ss_reverb_free(reverb);
 	return NULL;
+}
+
+void ss_reverb_clear(SS_Reverb *reverb) {
+	if(!reverb || !reverb->delayLeftOutput || !reverb->delayRightOutput || !reverb->delayLeftInput || !reverb->delayPreLPF) return;
+	memset(reverb->delayLeftOutput, 0, reverb->maxBufferSize * sizeof(float));
+	memset(reverb->delayRightOutput, 0, reverb->maxBufferSize * sizeof(float));
+	memset(reverb->delayLeftInput, 0, reverb->maxBufferSize * sizeof(float));
+	memset(reverb->delayPreLPF, 0, reverb->maxBufferSize * sizeof(float));
+	ss_dattorro_reverb_clear(reverb->dattorro);
+	ss_delay_line_clear(reverb->delayLeft);
+	ss_delay_line_clear(reverb->delayRight);
+	reverb->preLPFz = 0;
 }
 
 void ss_reverb_free(SS_Reverb *reverb) {

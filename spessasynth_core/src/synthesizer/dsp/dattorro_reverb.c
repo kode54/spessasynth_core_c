@@ -5,6 +5,7 @@
 
 #include <math.h>
 #include <stdbool.h>
+#include <string.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -50,6 +51,11 @@ double delay, float sampleRate) {
 	delayLine->mask = nextPow2 - 1;
 
 	return delayLine;
+}
+
+void ss_dattorro_delay_line_clear(SS_DattorroDelayLine *delayLine) {
+	if(!delayLine || !delayLine->buffer) return;
+	memset(delayLine->buffer, 0, (delayLine->mask + 1) * sizeof(float));
 }
 
 void ss_dattorro_delay_line_free(SS_DattorroDelayLine *delayLine) {
@@ -144,6 +150,16 @@ SS_DattorroReverb *ss_dattorro_reverb_create(float sampleRate) {
 out_of_memory:
 	ss_dattorro_reverb_free(reverb);
 	return NULL;
+}
+
+void ss_dattorro_reverb_clear(SS_DattorroReverb *reverb) {
+	if(!reverb || !reverb->delays || !reverb->pDelay) return;
+	memset(reverb->pDelay, 0, reverb->pDLength * sizeof(float));
+	memset(reverb->lp, 0, sizeof(reverb->lp));
+	for(size_t i = 0; i < templateDelaysCount; i++)
+		ss_dattorro_delay_line_clear(reverb->delays[i]);
+	reverb->excPhase = 0;
+	reverb->pDWrite = 0;
 }
 
 void ss_dattorro_reverb_free(SS_DattorroReverb *reverb) {

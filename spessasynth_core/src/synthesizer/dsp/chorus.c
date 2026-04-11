@@ -5,6 +5,7 @@
 
 #include <math.h>
 #include <stdbool.h>
+#include <string.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -69,6 +70,15 @@ SS_Chorus *ss_chorus_create(float sampleRate, int maxBufferSize) {
 out_of_memory:
 	ss_chorus_free(chorus);
 	return NULL;
+}
+
+void ss_chorus_clear(SS_Chorus *chorus) {
+	if(!chorus || !chorus->leftDelayBuffer || !chorus->rightDelayBuffer) return;
+	memset(chorus->leftDelayBuffer, 0, chorus->maxBufferSize * sizeof(float));
+	memset(chorus->rightDelayBuffer, 0, chorus->maxBufferSize * sizeof(float));
+	chorus->preLPFz = 0;
+	chorus->phase = 0;
+	chorus->write = 0;
 }
 
 void ss_chorus_free(SS_Chorus *chorus) {
