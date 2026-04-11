@@ -18,7 +18,7 @@
 /* Smoothing factors tuned at 44 100 Hz, scaled linearly to target rate */
 #define VOLENV_SMOOTHING_44K 0.01f
 #define PAN_SMOOTHING_44K 0.05f
-#define FILTER_SMOOTHING_44K 0.1f
+#define FILTER_SMOOTHING_44K 0.03f
 
 extern void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time);
 extern void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch, double time);
