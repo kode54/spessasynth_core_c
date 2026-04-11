@@ -173,6 +173,10 @@ typedef struct SS_Voice {
 	int portamento_from_key; /* -1 = off */
 	double portamento_duration;
 
+	/* LFO triangle-wave phase accumulators [0,1), initialized to 0.25 */
+	float vib_lfo_phase;
+	float mod_lfo_phase;
+
 	int exclusive_class;
 
 	float pitch_offset; /* per-voice pitch offset in cents (drum params) */

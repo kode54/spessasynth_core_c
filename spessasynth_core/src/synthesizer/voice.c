@@ -88,6 +88,9 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
 	v->portamento_from_key = -1;
 	v->gain = 1.0f;
 	v->pitch_offset = 0.0f;
+	/* Match TypeScript Voice.setup(): vibLfoPhase = modLfoPhase = 0.25 */
+	v->vib_lfo_phase = 0.25f;
+	v->mod_lfo_phase = 0.25f;
 	v->reverb_send = 1.0f;
 	v->chorus_send = 1.0f;
 	v->delay_send = 1.0f;
@@ -134,11 +137,8 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
 	ss_modulation_envelope_recalculate(&v->modulation_env, v->modulated_generators,
 	                                   midi_note, false, 0.0, current_time);
 
-	// Set initial pan to avoid split second changing from middle to the correct value
-	float current_pan = (float)v->modulated_generators[SS_GEN_PAN] / 500.0f;
-	if(current_pan < -1.0) current_pan = -1.0;
-	if(current_pan > 1.0) current_pan = 1.0;
-	v->current_pan = current_pan;
+	/* Store current_pan in generator units (-500..500) to match TS smoothing behaviour */
+	v->current_pan = (float)v->modulated_generators[SS_GEN_PAN];
 
 	return v;
 }
@@ -377,34 +377,62 @@ bool ss_voice_render(SS_Voice *v,
 	float volume_excursion_cb = 0.0f;
 	float mod_mult = ch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER];
 
-	/* Vibrato LFO */
+	/* voice_gain: amplitude generator + LFO amplitude depths (matches TS voiceGain) */
+	float voice_gain = v->gain * (1.0f + (float)v->modulated_generators[SS_GEN_AMPLITUDE] / 1000.0f);
+	if(voice_gain < 0.0f) voice_gain = 0.0f;
+
+	/* Vibrato LFO — triangle wave with phase accumulator, matching TypeScript render_voice.ts.
+	 * Triangle: value = 1 - 4*|phase - 0.5|, phase in [0,1).
+	 * rateInc = (freqHz * sampleCount) / sampleRate
+	 */
 	int vib_pitch = v->modulated_generators[SS_GEN_VIB_LFO_TO_PITCH];
-	int vib_vol = v->modulated_generators[SS_GEN_VIB_LFO_TO_VOLUME];
-	int vib_filter = v->modulated_generators[SS_GEN_VIB_LFO_TO_FILTER_FC];
-	if(vib_pitch || vib_vol || vib_filter) {
+	int vib_filter_depth = v->modulated_generators[SS_GEN_VIB_LFO_TO_FILTER_FC];
+	int vib_amplitude_depth = v->modulated_generators[SS_GEN_VIB_LFO_AMPLITUDE_DEPTH];
+	if(vib_pitch || vib_filter_depth || vib_amplitude_depth) {
 		double vib_start = v->start_time + ss_timecents_to_seconds(v->modulated_generators[SS_GEN_DELAY_VIB_LFO]);
-		float vib_freq = ss_abs_cents_to_hz(v->modulated_generators[SS_GEN_FREQ_VIB_LFO]);
-		float lfo_val = ss_lfo_value(vib_start, vib_freq, time_now);
-		cents += lfo_val * ((float)vib_pitch * mod_mult);
-		volume_excursion_cb += -lfo_val * (float)vib_vol;
-		lowpass_excursion += lfo_val * (float)vib_filter;
+		if(time_now >= vib_start) {
+			float vib_rate = (float)v->modulated_generators[SS_GEN_VIB_LFO_RATE] / 100.0f;
+			float vib_freq = ss_abs_cents_to_hz(v->modulated_generators[SS_GEN_FREQ_VIB_LFO]) + vib_rate;
+			if(vib_freq < 0.0f) vib_freq = 0.0f;
+			float rate_inc = (vib_freq * (float)sample_count) / (float)ch->synth->sample_rate;
+			float phase = v->vib_lfo_phase;
+			float lfo_val = 1.0f - 4.0f * fabsf(phase - 0.5f);
+			phase += rate_inc;
+			if(phase >= 1.0f) phase -= 1.0f;
+			v->vib_lfo_phase = phase;
+			cents += lfo_val * ((float)vib_pitch * mod_mult);
+			lowpass_excursion += lfo_val * (float)vib_filter_depth;
+			voice_gain *= 1.0f - ((lfo_val + 1.0f) / 2.0f) * ((float)vib_amplitude_depth / 1000.0f);
+		}
 	}
 
-	/* Mod LFO */
+	/* Mod LFO — same triangle wave approach */
 	int mod_pitch = v->modulated_generators[SS_GEN_MOD_LFO_TO_PITCH];
 	int mod_vol = v->modulated_generators[SS_GEN_MOD_LFO_TO_VOLUME];
 	int mod_filter = v->modulated_generators[SS_GEN_MOD_LFO_TO_FILTER_FC];
-	if(mod_pitch || mod_vol || mod_filter) {
+	int mod_amplitude_depth = v->modulated_generators[SS_GEN_MOD_LFO_AMPLITUDE_DEPTH];
+	if(mod_pitch || mod_vol || mod_filter || mod_amplitude_depth) {
 		double mod_start = v->start_time + ss_timecents_to_seconds(v->modulated_generators[SS_GEN_DELAY_MOD_LFO]);
-		float mod_freq = ss_abs_cents_to_hz(v->modulated_generators[SS_GEN_FREQ_MOD_LFO]);
-		float lfo_val = ss_lfo_value(mod_start, mod_freq, time_now);
-		cents += lfo_val * ((float)mod_pitch * mod_mult);
-		volume_excursion_cb += -lfo_val * (float)mod_vol;
-		lowpass_excursion += lfo_val * (float)mod_filter;
+		if(time_now >= mod_start) {
+			float mod_rate = (float)v->modulated_generators[SS_GEN_MOD_LFO_RATE] / 100.0f;
+			float mod_freq = ss_abs_cents_to_hz(v->modulated_generators[SS_GEN_FREQ_MOD_LFO]) + mod_rate;
+			if(mod_freq < 0.0f) mod_freq = 0.0f;
+			float rate_inc = (mod_freq * (float)sample_count) / (float)ch->synth->sample_rate;
+			float phase = v->mod_lfo_phase;
+			float lfo_val = 1.0f - 4.0f * fabsf(phase - 0.5f);
+			phase += rate_inc;
+			if(phase >= 1.0f) phase -= 1.0f;
+			v->mod_lfo_phase = phase;
+			cents += lfo_val * ((float)mod_pitch * mod_mult);
+			volume_excursion_cb += -lfo_val * (float)mod_vol;
+			lowpass_excursion += lfo_val * (float)mod_filter;
+			voice_gain *= 1.0f - ((lfo_val + 1.0f) / 2.0f) * ((float)mod_amplitude_depth / 1000.0f);
+		}
 	}
 
-	/* Channel vibrato (GS NRPN) */
-	if(ch->channel_vibrato.depth > 0.0f) {
+	/* Channel vibrato (GS NRPN) — sine wave, only when mod wheel == 0 (matches TS) */
+	if(ch->channel_vibrato.depth > 0.0f &&
+	   ch->midi_controllers[SS_MIDCON_MODULATION_WHEEL] == 0) {
 		float ch_vib = ss_lfo_value(v->start_time + ch->channel_vibrato.delay,
 		                            ch->channel_vibrato.rate, time_now);
 		cents += ch_vib * ch->channel_vibrato.depth;
@@ -469,19 +497,21 @@ bool ss_voice_render(SS_Voice *v,
 	if(v->override_pan != 0.0f) {
 		pan_val = v->override_pan / 500.0f;
 	} else {
-		float gen_pan = (float)v->modulated_generators[SS_GEN_PAN] / 500.0f;
+		/* Smooth only the generator pan (matches TS: currentPan tracks modulated[pan] only).
+		 * v->current_pan is stored in the -500..500 generator range.
+		 * Channel pan is added at use time, not during smoothing. */
+		v->current_pan += ((float)v->modulated_generators[SS_GEN_PAN] - v->current_pan) * pan_smoothing;
 		float ch_pan = (float)ch->midi_controllers[SS_MIDCON_PAN] / (63.5f * 128.0f) - 1.0f;
-		pan_val = v->current_pan + ((gen_pan + ch_pan) - v->current_pan) * pan_smoothing;
+		pan_val = v->current_pan / 500.0f + ch_pan;
 		if(pan_val < -1.0f) pan_val = -1.0f;
 		if(pan_val > 1.0f) pan_val = 1.0f;
-		v->current_pan = pan_val;
 	}
 
 	/* Equal-power panning */
 	float pan_left = cosf((pan_val + 1.0f) * (float)M_PI * 0.25f);
 	float pan_right = sinf((pan_val + 1.0f) * (float)M_PI * 0.25f);
 
-	float gain = v->gain;
+	float gain = voice_gain;
 	float reverb_amt = (float)v->modulated_generators[SS_GEN_REVERB_EFFECTS_SEND] / 1000.0f * v->reverb_send;
 	float chorus_amt = (float)v->modulated_generators[SS_GEN_CHORUS_EFFECTS_SEND] / 1000.0f * v->chorus_send;
 

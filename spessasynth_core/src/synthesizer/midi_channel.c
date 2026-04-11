@@ -1150,7 +1150,7 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 	if(ch->locked_controllers[cc]) return;
 
 	if(
-	cc >= SS_MIDCON_MOD_WHEEL_LSB &&
+	cc >= SS_MIDCON_MODULATION_WHEEL_LSB &&
 	cc <= SS_MIDCON_EFFECT_CONTROL_2_LSB &&
 	cc != SS_MIDCON_DATA_ENTRY_LSB) {
 		const int actualCCNum = cc - 32;

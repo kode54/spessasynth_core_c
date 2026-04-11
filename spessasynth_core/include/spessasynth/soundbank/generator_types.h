@@ -68,11 +68,15 @@ typedef enum {
 	SS_GEN_OVERRIDING_ROOT_KEY = 58,
 	SS_GEN_UNUSED5 = 59,
 	SS_GEN_END_OPER = 60,
-	/* Non-standard: used in sysex only, not saved to file */
-	SS_GEN_VIB_LFO_TO_VOLUME = 61,
-	SS_GEN_VIB_LFO_TO_FILTER_FC = 62,
+	/* Non-standard: used in sysex/dynamic modulators only, not saved to file */
+	SS_GEN_AMPLITUDE = 61, /* [-1000;1000] -> 1/10% gain offset */
+	SS_GEN_VIB_LFO_RATE = 62, /* [-1000;1000] -> Hz/100 rate offset */
+	SS_GEN_VIB_LFO_AMPLITUDE_DEPTH = 63, /* [0;1000] -> 1/10% amplitude depth */
+	SS_GEN_VIB_LFO_TO_FILTER_FC = 64, /* like modLfoToFilterFc */
+	SS_GEN_MOD_LFO_RATE = 65, /* [-1000;1000] -> Hz/100 rate offset */
+	SS_GEN_MOD_LFO_AMPLITUDE_DEPTH = 66, /* [0;1000] -> 1/10% amplitude depth */
 
-	SS_GEN_COUNT = 63
+	SS_GEN_COUNT = 67
 } SS_GeneratorType;
 
 /** Default generator values (SF2 spec defaults). */

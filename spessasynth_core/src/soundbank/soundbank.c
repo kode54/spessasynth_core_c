@@ -75,8 +75,12 @@ const SS_GeneratorLimit SS_GENERATOR_LIMITS[SS_GEN_COUNT] = {
 	/* 58 overridingRootKey          */ { -1, 127, -1, 0 },
 	/* 59 unused5                    */ { 0, 0, 0, 0 },
 	/* 60 endOper                    */ { 0, 0, 0, 0 },
-	/* 61 vibLfoToVolume (non-std)   */ { -960, 960, 0, 1 },
-	/* 62 vibLfoToFilterFc (non-std) */ { -12000, 12000, 0, 2 },
+	/* 61 amplitude (non-std)              */ { -1000, 1000, 0, 1 },
+	/* 62 vibLfoRate (non-std)             */ { -1000, 1000, 0, 1 },
+	/* 63 vibLfoAmplitudeDepth (non-std)   */ { 0, 1000, 0, 1 },
+	/* 64 vibLfoToFilterFc (non-std)       */ { -12000, 12000, 0, 2 },
+	/* 65 modLfoRate (non-std)             */ { -1000, 1000, 0, 1 },
+	/* 66 modLfoAmplitudeDepth (non-std)   */ { 0, 1000, 0, 1 },
 };
 
 int16_t ss_generator_clamp(SS_GeneratorType type, int16_t value) {
