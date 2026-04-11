@@ -153,14 +153,18 @@ double ss_midi_ticks_to_seconds(const SS_MIDIFile *m, uint32_t ticks_in) {
 	uint32_t ticks = ticks_in;
 	if(m->tempo_change_count == 0 || m->time_division == 0) return 0.0;
 	double total = 0.0;
-	for(size_t i = 0; i < m->tempo_change_count; i++) {
-		const SS_TempoChange *tc = &m->tempo_changes[i];
-		if(tc->ticks > ticks) continue;
-		uint32_t delta = ticks - tc->ticks;
+	double current_tempo = 60000000.0 / 500000.0; /* Default */
+	uint32_t current_tick = 0;
+	SS_TempoChange *tc;
+	size_t i;
+	for(i = 0, tc = m->tempo_changes; i < m->tempo_change_count && current_tick + ticks >= tc->ticks; i++, tc++) {
+		uint32_t delta = tc->ticks - current_tick;
 		total += (double)delta * 60.0 / (tc->tempo * (double)m->time_division);
-		ticks = tc->ticks;
-		if(ticks == 0) break;
+		current_tick += delta;
+		ticks -= delta;
+		current_tempo = tc->tempo;
 	}
+	total += (double)ticks * 60.0 / (current_tempo * (double)m->time_division);
 	return total;
 }
 
