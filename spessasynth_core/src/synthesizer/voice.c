@@ -54,8 +54,7 @@ extern void ss_modulation_envelope_start_release(SS_ModulationEnvelope *env,
                                                  double release_start_time,
                                                  double start_time);
 extern float ss_modulation_envelope_get_value(const SS_ModulationEnvelope *env,
-                                              double current_time,
-                                              bool ignore_release);
+                                              double current_time);
 extern float ss_timecents_to_seconds(int tc);
 extern float ss_abs_cents_to_hz(int cents);
 extern float ss_lfo_value(double start_time, float freq_hz, double current_time);
@@ -415,7 +414,7 @@ bool ss_voice_render(SS_Voice *v,
 	int mod_env_pitch = v->modulated_generators[SS_GEN_MOD_ENV_TO_PITCH];
 	int mod_env_filter = v->modulated_generators[SS_GEN_MOD_ENV_TO_FILTER_FC];
 	if(mod_env_pitch || mod_env_filter) {
-		float mod_env = ss_modulation_envelope_get_value(&v->modulation_env, time_now, false);
+		float mod_env = ss_modulation_envelope_get_value(&v->modulation_env, time_now);
 		lowpass_excursion += mod_env * (float)mod_env_filter;
 		cents += mod_env * (float)mod_env_pitch;
 	}

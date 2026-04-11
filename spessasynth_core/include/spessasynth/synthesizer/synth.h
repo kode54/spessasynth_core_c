@@ -119,6 +119,7 @@ typedef struct {
 	double release_start_time;
 	float release_start_level;
 	float current_value;
+	bool entered_release;
 } SS_ModulationEnvelope;
 
 /* ── Per-key drum parameters (XG / GS) ───────────────────────────────────── */
