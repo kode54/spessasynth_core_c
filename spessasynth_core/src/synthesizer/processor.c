@@ -264,15 +264,6 @@ static void ss_processor_render_internal(SS_Processor *proc,
 		proc->total_voices += (int)ch->voice_count;
 	}
 
-	/* Apply master volume */
-	float mv = proc->master_params.master_volume;
-	if(mv != 1.0f) {
-		for(uint32_t i = 0; i < sample_count; i++) {
-			out_left[i] *= mv;
-			out_right[i] *= mv;
-		}
-	}
-
 	/* Advance time */
 	proc->current_synth_time += (double)sample_count / (double)proc->sample_rate;
 }
@@ -339,6 +330,15 @@ void ss_processor_render(SS_Processor *proc,
 
 		out_left += block_count;
 		out_right += block_count;
+	}
+
+	/* Apply master volume */
+	const float mv = proc->master_params.master_volume;
+	if(mv != 1.0f) {
+		for(uint32_t i = 0; i < sample_count; i++) {
+			out_left[i] *= mv;
+			out_right[i] *= mv;
+		}
 	}
 }
 
