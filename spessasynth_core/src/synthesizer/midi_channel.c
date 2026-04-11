@@ -224,6 +224,11 @@ static void reset_controllers_to_defaults(SS_MIDIChannel *ch) {
 	reset_parameters_to_defaults(ch);
 }
 
+static inline float drum_params_reverb(int note) {
+	if (note == 35 || note == 36) return 0.0;
+	else return 1.0;
+}
+
 SS_MIDIChannel *ss_channel_new(int channel_number, struct SS_Processor *synth) {
 	SS_MIDIChannel *ch = (SS_MIDIChannel *)calloc(1, sizeof(SS_MIDIChannel));
 	if(!ch) return NULL;
@@ -241,9 +246,9 @@ SS_MIDIChannel *ss_channel_new(int channel_number, struct SS_Processor *synth) {
 		ch->drum_params[k].gain = 1.0f;
 		ch->drum_params[k].exclusive_class = 0;
 		ch->drum_params[k].pan = 64;
-		ch->drum_params[k].reverb_gain = 0.0f;
-		ch->drum_params[k].chorus_gain = 1.0f;
-		ch->drum_params[k].delay_gain = 1.0f;
+		ch->drum_params[k].reverb_gain = drum_params_reverb(k);
+		ch->drum_params[k].chorus_gain = 0.0f; /* No drums have chorus */
+		ch->drum_params[k].delay_gain = 0.0f; /* No drums have delay */
 		ch->drum_params[k].rx_note_on = true;
 		ch->drum_params[k].rx_note_off = false;
 	}
