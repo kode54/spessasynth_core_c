@@ -15,6 +15,9 @@
 #include "spessasynth/synthesizer/synth.h"
 #endif
 
+/* 1 / cos(pi/4)^2 = 2.0: corrects insertion send levels from 0-1 to 0-2 range */
+#define EFX_SENDS_GAIN_CORRECTION 2.0f
+
 /* Smoothing factors tuned at 44 100 Hz, scaled linearly to target rate */
 #define VOLENV_SMOOTHING_44K 0.01f
 #define PAN_SMOOTHING_44K 0.05f
@@ -142,12 +145,15 @@ void ss_processor_free(SS_Processor *proc) {
 	ss_reverb_free(proc->reverb);
 	ss_chorus_free(proc->chorus);
 	ss_delay_free(proc->delay);
+	ss_insertion_free(proc->insertion);
 	free(proc->reverb_left);
 	free(proc->reverb_right);
 	free(proc->chorus_left);
 	free(proc->chorus_right);
 	free(proc->delay_left);
 	free(proc->delay_right);
+	free(proc->insertion_left);
+	free(proc->insertion_right);
 
 	free(proc);
 }
@@ -248,10 +254,20 @@ static void ss_processor_render_internal(SS_Processor *proc,
 		SS_MIDIChannel *ch = proc->midi_channels[i];
 		if(!ch || ch->is_muted || ch->voice_count == 0) continue;
 
-		ss_channel_render(ch, time_now,
-		                  out_left, out_right,
-		                  rl, rr, cl, cr, dl, dr,
-		                  sample_count);
+		if(proc->options.enable_effects && ch->insertion_enabled &&
+		   proc->insertion_active && proc->insertion_left) {
+			/* Route this channel's voices into the insertion input buffers.
+			 * Skip reverb/chorus/delay sends: the insertion processor handles them. */
+			ss_channel_render(ch, time_now,
+			                  proc->insertion_left, proc->insertion_right,
+			                  NULL, NULL, NULL, NULL, NULL, NULL,
+			                  sample_count);
+		} else {
+			ss_channel_render(ch, time_now,
+			                  out_left, out_right,
+			                  rl, rr, cl, cr, dl, dr,
+			                  sample_count);
+		}
 
 		proc->total_voices += (int)ch->voice_count;
 	}
@@ -300,6 +316,12 @@ void ss_processor_render(SS_Processor *proc,
 		if(!delay_right) return;
 		proc->delay_right = delay_right;
 		proc->chorus_right = chorus_right;
+		float *ins_l = (float *)realloc(proc->insertion_left, sizeof(float) * 512);
+		if(!ins_l) return;
+		proc->insertion_left = ins_l;
+		float *ins_r = (float *)realloc(proc->insertion_right, sizeof(float) * 512);
+		if(!ins_r) return;
+		proc->insertion_right = ins_r;
 		proc->effects_allocated = 512;
 	} else {
 		reverb_left = proc->reverb_left;
@@ -322,8 +344,27 @@ void ss_processor_render(SS_Processor *proc,
 			memset(delay_left, 0, sizeof(float) * block_count);
 			memset(delay_right, 0, sizeof(float) * block_count);
 		}
+		if(proc->options.enable_effects && proc->insertion_active) {
+			memset(proc->insertion_left, 0, sizeof(float) * block_count);
+			memset(proc->insertion_right, 0, sizeof(float) * block_count);
+		}
 
 		ss_processor_render_internal(proc, out_left, out_right, reverb_left, reverb_right, chorus_left, chorus_right, delay_left, delay_right, block_count);
+
+		/* Run insertion processor first: it feeds into the stereo out and effect buses */
+		if(proc->options.enable_effects && proc->insertion_active && proc->insertion) {
+			proc->insertion->process(proc->insertion,
+			                         proc->insertion_left, proc->insertion_right,
+			                         out_left, out_right,
+			                         reverb_left, chorus_left, delay_left,
+			                         0, block_count);
+			/* Add insertion mono sends into stereo effect buses */
+			memcpy(reverb_right, reverb_left, sizeof(float) * block_count);
+			memcpy(chorus_right, chorus_left, sizeof(float) * block_count);
+			if(proc->delay_active) {
+				memcpy(delay_right, delay_left, sizeof(float) * block_count);
+			}
+		}
 
 		/* These mix into the output, with the option of chorus and/or delay emitting into the reverb buffers */
 		ss_chorus_process(proc->chorus, chorus_left, chorus_right, out_left, out_right, reverb_left, reverb_right, delay_left, delay_right, block_count);
@@ -726,20 +767,65 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 						}
 					}
 
-						/* EFX Parameter — no insertion processor yet; track delay activation */
+					/* EFX Parameter (addr2=0x03) */
 					case 0x03: {
-						if(addr3 == 0x19) /* EFX to delay */
+						uint8_t efx_val = (data[7] > 127) ? 127 : data[7];
+						if(addr3 == 0x00) {
+							/* EFX Type: 16-bit MSB<<8|LSB */
+							if(len < 9) break;
+							uint32_t efx_type = ((uint32_t)data[7] << 8) | (uint32_t)data[8];
+							ss_insertion_free(proc->insertion);
+							proc->insertion = ss_insertion_create(efx_type, proc->sample_rate, 512);
+							if(!proc->insertion)
+								proc->insertion = ss_insertion_create(0x0000, proc->sample_rate, 512);
+							if(proc->insertion) {
+								proc->insertion->reset(proc->insertion);
+								proc->insertion->send_level_to_reverb = (40.0f / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
+								proc->insertion->send_level_to_chorus = 0.0f;
+								proc->insertion->send_level_to_delay = 0.0f;
+							}
+						} else if(addr3 >= 0x03 && addr3 <= 0x16) {
+							/* EFX parameters (MIDI param indices 0x03-0x16) */
+							if(proc->insertion)
+								proc->insertion->set_parameter(proc->insertion, (int)addr3, (int)efx_val);
+						} else if(addr3 == 0x17) {
+							if(proc->insertion)
+								proc->insertion->send_level_to_reverb =
+								((float)efx_val / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
+						} else if(addr3 == 0x18) {
+							if(proc->insertion)
+								proc->insertion->send_level_to_chorus =
+								((float)efx_val / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
+						} else if(addr3 == 0x19) {
 							proc->delay_active = true;
+							if(proc->insertion)
+								proc->insertion->send_level_to_delay =
+								((float)efx_val / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
+						}
 						break;
 					}
 				}
 				break;
 			}
 
-			/* Part parameters: addr2 = 0x1n (n = part 0-15) */
+			/* Part parameters (addr2=0x1n) and tone-map EFX assign (addr2=0x4n) */
 			{
 				uint8_t addr2_byte = (uint8_t)((addr >> 8) & 0xFF);
-				if((addr2_byte >> 4) != 1) break; /* only handle 0x10-0x1F */
+				uint8_t addr2_nibble = addr2_byte >> 4;
+
+				/* Tone-map EFX assign: addr2=0x4n, addr3=0x22 */
+				if(addr2_nibble == 4) {
+					uint8_t efx_part = addr2_byte & 0x0F;
+					int efx_ch = GS_PART_TO_CHANNEL[efx_part];
+					if(efx_ch >= 0 && efx_ch < proc->channel_count &&
+					   (addr & 0xFF) == 0x22) {
+						SS_MIDIChannel *efx_mch = proc->midi_channels[efx_ch];
+						efx_mch->insertion_enabled = (data[7] == 1);
+						if(data[7] == 1) proc->insertion_active = true;
+					}
+				}
+
+				if(addr2_nibble != 1) break; /* only handle 0x10-0x1F below */
 
 				uint8_t part_idx = addr2_byte & 0x0F;
 				int channel_idx = GS_PART_TO_CHANNEL[part_idx];
@@ -1091,6 +1177,20 @@ void ss_processor_system_reset(SS_Processor *proc) {
 	// Delay1 default
 	ss_delay_set_macro(proc->delay, 0);
 	if(proc->master_params.delay_enabled) proc->delay_active = false;
+
+	/* Reset insertion: free old processor, create default Thru */
+	ss_insertion_free(proc->insertion);
+	proc->insertion = ss_insertion_create(0x0000, proc->sample_rate, 512);
+	if(proc->insertion) {
+		proc->insertion->send_level_to_reverb = (40.0f / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
+		proc->insertion->send_level_to_chorus = 0.0f;
+		proc->insertion->send_level_to_delay = 0.0f;
+	}
+	proc->insertion_active = false;
+	for(int i = 0; i < proc->channel_count; i++) {
+		if(proc->midi_channels[i])
+			proc->midi_channels[i]->insertion_enabled = false;
+	}
 
 	(void)t;
 	proc_emit(proc, SS_EVENT_STOP_ALL, -1, 0, 0);

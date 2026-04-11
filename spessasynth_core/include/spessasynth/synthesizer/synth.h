@@ -8,12 +8,14 @@
 #if __has_include(<spessasynth_core/soundbank.h>)
 #include <spessasynth_core/chorus.h>
 #include <spessasynth_core/delay.h>
+#include <spessasynth_core/insertion.h>
 #include <spessasynth_core/reverb.h>
 #include <spessasynth_core/soundbank.h>
 #else
 #include "../soundbank/soundbank.h"
 #include "dsp/chorus.h"
 #include "dsp/delay.h"
+#include "dsp/insertion.h"
 #include "dsp/reverb.h"
 #endif
 
@@ -253,6 +255,7 @@ typedef struct SS_MIDIChannel {
 	bool random_pan;
 	bool is_muted;
 	bool poly_mode; /* true = polyphonic (default), false = monophonic */
+	bool insertion_enabled; /* GS EFX assign: route voices to insertion processor */
 
 	uint8_t bank_msb;
 	uint8_t bank_lsb;
@@ -401,6 +404,11 @@ typedef struct SS_Processor {
 
 	bool delay_active; /* whether the delay effect has been activated via sysex */
 	bool custom_channel_numbers; /* whether any channel uses a non-default rx_channel */
+	bool insertion_active; /* true once any channel has insertion_enabled */
+
+	SS_InsertionProcessor *insertion; /* active insertion effect processor (owned) */
+	float *insertion_left; /* per-block insertion input accumulation buffer */
+	float *insertion_right;
 
 	SS_EventCallback event_callback;
 	void *event_userdata;

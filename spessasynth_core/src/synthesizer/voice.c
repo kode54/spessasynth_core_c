@@ -515,7 +515,7 @@ bool ss_voice_render(SS_Voice *v,
 	float reverb_amt = (float)v->modulated_generators[SS_GEN_REVERB_EFFECTS_SEND] / 1000.0f * v->reverb_send;
 	float chorus_amt = (float)v->modulated_generators[SS_GEN_CHORUS_EFFECTS_SEND] / 1000.0f * v->chorus_send;
 
-	if(ch->synth && ch->synth->delay_active) {
+	if(ch->synth && ch->synth->delay_active && delay_left && delay_right) {
 		const int delaySend = ch->midi_controllers[SS_MIDCON_VARIATION_DEPTH] * v->delay_send;
 		if(delaySend > 0) {
 			const float delayGain =
