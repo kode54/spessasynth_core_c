@@ -118,9 +118,9 @@ const FLAC__StreamDecoder *dec,
 FLAC__StreamDecoderErrorStatus status,
 void *client_data) {
 	(void)dec;
-	(void)status;
 	FlacState *st = (FlacState *)client_data;
-	st->error = true;
+	/* sf2pack writes streams, which may lose sync after their end */
+	st->error = status != FLAC__STREAM_DECODER_ERROR_STATUS_LOST_SYNC;
 }
 
 /* ── Public entry point ───────────────────────────────────────────────────── */
