@@ -124,6 +124,9 @@ static void read_sample_header(SS_IBA *iba, SS_BasicSample *s,
 
 /* ── Main SF2 loader ─────────────────────────────────────────────────────── */
 
+bool ss_vorbis_decode(SS_BasicSample *s);
+bool ss_flac_decode(SS_BasicSample *s);
+
 SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 	SS_IBA main_iba;
 	ss_iba_wrap(&main_iba, data, size);
@@ -212,6 +215,9 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 	memset(&smpl_data, 0, sizeof(smpl_data));
 	bool smpl_is_float32 = false; /* SF2Pack decoded float */
 
+	SS_BasicSample sf2pack_samples;
+	memset(&sf2pack_samples, 0, sizeof(sf2pack_samples));
+
 	while(ss_iba_remaining(&sdta.data) >= (8 + riff64 * 4)) {
 		SS_RIFFChunk sub;
 		if(!ss_riff_read_chunk(&sdta.data, &sub, false, riff64)) break;
@@ -221,7 +227,34 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 				/* SF2Pack: smpl is a single Ogg Vorbis stream covering all samples */
 				/* We decode it and get a Float32 array */
 				/* For now, copy raw compressed data; decode lazily */
-				smpl_data = sub.data; /* non-owning view */
+				const uint8_t *hdr = sub.data.data;
+				if(sub.data.length >= 4) {
+					if(hdr[0] == 'O' && hdr[1] == 'g' && hdr[2] == 'g' && hdr[3] == 'S') {
+#ifdef SS_HAVE_STB_VORBIS
+						sf2pack_samples.compressed_data = sub.data.data;
+						sf2pack_samples.compressed_data_length = sub.data.length;
+						if(ss_vorbis_decode(&sf2pack_samples)) {
+							smpl_data.data = (uint8_t *)sf2pack_samples.audio_data;
+							smpl_data.length = sf2pack_samples.audio_data_length * sizeof(float);
+							smpl_data.owns_data = true;
+							smpl_is_float32 = true;
+						}
+#endif
+					}
+					if(hdr[0] == 'f' && hdr[1] == 'L' && hdr[2] == 'a' && hdr[3] == 'C') {
+#ifdef SS_HAVE_LIBFLAC
+						sf2pack_samples.compressed_data = sub.data.data;
+						sf2pack_samples.compressed_data_length = sub.data.length;
+						if(ss_flac_decode(&sf2pack_samples)) {
+							smpl_data.data = (uint8_t *)sf2pack_samples.audio_data;
+							smpl_data.length = sf2pack_samples.audio_data_length * sizeof(float);
+							smpl_data.owns_data = true;
+							smpl_is_float32 = true;
+						}
+#endif
+					}
+				}
+
 #else
 				goto fail;
 #endif
@@ -419,6 +452,7 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 		bank->samples[i].sample_type = (SS_SampleType)(stype & ~SS_SF3_COMPRESSED_FLAG);
 		bank->samples[i].is_compressed = compressed;
 		bank->samples[i].owns_raw_data = true;
+		bank->samples[i].is_sf2pack = false;
 
 		if(smpl_data.data && smpl_data.length > 0) {
 			uint32_t byte_start = sample_starts[i] * 2;
@@ -451,8 +485,31 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 					       smpl_data.data + byte_start, slen);
 					bank->samples[i].s16le_length = slen;
 				}
+			} else {
+				/* SF2Pack: globally compressed to a single chunk, decoded to float already */
+				byte_start *= 2;
+				byte_end *= 2;
+				bank->samples[i].loop_start += byte_start / 4;
+				bank->samples[i].loop_end += byte_start / 4;
+				if(byte_end > smpl_data.length) byte_end = (uint32_t)smpl_data.length;
+				size_t slen = (byte_end > byte_start) ? (byte_end - byte_start) : 0;
+				bank->samples[i].compressed_data = (uint8_t *)malloc(slen + 4 * sizeof(float));
+				if(bank->samples[i].compressed_data) {
+					memcpy(bank->samples[i].compressed_data,
+					       smpl_data.data + byte_start, slen);
+					bank->samples[i].compressed_data_length = slen;
+					memset(bank->samples[i].compressed_data + slen, 0, 4 * sizeof(float));
+					bank->samples[i].is_compressed = true;
+					bank->samples[i].is_sf2pack = true;
+				}
 			}
 		}
+	}
+
+	if(smpl_is_float32) {
+		free(smpl_data.data);
+		smpl_data.data = NULL;
+		smpl_data.owns_data = false;
 	}
 
 	/* Fix sample loop points and link stereo pairs */

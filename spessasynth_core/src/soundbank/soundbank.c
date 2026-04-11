@@ -296,6 +296,16 @@ bool ss_sample_decode(SS_BasicSample *s) {
 
 	if(s->is_compressed && s->compressed_data) {
 		/* Dispatch to vorbis/FLAC/WAV decoder based on magic bytes */
+		if(s->is_sf2pack) {
+			s->audio_data = (float *)malloc(s->compressed_data_length + 4 * sizeof(float));
+			if(s->audio_data) {
+				memcpy(s->audio_data, s->compressed_data, s->compressed_data_length);
+				s->audio_data_length = s->compressed_data_length / sizeof(float);
+				memset(s->audio_data + s->audio_data_length, 0, 4 * sizeof(float));
+				return true;
+			}
+			return false;
+		}
 		if(s->compressed_data_length >= 4) {
 			const uint8_t *hdr = s->compressed_data;
 			if(hdr[0] == 'O' && hdr[1] == 'g' && hdr[2] == 'g' && hdr[3] == 'S') {

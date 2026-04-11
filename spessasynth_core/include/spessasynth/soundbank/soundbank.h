@@ -81,6 +81,7 @@ typedef struct SS_BasicSample {
 	 * compressed_data / s16le_data with the bank sample.  Guards cleanup in
 	 * ss_sample_free_data().  audio_data is always freed when non-NULL. */
 	bool owns_raw_data;
+	bool is_sf2pack;
 
 	/* Zone-level address-offset generator fixups (SF2 gens 0/4 and 1/12).
 	 * Applied to audio_data at voice-creation time; zero for bank samples. */
