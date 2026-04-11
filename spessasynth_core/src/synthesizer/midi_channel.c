@@ -157,6 +157,7 @@ static void reset_controllers_rp15_compliant(SS_MIDIChannel *ch, double time) {
 
 	memset(ch->channel_octave_tuning, 0, sizeof(ch->channel_octave_tuning));
 
+	ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = 2 << 7; /* Default 2 semitones */
 	ss_channel_pitch_wheel(ch, 8192, time);
 
 	reset_vibrato_params(ch);
@@ -217,6 +218,9 @@ static void reset_controllers_to_defaults(SS_MIDIChannel *ch) {
 
 	memset(ch->channel_octave_tuning, 0, sizeof(ch->channel_octave_tuning));
 	ch->channel_tuning_cents = 0;
+
+	ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = 2 << 7; /* Default 2 semitones */
+	ss_channel_pitch_wheel(ch, 8192, 0);
 
 	reset_portamento(ch);
 	reset_drum_params(ch);
