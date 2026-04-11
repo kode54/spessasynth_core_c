@@ -769,7 +769,7 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 						break;
 
 					case 0x2c: /* Delay send (CC94) */
-						ss_channel_controller(mch, SS_MIDCON_DETUNE_DEPTH, (int)gs_val, t);
+						ss_channel_controller(mch, SS_MIDCON_VARIATION_DEPTH, (int)gs_val, t);
 						break;
 
 					case 0x30: /* Vibrato rate (CC76) */
