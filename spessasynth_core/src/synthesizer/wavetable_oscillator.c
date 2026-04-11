@@ -22,16 +22,15 @@ static bool get_sample_nearest(SS_Voice *v, float *out, int count, double step) 
 		double loop_len = (double)(s->loop_end - s->loop_start);
 		for(int i = 0; i < count; i++) {
 			while(cur >= (double)s->loop_end) cur -= loop_len;
-			int ceil = (int)cur + 1;
-			if(ceil >= (int)s->loop_end) ceil -= (int)loop_len;
-			out[i] = data[ceil];
+			int floor_i = (int)cur;
+			out[i] = data[floor_i];
 			cur += step;
 		}
 	} else {
 		for(int i = 0; i < count; i++) {
-			int ceil = (int)cur + 1;
-			if(ceil >= (int)s->end) { return false; }
-			out[i] = data[ceil];
+			int floor_i = (int)cur;
+			if(floor_i >= (int)s->end) { return false; }
+			out[i] = data[floor_i];
 			cur += step;
 		}
 	}
