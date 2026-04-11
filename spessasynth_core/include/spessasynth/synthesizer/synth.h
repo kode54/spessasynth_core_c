@@ -373,7 +373,7 @@ typedef struct {
 
 #define SS_MAX_SOUNDBANKS 16
 
-#define SS_MAX_SOUND_CHUNK 2048
+#define SS_MAX_SOUND_CHUNK 128
 
 typedef struct SS_Processor {
 	uint32_t sample_rate;
