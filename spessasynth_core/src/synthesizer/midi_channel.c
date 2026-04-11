@@ -55,6 +55,12 @@ static float ss_portamento_time_to_seconds(float portamento_time, float distance
 
 #define VOICE_GROW_BY 16
 
+static ssize_t clamp_ssize(ssize_t value, ssize_t min, ssize_t max) {
+	if(value < min) return min;
+	if(value > max) return max;
+	return value;
+}
+
 static void reset_generator_overrides(SS_MIDIChannel *ch) {
 	for(int i = 0; i < SS_GEN_COUNT; i++)
 		ch->generator_overrides[i] = GENERATOR_OVERRIDE_NO_CHANGE_VALUE;
@@ -521,14 +527,12 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		voice->modulated_generators[SS_GEN_ENDLOOP_ADDRS_COARSE_OFFSET] *
 		32768;
 
-#define clamp(a, min, max) ((a) < (min) ? (min) : (((a) > (max) ? (max) : (a))))
 		/* Clamp the sample offsets */
-		const size_t lastSample = audio.sample_data_len - 1;
-		voice->sample.cursor = clamp(cursorStartOffset, 0, lastSample);
-		voice->sample.end = clamp(lastSample + endOffset, 0, lastSample);
-		voice->sample.loop_start = clamp(audio.loop_start + loopStartOffset, 0, lastSample);
-		voice->sample.loop_end = clamp(audio.loop_end + loopEndOffset, 0, lastSample);
-#undef clamp
+		const ssize_t lastSample = audio.sample_data_len - 1;
+		voice->sample.cursor = clamp_ssize(cursorStartOffset, 0, lastSample);
+		voice->sample.end = clamp_ssize(lastSample + endOffset, 0, lastSample);
+		voice->sample.loop_start = clamp_ssize(audio.loop_start + loopStartOffset, 0, lastSample);
+		voice->sample.loop_end = clamp_ssize(audio.loop_end + loopEndOffset, 0, lastSample);
 
 		// Swap loops if needed
 		if(voice->sample.loop_end < voice->sample.loop_start) {
