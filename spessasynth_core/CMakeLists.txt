@@ -8,6 +8,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 option(SS_ENABLE_SF3_VORBIS  "Enable SF3 OGG Vorbis decoding via stb_vorbis"  OFF)
 option(SS_ENABLE_SF3_FLAC    "Enable SF3 FLAC decoding via libFLAC"           OFF)
 option(SS_BUILD_SHARED       "Build as a shared library"                      OFF)
+option(SS_BUILD_EXAMPLES     "Build example tools"                            ON)
 
 # ── Core source list ─────────────────────────────────────────────────────────
 set(SS_SOURCES
@@ -32,6 +33,7 @@ set(SS_SOURCES
     src/synthesizer/dsp/dattorro_reverb.c
     src/synthesizer/dsp/delay_line.c
     src/synthesizer/dsp/reverb.c
+    src/synthesizer/dsp/delay.c
     src/synthesizer/dsp/insertion.c
     src/sequencer/sequencer.c
 )
@@ -100,6 +102,19 @@ if(MSVC)
     target_compile_options(spessasynth_core PRIVATE /W3)
 else()
     target_compile_options(spessasynth_core PRIVATE -Wall -Wextra -Wno-unused-parameter)
+endif()
+
+# ── Examples ─────────────────────────────────────────────────────────────────
+if(SS_BUILD_EXAMPLES)
+    add_executable(spessasynth_example examples/example.c)
+    target_link_libraries(spessasynth_example PRIVATE spessasynth_core)
+    target_include_directories(spessasynth_example PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/examples
+    )
+    if(NOT MSVC)
+        target_compile_options(spessasynth_example PRIVATE -Wall -Wextra -Wno-unused-parameter)
+    endif()
 endif()
 
 # ── Install ──────────────────────────────────────────────────────────────────
