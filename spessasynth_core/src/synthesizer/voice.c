@@ -490,7 +490,7 @@ bool ss_voice_render(SS_Voice *v,
 		const int delaySend = ch->midi_controllers[SS_MIDCON_VARIATION_DEPTH] * v->delay_send;
 		if (delaySend > 0) {
 			const float delayGain =
-				gain * v->delay_send *
+				gain *
 				ch->synth->master_params.delay_gain *
 				((float)(delaySend >> 7) / 127.0);
 			for (int i = 0; i < sample_count; i++) {
