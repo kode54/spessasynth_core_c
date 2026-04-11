@@ -32,6 +32,7 @@ set(SS_SOURCES
     src/synthesizer/dsp/dattorro_reverb.c
     src/synthesizer/dsp/delay_line.c
     src/synthesizer/dsp/reverb.c
+    src/synthesizer/dsp/insertion.c
     src/sequencer/sequencer.c
 )
 
