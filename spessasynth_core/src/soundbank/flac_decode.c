@@ -179,10 +179,11 @@ bool ss_flac_decode(SS_BasicSample *s) {
 	}
 
 	/* Free compressed data */
-	free(s->compressed_data);
+	if(s->owns_raw_data) {
+		free(s->compressed_data);
+	}
 	s->compressed_data = NULL;
 	s->compressed_data_length = 0;
-
 	return true;
 }
 
