@@ -546,7 +546,9 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 	for(size_t i = 0; i < bank->preset_count; i++) {
 		SS_BasicPreset *p = &bank->presets[i];
 		bool drum_match = ((is_drum_channel == p->is_gm_gs_drum) || xgDrums);
+		bool drum_patch = p->is_gm_gs_drum || p->is_xg_drum;
 		if(!drum_match && is_drum_channel) continue;
+		if(drum_patch != is_drum_channel) continue;
 		if(p->program != program) continue;
 		if(p->bank_lsb == bank_lsb && p->bank_msb == bank_msb) {
 			match = p;
