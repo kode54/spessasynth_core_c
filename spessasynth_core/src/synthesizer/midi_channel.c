@@ -1285,6 +1285,11 @@ void ss_channel_program_change(SS_MIDIChannel *ch, int program) {
 		                                             (int)proc->master_params.midi_system, ch->drum_channel);
 		if(p) {
 			ch->preset = p;
+			bool is_drum_preset = p->is_gm_gs_drum || p->is_xg_drum;
+			if (ch->drum_channel != is_drum_preset) {
+				ch->drum_channel = is_drum_preset;
+			}
+			reset_drum_params(ch);
 			return;
 		}
 	}
