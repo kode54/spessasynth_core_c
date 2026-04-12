@@ -205,7 +205,7 @@ void ss_voice_release(SS_Voice *v, double current_time, double min_note_length) 
 
 void ss_voice_exclusive_release(SS_Voice *v, double current_time) {
 	ss_voice_release(v, current_time, MIN_EXCLUSIVE_LENGTH);
-	v->modulated_generators[SS_GEN_RELEASE_VOL_ENV] = EXCLUSIVE_CUTOFF_TIME;
+	v->override_release_vol_env = EXCLUSIVE_CUTOFF_TIME;
 	v->modulated_generators[SS_GEN_RELEASE_MOD_ENV] = EXCLUSIVE_MOD_CUTOFF_TIME;
 	ss_volume_envelope_recalculate(v, &v->volume_env, v->modulated_generators,
 	                               v->target_key, true,

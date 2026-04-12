@@ -185,6 +185,12 @@ typedef struct SS_Voice {
 	float reverb_send; /* per-voice reverb send multiplier */
 	float chorus_send; /* per-voice chorus send multiplier */
 	float delay_send; /* per-voice delay send multiplier */
+
+	/**
+	 * In timecents, where zero means disabled (use the modulatedGenerators table).
+	 * Used for exclusive notes and killing notes.
+	 */
+	int override_release_vol_env;
 } SS_Voice;
 
 SS_Voice *ss_voice_create(uint32_t sample_rate,

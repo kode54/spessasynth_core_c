@@ -116,7 +116,7 @@ void ss_volume_envelope_start_release(SS_Voice *v,
                                       double start_time) {
 	env->release_start_time_samples = env->sample_time;
 
-	float timecents = mod_gens[SS_GEN_RELEASE_VOL_ENV];
+	float timecents = v->override_release_vol_env ?: mod_gens[SS_GEN_RELEASE_VOL_ENV];
 	if(timecents < -7200) timecents = -7200;
 
 	env->release_duration = timecents_to_samples(timecents, env->sample_rate);
