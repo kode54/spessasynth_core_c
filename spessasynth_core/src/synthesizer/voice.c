@@ -313,8 +313,8 @@ void ss_voice_compute_modulators_internal(SS_Voice *v, const SS_MIDIChannel *ch,
 
 			/* Default resonant modulator: track separately */
 			if(m->is_default_resonant_modulator) {
-				v->resonance_offset = val;
-				/* Do not add to filter cutoff gain */
+				/* Half the gain, negates the filter */
+				v->resonance_offset = (val > 0) ? val / 2 : 0;
 			} else {
 				int16_t g = v->modulated_generators[m->dest_enum];
 				int32_t new_val = (int32_t)g + (int32_t)val;
