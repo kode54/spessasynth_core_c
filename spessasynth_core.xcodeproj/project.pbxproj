@@ -18,6 +18,9 @@
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		8346D4122F86800000F3F5EC /* Exceptions for "spessasynth_core" folder in "spessasynth_core" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				examples/example.c,
+			);
 			publicHeaders = (
 				include/spessasynth/midi/midi_enums.h,
 				include/spessasynth/midi/midi.h,
