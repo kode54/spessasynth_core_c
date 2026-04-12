@@ -306,6 +306,11 @@ void ss_voice_compute_modulators_internal(SS_Voice *v, const SS_MIDIChannel *ch,
 
 			float val = src * asrc * transform_amount;
 
+			if(m->transform_type == SS_MODTRANS_ABSOLUTE) {
+				/* Abs value */
+				val = fabs(val);
+			}
+
 			/* Default resonant modulator: track separately */
 			if(m->is_default_resonant_modulator) {
 				v->resonance_offset = val;
