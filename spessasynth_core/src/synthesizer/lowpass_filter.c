@@ -70,11 +70,11 @@ static void calculate_coefficients(SS_LowpassFilter *f, float cutoff_cents) {
 	float cutoff_hz = ss_abs_cents_to_hz(ci);
 	if(cutoff_hz > f->max_cutoff) cutoff_hz = f->max_cutoff;
 
-	float q_db = (float)f->resonance_cb;
-	float res_gain = ss_centibel_attenuation_to_gain(-(q_db - 3.01f));
-	float q_gain = 1.0f / sqrtf(ss_centibel_attenuation_to_gain(-q_db));
+	float q_cb = (float)f->resonance_cb;
+	float res_gain = ss_centibel_attenuation_to_gain(-(q_cb - 3.01f));
+	float q_gain = 1.0f / sqrtf(ss_centibel_attenuation_to_gain(-q_cb));
 
-	double w = 2.0 * M_PI * (double)cutoff_hz / (double)f->sample_rate;
+	double w = (2.0 * M_PI * (double)cutoff_hz) / (double)f->sample_rate;
 	double cosw = cos(w);
 	double alpha = sin(w) / (2.0 * (double)res_gain);
 
