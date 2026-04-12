@@ -199,6 +199,8 @@ static void reset_drum_params(SS_MIDIChannel *ch) {
 		ch->drum_params[k].gain = 1.0f;
 		ch->drum_params[k].exclusive_class = 0;
 		ch->drum_params[k].pan = 64;
+		ch->drum_params[k].filter_cutoff = 1.0f;
+		ch->drum_params[k].filter_resonance = 0.0f;
 		ch->drum_params[k].reverb_gain = drum_params_reverb(k);
 		ch->drum_params[k].chorus_gain = 0.0f; /* No drums have chorus */
 		ch->drum_params[k].delay_gain = 0.0f; /* No drums have delay */
@@ -345,6 +347,8 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	}
 
 	/* Drum parameter checks */
+	float drum_filter_cutoff = 1.0;
+	float drum_filter_resonance = 0.0f;
 	float drum_pitch_offset = 0.0f;
 	float drum_reverb_send = 1.0f;
 	float drum_chorus_send = 1.0f;
@@ -359,6 +363,8 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 
 		drum_pitch_offset = dp->pitch;
 		drum_exclusive_override = (int)dp->exclusive_class;
+		drum_filter_cutoff = dp->filter_cutoff;
+		drum_filter_resonance = dp->filter_resonance;
 		drum_reverb_send = dp->reverb_gain;
 		drum_chorus_send = dp->chorus_gain;
 		drum_delay_send = dp->delay_gain;
@@ -522,6 +528,16 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		/* Compute initial modulators */
 		ss_voice_compute_modulators_internal(voice, ch, def_mods, def_mod_count, time);
 
+		/* Apply the drum overrides */
+		if(drum_filter_cutoff != 1.0) {
+			float cutoff = (float)voice->modulated_generators[SS_GEN_INITIAL_FILTER_FC] * drum_filter_cutoff;
+			if (cutoff > 13499.0) cutoff = 13499.0;
+			voice->modulated_generators[SS_GEN_INITIAL_FILTER_FC] = (uint16_t)cutoff;
+		}
+		if(drum_filter_resonance != 0.0) {
+			voice->resonance_offset += drum_filter_resonance; /* I think? */
+		}
+
 		/* Calculate LFO start times */
 		voice->vib_lfo_start_time = time + ss_timecents_to_seconds(voice->modulated_generators[SS_GEN_DELAY_VIB_LFO]);
 		voice->mod_lfo_start_time = time + ss_timecents_to_seconds(voice->modulated_generators[SS_GEN_DELAY_MOD_LFO]);
@@ -679,7 +695,17 @@ enum {
 	SS_NRPN_GS_LSB_TVF_FILTER_RESONANCE = 0x21,
 
 	SS_NRPN_GS_LSB_EG_ATTACK_TIME = 0x63,
-	SS_NRPN_GS_LSB_EG_RELEASE_TIME = 0x66
+	SS_NRPN_GS_LSB_EG_RELEASE_TIME = 0x66,
+
+	SS_NRPN_GS_MSB_DRUM_FILTER_CUTOFF = 0x14,
+	SS_NRPN_GS_MSB_DRUM_FILTER_Q = 0x15,
+	SS_NRPN_GS_MSB_DRUM_PITCH_COARSE = 0x18,
+	SS_NRPN_GS_MSB_DRUM_PITCH_FINE = 0x19,
+	SS_NRPN_GS_MSB_DRUM_TVA_LEVEL = 0x1a,
+	SS_NRPN_GS_MSB_DRUM_PANPOT = 0x1c,
+	SS_NRPN_GS_MSB_DRUM_REVERB_SEND = 0x1d,
+	SS_NRPN_GS_MSB_DRUM_CHORUS_SEND = 0x1e,
+	SS_NRPN_GS_MSB_DRUM_DELAY_SEND = 0x1f
 };
 
 void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time) {
@@ -1045,6 +1071,43 @@ because I wanted support for Touhou MIDIs :-)
 						return;
 					}
 					/* Unrecognized NRPN */
+					break;
+
+				case SS_NRPN_GS_MSB_DRUM_FILTER_CUTOFF:
+					ch->drum_params[nrpn_fine].filter_cutoff = (((float)val) - 64.0) / 64.0;
+					break;
+
+				case SS_NRPN_GS_MSB_DRUM_FILTER_Q:
+					ch->drum_params[nrpn_fine].filter_resonance = (float)val * 128.0;
+					break;
+
+				case SS_NRPN_GS_MSB_DRUM_PITCH_COARSE:
+					ch->drum_params[nrpn_fine].pitch = (((float)val) - 64.0) * 100.0;
+					break;
+
+				case SS_NRPN_GS_MSB_DRUM_PITCH_FINE:
+					ch->drum_params[nrpn_fine].pitch = ((int)ch->drum_params[nrpn_fine].pitch / 100.0) * 100.0 + ((float)val) - 64.0;
+					break;
+
+				case SS_NRPN_GS_MSB_DRUM_TVA_LEVEL:
+					ch->drum_params[nrpn_fine].gain = ((float)val) / 127.0;
+					break;
+
+				case SS_NRPN_GS_MSB_DRUM_PANPOT:
+					ch->drum_params[nrpn_fine].pan = val;
+					break;
+
+				case SS_NRPN_GS_MSB_DRUM_REVERB_SEND:
+					ch->drum_params[nrpn_fine].reverb_gain = ((float)val) / 127.0;
+					break;
+
+				case SS_NRPN_GS_MSB_DRUM_CHORUS_SEND:
+					ch->drum_params[nrpn_fine].chorus_gain = ((float)val) / 127.0;
+					break;
+
+				case SS_NRPN_GS_MSB_DRUM_DELAY_SEND:
+					ch->drum_params[nrpn_fine].delay_gain = ((float)val) / 127.0;
+					if(ch->synth) ch->synth->delay_active = true;
 					break;
 
 				case SS_NRPN_MSB_PART_PARAMETER:
