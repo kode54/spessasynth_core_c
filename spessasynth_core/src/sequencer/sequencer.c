@@ -113,6 +113,7 @@ bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 
 	if(seq->current_song_index < 0) {
 		seq->current_song_index = 0;
+		seq->base_time = 0.0;
 		seq->current_time = 0.0;
 		seq->finished = false;
 	}
@@ -144,6 +145,7 @@ void ss_sequencer_pause(SS_Sequencer *seq) {
 void ss_sequencer_stop(SS_Sequencer *seq) {
 	seq->is_playing = false;
 	seq->is_paused = false;
+	seq->base_time = 0.0;
 	seq->current_time = 0.0;
 	SS_SequencerSong *song = current_song(seq);
 	if(song) song_rewind(song);
@@ -169,9 +171,7 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 	/* We use the tempo map to convert ticks → seconds. */
 	/* Replay just CC/program/pitch wheel/sysex events; skip notes. */
 	bool done = false;
-	/*double one_tick_sec = (midi->time_division > 0)
-	    ? (60.0 / (120.0 * (double)midi->time_division))
-	    : (60.0 / (120.0 * 480.0));*/
+	double one_tick_sec = (midi->time_division > 0) ? (60.0 / (120.0 * (double)midi->time_division)) : (60.0 / (120.0 * 480.0));
 
 	while(!done) {
 		int ti = find_first_event(song, midi);
@@ -191,11 +191,11 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 		uint8_t sb = e->status_byte;
 
 		/* Update tempo (so subsequent ticks-to-seconds conversions are right) */
-		/*if (sb == SS_META_SET_TEMPO && e->data_length >= 3) {
-		    double bpm = read_tempo_bpm(e->data);
-		    if (midi->time_division > 0)
-		        one_tick_sec = 60.0 / (bpm * (double)midi->time_division);
-		}*/
+		if(sb == SS_META_SET_TEMPO && e->data_length >= 3) {
+			double bpm = read_tempo_bpm(e->data);
+			if(midi->time_division > 0)
+				one_tick_sec = 60.0 / (bpm * (double)midi->time_division);
+		}
 
 		/* Non-note voice events */
 		if(sb >= 0x80 && sb < 0xF0 && seq->proc) {
@@ -225,6 +225,8 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 			ss_processor_sysex(seq->proc, e->data, e->data_length, ev_time);
 		}
 	}
+
+	seq->one_tick_seconds = one_tick_sec;
 }
 
 bool ss_sequencer_is_finished(const SS_Sequencer *seq) {
@@ -237,15 +239,13 @@ double ss_sequencer_get_time(const SS_Sequencer *seq) {
 
 /* ── Process a single MIDI event ─────────────────────────────────────────── */
 
-static double g_one_tick_seconds = 0.0; /* updated by tempo events during tick */
-
 static void process_event(SS_Sequencer *seq, SS_MIDIFile *midi,
                           SS_MIDIMessage *e, int track_index) {
 	if(!seq->proc) return;
 	(void)track_index;
 
 	uint8_t sb = e->status_byte;
-	double t = seq->current_time;
+	double t = seq->current_time + seq->base_time;
 
 	/* Voice event */
 	if(sb >= 0x80 && sb < 0xF0) {
@@ -300,7 +300,7 @@ static void process_event(SS_Sequencer *seq, SS_MIDIFile *midi,
 		case SS_META_SET_TEMPO:
 			if(e->data_length >= 3 && midi->time_division > 0) {
 				double bpm = read_tempo_bpm(e->data);
-				g_one_tick_seconds = 60.0 / (bpm * (double)midi->time_division);
+				seq->one_tick_seconds = 60.0 / (bpm * (double)midi->time_division);
 			}
 			break;
 
@@ -313,12 +313,27 @@ static void process_event(SS_Sequencer *seq, SS_MIDIFile *midi,
 	}
 }
 
+static bool ss_sequencer_next_song(SS_Sequencer *seq) {
+	seq->current_song_index++;
+	if((size_t)seq->current_song_index < seq->song_count) {
+		seq->base_time += seq->current_time;
+		seq->current_time = 0.0;
+		seq->one_tick_seconds = 0.0;
+		if(seq->proc)
+			ss_processor_system_reset(seq->proc);
+		return true;
+	}
+	return false;
+}
+
 /* ── ss_sequencer_tick ────────────────────────────────────────────────────── */
 
 void ss_sequencer_tick(SS_Sequencer *seq, uint32_t sample_count) {
 	if(!seq->is_playing || seq->is_paused || seq->finished) return;
 
-	SS_SequencerSong *song = current_song(seq);
+	SS_SequencerSong *song;
+try_again:
+	song = current_song(seq);
 	if(!song) {
 		seq->finished = true;
 		return;
@@ -332,14 +347,17 @@ void ss_sequencer_tick(SS_Sequencer *seq, uint32_t sample_count) {
 	double target_time = seq->current_time + dt;
 
 	/* Seed one_tick_seconds from the MIDI tempo map if not yet set */
-	if(g_one_tick_seconds <= 0.0 && midi->time_division > 0) {
-		g_one_tick_seconds = 60.0 / (120.0 * (double)midi->time_division);
+	if(seq->one_tick_seconds <= 0.0 && midi->time_division > 0) {
+		seq->one_tick_seconds = 60.0 / (120.0 * (double)midi->time_division);
 	}
 
 	/* Dispatch all events whose time <= target_time */
 	while(1) {
 		int ti = find_first_event(song, midi);
 		if(ti < 0) {
+			/* Try the next song */
+			if(ss_sequencer_next_song(seq))
+				goto try_again;
 			/* All tracks exhausted */
 			seq->finished = true;
 			seq->is_playing = false;
@@ -348,7 +366,7 @@ void ss_sequencer_tick(SS_Sequencer *seq, uint32_t sample_count) {
 
 		size_t ei = song->event_indexes[ti];
 		SS_MIDIMessage *e = &midi->tracks[ti].events[ei];
-		double ev_time = ss_midi_ticks_to_seconds(midi, e->ticks);
+		double ev_time = (double)e->ticks * seq->one_tick_seconds;
 
 		if(ev_time > target_time) break;
 
@@ -370,12 +388,13 @@ void ss_sequencer_tick(SS_Sequencer *seq, uint32_t sample_count) {
 		if(e->ticks >= midi->last_voice_event_tick) {
 			int next_ti = find_first_event(song, midi);
 			if(next_ti < 0) {
+				if(ss_sequencer_next_song(seq))
+					goto try_again;
 				seq->finished = true;
 				seq->is_playing = false;
 				break;
 			}
 		}
 	}
-
 	seq->current_time = target_time;
 }
