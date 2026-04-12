@@ -332,9 +332,6 @@ void ss_voice_compute_modulators_internal(SS_Voice *v, const SS_MIDIChannel *ch,
 				((SS_Modulator *)m)->current_value = val;
 		}
 	}
-
-	ss_volume_envelope_recalculate(v, &v->volume_env, v->modulated_generators, v->target_key, v->is_in_release, v->release_start_time, time);
-	ss_modulation_envelope_recalculate(&v->modulation_env, v->modulated_generators, v->target_key, v->is_in_release, v->release_start_time, time);
 }
 
 /* ── Render voice ────────────────────────────────────────────────────────── */

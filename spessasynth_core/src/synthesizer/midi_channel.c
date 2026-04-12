@@ -53,6 +53,19 @@ void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
 static void ss_channel_set_modulation_depth(SS_MIDIChannel *ch, float cents);
 static float ss_portamento_time_to_seconds(float portamento_time, float distance);
 extern float ss_timecents_to_seconds(int tc);
+extern void ss_volume_envelope_recalculate(SS_Voice *v,
+                                           SS_VolumeEnvelope *env,
+                                           const int16_t *mod_gens,
+                                           int target_key,
+                                           bool is_in_release,
+                                           double release_start_time,
+                                           double start_time);
+extern void ss_modulation_envelope_recalculate(SS_ModulationEnvelope *env,
+                                               const int16_t *mod_gens,
+                                               int midi_note,
+                                               bool is_in_release,
+                                               double release_start_time,
+                                               double start_time);
 
 #define VOICE_GROW_BY 16
 
@@ -528,10 +541,14 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		/* Compute initial modulators */
 		ss_voice_compute_modulators_internal(voice, ch, def_mods, def_mod_count, time);
 
+		/* Recalculate the envelopes */
+		ss_volume_envelope_recalculate(voice, &voice->volume_env, voice->modulated_generators, voice->target_key, voice->is_in_release, voice->release_start_time, time);
+		ss_modulation_envelope_recalculate(&voice->modulation_env, voice->modulated_generators, voice->target_key, voice->is_in_release, voice->release_start_time, time);
+
 		/* Apply the drum overrides */
 		if(drum_filter_cutoff != 1.0) {
 			float cutoff = (float)voice->modulated_generators[SS_GEN_INITIAL_FILTER_FC] * drum_filter_cutoff;
-			if (cutoff > 13499.0) cutoff = 13499.0;
+			if(cutoff > 13499.0) cutoff = 13499.0;
 			voice->modulated_generators[SS_GEN_INITIAL_FILTER_FC] = (uint16_t)cutoff;
 		}
 		if(drum_filter_resonance != 0.0) {
