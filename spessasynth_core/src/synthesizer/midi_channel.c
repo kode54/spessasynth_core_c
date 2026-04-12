@@ -1286,7 +1286,7 @@ void ss_channel_program_change(SS_MIDIChannel *ch, int program) {
 		if(p) {
 			ch->preset = p;
 			bool is_drum_preset = p->is_gm_gs_drum || p->is_xg_drum;
-			if (ch->drum_channel != is_drum_preset) {
+			if(ch->drum_channel != is_drum_preset) {
 				ch->drum_channel = is_drum_preset;
 			}
 			reset_drum_params(ch);
