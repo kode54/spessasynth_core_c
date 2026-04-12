@@ -36,7 +36,7 @@ static const SS_DelayTimeSegment delay_time_segments[] = {
 };
 static const int delay_time_segments_count = sizeof(delay_time_segments) / sizeof(delay_time_segments[0]);
 
-static const int DELAY_GAIN = 1.66;
+static const float DELAY_GAIN = 1.66;
 
 SS_Delay *ss_delay_create(float sample_rate, int max_buffer_size) {
 	SS_Delay *delay = (SS_Delay *)calloc(1, sizeof(*delay));
