@@ -469,11 +469,13 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 
 			if(compressed) {
 				/* SF3: copy compressed data slice */
-				size_t clen = (byte_end > byte_start) ? (byte_end - byte_start) / 2 : 0;
-				size_t offset = byte_start / 2;
-				bank->samples[i].loop_start += byte_start / 2;
-				bank->samples[i].loop_end += byte_start / 2;
-				if(offset + clen <= smpl_data.length) {
+				byte_start = sample_starts[i];
+				byte_end = sample_ends[i];
+				size_t clen = (byte_end > byte_start) ? (byte_end - byte_start) : 0;
+				size_t offset = byte_start;
+				bank->samples[i].loop_start += byte_start;
+				bank->samples[i].loop_end += byte_start;
+				if(offset < smpl_data.length && offset + clen <= smpl_data.length) {
 					bank->samples[i].compressed_data = (uint8_t *)malloc(clen);
 					if(bank->samples[i].compressed_data) {
 						memcpy(bank->samples[i].compressed_data,
