@@ -375,6 +375,20 @@ bool ss_sample_decode(SS_BasicSample *s) {
 		return true;
 	}
 
+	if(s->u8_data && s->u8_length >= 1) {
+		size_t sample_count = s->u8_length;
+		s->audio_data = (float *)malloc((sample_count + 4) * sizeof(float)); /* Allocate a little more for interpolators */
+		if(!s->audio_data) return false;
+		memset(s->audio_data + sample_count, 0, 4 * sizeof(float));
+		s->audio_data_length = sample_count;
+
+		const uint8_t *src = s->u8_data;
+		for(size_t i = 0; i < sample_count; i++) {
+			s->audio_data[i] = ((float)src[i] - 128.0) / 128.0;
+		}
+		return true;
+	}
+
 	/* Zero-length sample: create minimal silent buffer */
 	s->audio_data = (float *)calloc(1, sizeof(float));
 	s->audio_data_length = 1;
@@ -384,14 +398,16 @@ bool ss_sample_decode(SS_BasicSample *s) {
 void ss_sample_free_data(SS_BasicSample *s) {
 	/* audio_data is always owned by whichever struct decoded it. */
 	free(s->audio_data);
-	/* compressed_data / s16le_data are owned only by bank samples. */
+	/* compressed_data / s16le_data / u8_data are owned only by bank samples. */
 	if(s->owns_raw_data) {
 		free(s->compressed_data);
 		free(s->s16le_data);
+		free(s->u8_data);
 	}
 	s->audio_data = NULL;
 	s->compressed_data = NULL;
 	s->s16le_data = NULL;
+	s->u8_data = NULL;
 	s->audio_data_length = 0;
 }
 

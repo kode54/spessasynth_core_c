@@ -72,9 +72,13 @@ typedef struct SS_BasicSample {
 	size_t compressed_data_length;
 	bool is_compressed;
 
-	/* SF2 raw s16le slice. Freed after decode. */
+	/* SF2 or DLS raw s16le slice. Freed after decode. */
 	uint8_t *s16le_data;
 	size_t s16le_length; /* bytes */
+
+	/* DLS 8-bit */
+	uint8_t *u8_data;
+	size_t u8_length; /* bytes */
 
 	bool data_overridden;
 

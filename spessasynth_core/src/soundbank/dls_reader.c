@@ -371,7 +371,7 @@ static bool parse_wave_pool(SS_IBA *waves_iba,
 		if(offset + 12 > waves_iba->length) continue;
 
 		SS_IBA wave_iba;
-		ss_iba_wrap(&wave_iba, waves_iba->data + offset, waves_iba->length - offset);
+		ss_iba_wrap(&wave_iba, waves_iba->data + offset + 4 /* wvpl as indexed */, waves_iba->length - offset);
 
 		SS_RIFFChunk wave_list;
 		if(!ss_riff_read_chunk(&wave_iba, &wave_list, false, false)) continue;
@@ -430,19 +430,23 @@ static bool parse_wave_pool(SS_IBA *waves_iba,
 		 * For stereo, take left channel only (mix later if needed). */
 		size_t bytes_per_sample = bits_per_sample / 8;
 		size_t total_frames = pcm_len / (bytes_per_sample * num_channels);
-		s->audio_data = (float *)malloc(total_frames * sizeof(float));
-		if(!s->audio_data) continue;
-		s->audio_data_length = total_frames;
+		uint8_t *out_data = (uint8_t *)malloc(total_frames * bytes_per_sample);
+		if(!out_data) continue;
 
 		if(bits_per_sample == 16) {
 			const int16_t *src = (const int16_t *)pcm_data;
+			int16_t *dest = (int16_t *)out_data;
 			for(size_t f = 0; f < total_frames; f++) {
-				s->audio_data[f] = (float)src[f * num_channels] / 32768.0f;
+				dest[f] = src[f * num_channels];
 			}
+			s->s16le_data = out_data;
+			s->s16le_length = total_frames * 2;
 		} else if(bits_per_sample == 8) {
 			for(size_t f = 0; f < total_frames; f++) {
-				s->audio_data[f] = ((float)pcm_data[f * num_channels] - 128.0f) / 128.0f;
+				out_data[f] = pcm_data[f * num_channels];
 			}
+			s->u8_data = out_data;
+			s->u8_length = total_frames;
 		}
 
 		if(has_loop) {
