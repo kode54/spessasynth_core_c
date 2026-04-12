@@ -11,6 +11,12 @@
 #include "spessasynth/utils/indexed_byte_array.h"
 #endif
 
+typedef enum {
+	SS_SYSTEM_GM = 0,
+	SS_SYSTEM_GS = 1,
+	SS_SYSTEM_XG = 2
+} SS_MIDISystem;
+
 /* ── Generator limits table ──────────────────────────────────────────────── */
 
 const SS_GeneratorLimit SS_GENERATOR_LIMITS[SS_GEN_COUNT] = {
@@ -594,7 +600,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 	(void)midi_system;
 	SS_BasicPreset *match = NULL;
 
-	const bool isXG = midi_system == 2;
+	const bool isXG = midi_system == SS_SYSTEM_XG;
 	const bool xgDrums = (bank_msb == 120 || bank_msb == 127) && isXG;
 
 	if(bank_offset) {

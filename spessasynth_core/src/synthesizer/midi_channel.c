@@ -209,7 +209,7 @@ static void reset_drum_params(SS_MIDIChannel *ch) {
 static void reset_portamento(SS_MIDIChannel *ch) {
 	if(ch->locked_controllers[SS_MIDCON_PORTAMENTO_CONTROL]) return;
 
-	if(ch->synth && ch->synth->master_params.midi_system == 2) { /* XG */
+	if(ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_XG) {
 		ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, 60, 0);
 	} else {
 		ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, 0, 0);

@@ -330,7 +330,7 @@ void ss_processor_render(SS_Processor *proc,
 
 		/* These mix into the output, with the option of chorus and/or delay emitting into the reverb buffers */
 		ss_chorus_process(proc->chorus, chorus_left, chorus_right, out_left, out_right, reverb_left, reverb_right, delay_left, delay_right, block_count);
-		if(proc->delay_active && proc->master_params.midi_system != 2 /* XG */) {
+		if(proc->delay_active && proc->master_params.midi_system != SS_SYSTEM_XG) {
 			ss_delay_process(proc->delay, delay_left, delay_right, out_left, out_right, reverb_left, reverb_right, block_count);
 		}
 		ss_reverb_process(proc->reverb, reverb_left, reverb_right, out_left, out_right, block_count);
