@@ -703,18 +703,13 @@ enum {
 };
 
 void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time) {
-	SS_Processor *proc = ch->synth;
+	SS_BasicPreset *p = ch->preset;
 	/* Collect modulators: use bank's default + voice mods */
 	const SS_Modulator *def_mods = SS_DEFAULT_MODULATORS;
 	size_t def_mod_count = SS_DEFAULT_MODULATOR_COUNT;
-	if(proc) {
-		for(int b = 0; b < proc->soundbank_count; b++) {
-			if(proc->soundbanks[b] && proc->soundbanks[b]->custom_default_modulators) {
-				def_mods = proc->soundbanks[b]->default_modulators;
-				def_mod_count = proc->soundbanks[b]->default_mod_count;
-				break;
-			}
-		}
+	if(p && p->parent_bank && p->parent_bank->custom_default_modulators) {
+		def_mods = p->parent_bank->default_modulators;
+		def_mod_count = p->parent_bank->default_mod_count;
 	}
 
 	for(size_t v = 0; v < ch->voice_count; v++) {
@@ -723,18 +718,13 @@ void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time) {
 }
 
 void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch, double time) {
-	SS_Processor *proc = ch->synth;
+	SS_BasicPreset *p = v->preset;
 	/* Collect modulators: use bank's default + voice mods */
 	const SS_Modulator *def_mods = SS_DEFAULT_MODULATORS;
 	size_t def_mod_count = SS_DEFAULT_MODULATOR_COUNT;
-	if(proc) {
-		for(int b = 0; b < proc->soundbank_count; b++) {
-			if(proc->soundbanks[b] && proc->soundbanks[b]->custom_default_modulators) {
-				def_mods = proc->soundbanks[b]->default_modulators;
-				def_mod_count = proc->soundbanks[b]->default_mod_count;
-				break;
-			}
-		}
+	if(p && p->parent_bank && p->parent_bank->custom_default_modulators) {
+		def_mods = p->parent_bank->default_modulators;
+		def_mod_count = p->parent_bank->default_mod_count;
 	}
 
 	ss_voice_compute_modulators_internal(v, ch, def_mods, def_mod_count, time);
