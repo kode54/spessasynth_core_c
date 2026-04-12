@@ -117,7 +117,7 @@ void ss_delay_set_pre_lowpass(SS_Delay *delay, unsigned char value) {
 static void ss_delay_update_gain(SS_Delay *delay) {
 	delay->delayCenter->gain = (float)delay->parameters.level_center / 127.0;
 	delay->delayLeft->gain = (float)delay->parameters.level_left / 127.0;
-	delay->delayLeft->gain = (float)delay->parameters.level_right / 127.0;
+	delay->delayRight->gain = (float)delay->parameters.level_right / 127.0;
 }
 
 void ss_delay_set_level_right(SS_Delay *delay, unsigned char value) {
