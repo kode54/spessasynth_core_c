@@ -26,23 +26,22 @@
 #endif
 
 /* Hacks above and beyond the base STB Vorbis, to implement float reading */
-int stb_vorbis_get_frame_float_mono(stb_vorbis *f, int num_c, float *buffer, int num_floats)
-{
+int stb_vorbis_get_frame_float_mono(stb_vorbis *f, int num_c, float *buffer, int num_floats) {
 	float **output;
 	int len;
-	if (num_c == 1) {
+	if(num_c == 1) {
 		len = stb_vorbis_get_frame_float(f, NULL, &output);
-		if (len) {
+		if(len) {
 			memcpy(buffer, output[0], len * sizeof(float));
 		}
 		return len;
 	}
 	len = stb_vorbis_get_frame_float(f, NULL, &output);
-	if (len) {
-		if (len*num_c > num_floats) len = num_floats / num_c;
-		for (int i = 0; i < len; i++) {
+	if(len) {
+		if(len * num_c > num_floats) len = num_floats / num_c;
+		for(int i = 0; i < len; i++) {
 			float sample = 0;
-			for (int j = 0; j < num_c; j++) sample += output[j][i];
+			for(int j = 0; j < num_c; j++) sample += output[j][i];
 			sample /= (float)num_c;
 			buffer[i] = sample;
 		}
@@ -50,33 +49,32 @@ int stb_vorbis_get_frame_float_mono(stb_vorbis *f, int num_c, float *buffer, int
 	return len;
 }
 
-static int stb_vorbis_decode_memory_float(const uint8 *mem, int len, int *channels, int *sample_rate, float **output)
-{
+static int stb_vorbis_decode_memory_float(const uint8 *mem, int len, int *channels, int *sample_rate, float **output) {
 	int data_len, offset, total, limit, error;
 	float *data;
 	stb_vorbis *v = stb_vorbis_open_memory(mem, len, &error, NULL);
-	if (v == NULL) return -1;
+	if(v == NULL) return -1;
 	limit = 16384;
 	*channels = v->channels;
-	if (sample_rate)
+	if(sample_rate)
 		*sample_rate = v->sample_rate;
 	offset = data_len = 0;
 	total = limit;
-	data = (float *) malloc(total * sizeof(*data));
-	if (data == NULL) {
+	data = (float *)malloc(total * sizeof(*data));
+	if(data == NULL) {
 		stb_vorbis_close(v);
 		return -2;
 	}
-	for (;;) {
-		int n = stb_vorbis_get_frame_float_mono(v, v->channels, data+offset, total-offset);
-		if (n == 0) break;
+	for(;;) {
+		int n = stb_vorbis_get_frame_float_mono(v, v->channels, data + offset, total - offset);
+		if(n == 0) break;
 		data_len += n;
 		offset += n;
-		if (offset + limit > total) {
+		if(offset + limit > total) {
 			float *data2;
 			total *= 2;
-			data2 = (float *) realloc(data, total * sizeof(*data));
-			if (data2 == NULL) {
+			data2 = (float *)realloc(data, total * sizeof(*data));
+			if(data2 == NULL) {
 				free(data);
 				stb_vorbis_close(v);
 				return -2;
