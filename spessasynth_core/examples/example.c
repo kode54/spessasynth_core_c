@@ -17,33 +17,66 @@ SS_SoundBank *g_soundBank;
 float sampleLeft[128], sampleRight[128];
 
 // Callback function called by the audio thread
-static void AudioCallback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
-{
-	float* stream = (float*)pOutput;
-	for (ma_uint32 SampleBlock = 128; frameCount; frameCount -= SampleBlock, stream += SampleBlock * 2) // 2 channel output
+static void AudioCallback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount) {
+	float *stream = (float *)pOutput;
+	for(ma_uint32 SampleBlock = 128; frameCount; frameCount -= SampleBlock, stream += SampleBlock * 2) // 2 channel output
 	{
-		//We progress the MIDI playback and then process TSF_RENDER_EFFECTSAMPLEBLOCK samples at once
-		if (SampleBlock > frameCount) SampleBlock = frameCount;
+		// We progress the MIDI playback and then process TSF_RENDER_EFFECTSAMPLEBLOCK samples at once
+		if(SampleBlock > frameCount) SampleBlock = frameCount;
 
-		//Loop through all MIDI messages which need to be played up until the current playback time
+		// Loop through all MIDI messages which need to be played up until the current playback time
 		ss_sequencer_tick(g_sequencer, SampleBlock);
 
 		// Render the block of audio samples in float format
 		ss_processor_render(g_processor, sampleLeft, sampleRight, SampleBlock);
-		for (ma_uint32 i = 0; i < SampleBlock; i++)
-		{
+		for(ma_uint32 i = 0; i < SampleBlock; i++) {
 			stream[i * 2] = sampleLeft[i];
 			stream[i * 2 + 1] = sampleRight[i];
 		}
 	}
 }
 
-int main(int argc, char *argv[])
-{
+bool load_midi_file(SS_Sequencer *seq, const char *midiName) {
+	uint8_t *midiFile;
+	FILE *fMidiFile = fopen(midiName, "rb");
+	if(!fMidiFile) {
+		fprintf(stderr, "Could not load MIDI file\n");
+		return false;
+	}
+
+	fseek(fMidiFile, 0, SEEK_END);
+	size_t midiSize = ftell(fMidiFile);
+	fseek(fMidiFile, 0, SEEK_SET);
+
+	midiFile = malloc(midiSize);
+	if(!midiFile) {
+		fprintf(stderr, "Out of memory\n");
+		return false;
+	}
+
+	fread(midiFile, 1, midiSize, fMidiFile);
+	fclose(fMidiFile);
+
+	g_midiFile = ss_midi_load(midiFile, midiSize, midiName);
+	if(!g_midiFile) {
+		fprintf(stderr, "Could not load MIDI file\n");
+		return false;
+	}
+	free(midiFile);
+
+	if(!ss_sequencer_load_midi(seq, g_midiFile)) {
+		fprintf(stderr, "Could not load MIDI file into sequencer\n");
+		return false;
+	}
+
+	return true;
+}
+
+int main(int argc, char *argv[]) {
 	// This implements a small program that you can launch without
 	// parameters for a default file & soundfont, or with these arguments:
 	//
-	// ./example3-... <yourfile>.mid <yoursoundfont>.sf2
+	// ./example3-... <yoursoundfont>.sf2 <yourfile>.mid [.. more midi files]
 
 	// Define the desired audio output format we request
 	ma_device device;
@@ -55,52 +88,15 @@ int main(int argc, char *argv[])
 	deviceConfig.dataCallback = AudioCallback;
 
 	// Initialize the audio system
-	if (ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS)
-	{
+	if(ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS) {
 		fprintf(stderr, "Could not initialize audio hardware or driver\n");
 		return 1;
 	}
 
-	//Venture (Original WIP) by Ximon
-	//https://musescore.com/user/2391686/scores/841451
-	//License: Creative Commons copyright waiver (CC0)
-	const char *midiName = (argc >= 2 ? argv[1] : "venture.mid");
-
-	uint8_t *midiFile;
-	FILE *fMidiFile = fopen(midiName, "rb");
-	if (!fMidiFile)
-	{
-		fprintf(stderr, "Could not load MIDI file\n");
-		return 1;
-	}
-
-	fseek(fMidiFile, 0, SEEK_END);
-	size_t midiSize = ftell(fMidiFile);
-	fseek(fMidiFile, 0, SEEK_SET);
-
-	midiFile = malloc(midiSize);
-	if (!midiFile)
-	{
-		fprintf(stderr, "Out of memory\n");
-		return 1;
-	}
-
-	fread(midiFile, 1, midiSize, fMidiFile);
-	fclose(fMidiFile);
-
-	g_midiFile = ss_midi_load(midiFile, midiSize, midiName);
-	if (!g_midiFile)
-	{
-		fprintf(stderr, "Could not load MIDI file\n");
-		return 1;
-	}
-	free(midiFile);
-
 	// Load the SoundFont from a file
-	const char *soundBankName = (argc >= 3 ? argv[2] : "florestan-subset.sf2");
+	const char *soundBankName = (argc >= 2 ? argv[1] : "florestan-subset.sf2");
 	FILE *fSoundBank = fopen(soundBankName, "rb");
-	if (!fSoundBank)
-	{
+	if(!fSoundBank) {
 		fprintf(stderr, "Could not load SoundFont\n");
 		return 1;
 	}
@@ -110,8 +106,7 @@ int main(int argc, char *argv[])
 	fseek(fSoundBank, 0, SEEK_SET);
 
 	uint8_t *soundBank = malloc(soundBankSize);
-	if (!soundBank)
-	{
+	if(!soundBank) {
 		fprintf(stderr, "Out of memory");
 		return 1;
 	}
@@ -120,8 +115,7 @@ int main(int argc, char *argv[])
 	fclose(fSoundBank);
 
 	g_soundBank = ss_soundbank_load(soundBank, soundBankSize);
-	if (!g_soundBank)
-	{
+	if(!g_soundBank) {
 		fprintf(stderr, "Could not load SoundFont\n");
 		return 1;
 	}
@@ -129,35 +123,40 @@ int main(int argc, char *argv[])
 
 	// Set the SoundFont rendering output mode
 	g_processor = ss_processor_create((int)deviceConfig.sampleRate, NULL);
-	if (!g_processor)
-	{
+	if(!g_processor) {
 		fprintf(stderr, "Could not create the synthesizer\n");
 		return 1;
 	}
 
-	if (!ss_processor_load_soundbank(g_processor, g_soundBank, "theBank"))
-	{
-		fprintf(stderr, "Could not add the bank to the synthesizer\n");
-		return 1;
-	}
-
 	g_sequencer = ss_sequencer_create(g_processor);
-	if (!g_sequencer)
-	{
+	if(!g_sequencer) {
 		fprintf(stderr, "Out of memory");
 		return 1;
 	}
 
-	if (!ss_sequencer_load_midi(g_sequencer, g_midiFile))
-	{
-		fprintf(stderr, "Could not load MIDI file into sequencer\n");
+	if(argc < 3) {
+		// Venture (Original WIP) by Ximon
+		// https://musescore.com/user/2391686/scores/841451
+		// License: Creative Commons copyright waiver (CC0)
+		if(!load_midi_file(g_sequencer, "venture.mid")) {
+			return 1;
+		}
+	} else {
+		for(int idx = 2; idx < argc; idx++) {
+			if(!load_midi_file(g_sequencer, argv[idx])) {
+				return 1;
+			}
+		}
+	}
+
+	if(!ss_processor_load_soundbank(g_processor, g_soundBank, "theBank")) {
+		fprintf(stderr, "Could not add the bank to the synthesizer\n");
 		return 1;
 	}
 
 	// Start the actual audio playback here
 	// The audio thread will begin to call our AudioCallback function
-	if (ma_device_start(&device) != MA_SUCCESS)
-	{
+	if(ma_device_start(&device) != MA_SUCCESS) {
 		fprintf(stderr, "Failed to start playback device.\n");
 		ma_device_uninit(&device);
 		return 1;
@@ -166,7 +165,7 @@ int main(int argc, char *argv[])
 	ss_sequencer_play(g_sequencer);
 
 	// Wait until the entire MIDI file has been played back (until the end of the linked message list is reached)
-	while (!ss_sequencer_is_finished(g_sequencer)) ma_sleep(100);
+	while(!ss_sequencer_is_finished(g_sequencer)) ma_sleep(100);
 
 	ma_device_uninit(&device);
 
