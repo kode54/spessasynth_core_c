@@ -451,21 +451,31 @@ void ss_preset_free(SS_BasicPreset *p) {
 void ss_synthesis_data_free_array(SS_SynthesisData *data, size_t count) {
 	if(!data) return;
 	for(size_t i = 0; i < count; i++) {
-		free(data[i].preset_generators);
-		free(data[i].instrument_generators);
 		free(data[i].modulators);
 	}
 	free(data);
 }
 
+/* Returns true if two modulators are identical (same sources, dest, transform type).
+ * Does not compare transform_amount — used for SF2 spec §9.5 summing. */
+static bool mod_is_identical(const SS_Modulator *a, const SS_Modulator *b) {
+	return a->source_enum == b->source_enum &&
+	       a->amount_source_enum == b->amount_source_enum &&
+	       a->dest_enum == b->dest_enum &&
+	       a->transform_type == b->transform_type;
+}
+
 /*
  * Collect all synthesis data for a (note, velocity) pair.
- * Walks preset zones -> instrument zones, merging generator/modulator lists.
+ * Matches BasicPreset.getVoiceParameters() in basic_preset.ts:
+ *  - Generators: defaults, overridden by inst global then inst zone, then preset
+ *    generators are added (summed) with int16 clamp.  EMU attenuation applied here.
+ *  - Modulators: inst zone + unique inst global + unique bank defaults + preset mods
+ *    (identical preset+inst mods have their amounts summed per SF2 spec §9.5).
  */
 size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
                                     int midi_note, int velocity,
                                     SS_SynthesisData **out_data) {
-	/* Pre-allocate a generous amount, we'll trim later */
 	size_t capacity = 32;
 	SS_SynthesisData *result = (SS_SynthesisData *)calloc(capacity,
 	                                                      sizeof(SS_SynthesisData));
@@ -475,9 +485,16 @@ size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
 	}
 	size_t count = 0;
 
+	/* Bank default modulators (preset's parent bank, or global defaults) */
+	const SS_Modulator *def_mods = SS_DEFAULT_MODULATORS;
+	size_t def_mod_count = SS_DEFAULT_MODULATOR_COUNT;
+	if(preset->parent_bank && preset->parent_bank->custom_default_modulators) {
+		def_mods = preset->parent_bank->default_modulators;
+		def_mod_count = preset->parent_bank->default_mod_count;
+	}
+
 	for(size_t pi = 0; pi < preset->zone_count; pi++) {
 		const SS_PresetZone *pz = &preset->zones[pi];
-		/* Check key/velocity range for preset zone */
 		if(pz->base.key_range_min >= 0) {
 			if(midi_note < pz->base.key_range_min ||
 			   midi_note > pz->base.key_range_max) continue;
@@ -490,9 +507,42 @@ size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
 		SS_BasicInstrument *inst = pz->instrument;
 		if(!inst) continue;
 
+		/* Preset generator offsets: zero-based, type-indexed.
+		 * Global zone sets first; local zone overrides (later write wins). */
+		int16_t preset_gens[SS_GEN_COUNT];
+		memset(preset_gens, 0, sizeof(preset_gens));
+		for(size_t g = 0; g < preset->global_zone.gen_count; g++) {
+			SS_GeneratorType t = preset->global_zone.generators[g].type;
+			if(t >= 0 && t < SS_GEN_COUNT)
+				preset_gens[t] = preset->global_zone.generators[g].value;
+		}
+		for(size_t g = 0; g < pz->base.gen_count; g++) {
+			SS_GeneratorType t = pz->base.generators[g].type;
+			if(t >= 0 && t < SS_GEN_COUNT)
+				preset_gens[t] = pz->base.generators[g].value;
+		}
+
+		/* Preset modulator list: preset zone mods first, then unique from preset global. */
+		size_t preset_mod_cap = pz->base.mod_count + preset->global_zone.mod_count;
+		SS_Modulator *preset_mods = (SS_Modulator *)malloc(
+		(preset_mod_cap + 1) * sizeof(SS_Modulator));
+		size_t preset_mod_count = 0;
+		if(preset_mods) {
+			for(size_t m = 0; m < pz->base.mod_count; m++)
+				preset_mods[preset_mod_count++] = ss_modulator_copy(&pz->base.modulators[m]);
+			for(size_t m = 0; m < preset->global_zone.mod_count; m++) {
+				const SS_Modulator *gm = &preset->global_zone.modulators[m];
+				bool found = false;
+				for(size_t k = 0; k < preset_mod_count; k++) {
+					if(mod_is_identical(&preset_mods[k], gm)) { found = true; break; }
+				}
+				if(!found)
+					preset_mods[preset_mod_count++] = ss_modulator_copy(gm);
+			}
+		}
+
 		for(size_t ii = 0; ii < inst->zone_count; ii++) {
 			const SS_InstrumentZone *iz = &inst->zones[ii];
-			/* Check key/velocity range for instrument zone */
 			if(iz->base.key_range_min >= 0) {
 				if(midi_note < iz->base.key_range_min ||
 				   midi_note > iz->base.key_range_max) continue;
@@ -503,12 +553,12 @@ size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
 			}
 			if(!iz->sample) continue;
 
-			/* Grow array if needed */
 			if(count >= capacity) {
 				capacity *= 2;
 				SS_SynthesisData *tmp = (SS_SynthesisData *)realloc(
 				result, capacity * sizeof(SS_SynthesisData));
 				if(!tmp) {
+					free(preset_mods);
 					ss_synthesis_data_free_array(result, count);
 					*out_data = NULL;
 					return 0;
@@ -517,50 +567,87 @@ size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
 			}
 
 			SS_SynthesisData *sd = &result[count++];
+			memset(sd, 0, sizeof(*sd));
 			sd->sample = iz->sample;
 
-			/* Copy preset generators */
-			size_t pgc = pz->base.gen_count + preset->global_zone.gen_count;
-			sd->preset_generators = (SS_Generator *)malloc((pgc + 1) * sizeof(SS_Generator));
-			sd->preset_gen_count = 0;
-			if(sd->preset_generators) {
-				/* Global first, then zone */
-				for(size_t g = 0; g < preset->global_zone.gen_count; g++)
-					sd->preset_generators[sd->preset_gen_count++] = preset->global_zone.generators[g];
-				for(size_t g = 0; g < pz->base.gen_count; g++)
-					sd->preset_generators[sd->preset_gen_count++] = pz->base.generators[g];
+			/* Generator array: start with spec defaults, override with inst global,
+			 * override with inst zone, then add (sum) preset generator offsets. */
+			for(int g = 0; g < SS_GEN_COUNT; g++)
+				sd->generators[g] = SS_GENERATOR_LIMITS[g].def;
+			for(size_t g = 0; g < inst->global_zone.gen_count; g++) {
+				SS_GeneratorType t = inst->global_zone.generators[g].type;
+				if(t >= 0 && t < SS_GEN_COUNT)
+					sd->generators[t] = inst->global_zone.generators[g].value;
 			}
-
-			/* Copy instrument generators */
-			size_t igc = iz->base.gen_count + inst->global_zone.gen_count;
-			sd->instrument_generators = (SS_Generator *)malloc((igc + 1) * sizeof(SS_Generator));
-			sd->instrument_gen_count = 0;
-			if(sd->instrument_generators) {
-				for(size_t g = 0; g < inst->global_zone.gen_count; g++)
-					sd->instrument_generators[sd->instrument_gen_count++] = inst->global_zone.generators[g];
-				for(size_t g = 0; g < iz->base.gen_count; g++)
-					sd->instrument_generators[sd->instrument_gen_count++] = iz->base.generators[g];
+			for(size_t g = 0; g < iz->base.gen_count; g++) {
+				SS_GeneratorType t = iz->base.generators[g].type;
+				if(t >= 0 && t < SS_GEN_COUNT)
+					sd->generators[t] = iz->base.generators[g].value;
 			}
+			/* Sum preset offsets — clamp to int16 range to prevent overflow
+			 * (per-type range limits are applied later in the modulator compute). */
+			for(int g = 0; g < SS_GEN_COUNT; g++) {
+				int32_t sum = (int32_t)sd->generators[g] + (int32_t)preset_gens[g];
+				if(sum > 32767) sum = 32767;
+				if(sum < -32768) sum = -32768;
+				sd->generators[g] = (int16_t)sum;
+			}
+			/* EMU initial attenuation correction: multiply by 0.4. All EMU sound
+			 * cards have this quirk; all SF2 editors and players emulate it. */
+			sd->generators[SS_GEN_INITIAL_ATTENUATION] =
+			(int16_t)((int)sd->generators[SS_GEN_INITIAL_ATTENUATION] * 4 / 10);
 
-			/* Collect modulators: instrument zone mods override defaults */
-			size_t total_mods = iz->base.mod_count +
-			                    inst->global_zone.mod_count +
-			                    pz->base.mod_count +
-			                    preset->global_zone.mod_count;
-			sd->modulators = (SS_Modulator *)malloc((total_mods + 1) * sizeof(SS_Modulator));
+			/* Modulator list (SF2 spec §9.5):
+			 *  1. Inst zone mods
+			 *  2. Unique mods from inst global zone
+			 *  3. Unique bank default mods
+			 *  4. Preset mods: if an identical inst mod exists, sum amounts;
+			 *     otherwise append. */
+			size_t mod_cap = iz->base.mod_count + inst->global_zone.mod_count +
+			                 def_mod_count + preset_mod_count;
+			sd->modulators = (SS_Modulator *)malloc((mod_cap + 1) * sizeof(SS_Modulator));
 			sd->mod_count = 0;
 			if(sd->modulators) {
-				/* Add in priority order: preset global, preset zone, inst global, inst zone */
-				for(size_t m = 0; m < preset->global_zone.mod_count; m++)
-					sd->modulators[sd->mod_count++] = ss_modulator_copy(&preset->global_zone.modulators[m]);
-				for(size_t m = 0; m < pz->base.mod_count; m++)
-					sd->modulators[sd->mod_count++] = ss_modulator_copy(&pz->base.modulators[m]);
-				for(size_t m = 0; m < inst->global_zone.mod_count; m++)
-					sd->modulators[sd->mod_count++] = ss_modulator_copy(&inst->global_zone.modulators[m]);
+				/* 1. Inst zone mods */
 				for(size_t m = 0; m < iz->base.mod_count; m++)
 					sd->modulators[sd->mod_count++] = ss_modulator_copy(&iz->base.modulators[m]);
+				/* 2. Unique from inst global zone */
+				for(size_t m = 0; m < inst->global_zone.mod_count; m++) {
+					const SS_Modulator *gm = &inst->global_zone.modulators[m];
+					bool found = false;
+					for(size_t k = 0; k < sd->mod_count; k++) {
+						if(mod_is_identical(&sd->modulators[k], gm)) { found = true; break; }
+					}
+					if(!found)
+						sd->modulators[sd->mod_count++] = ss_modulator_copy(gm);
+				}
+				/* 3. Unique bank defaults */
+				for(size_t m = 0; m < def_mod_count; m++) {
+					const SS_Modulator *dm = &def_mods[m];
+					bool found = false;
+					for(size_t k = 0; k < sd->mod_count; k++) {
+						if(mod_is_identical(&sd->modulators[k], dm)) { found = true; break; }
+					}
+					if(!found)
+						sd->modulators[sd->mod_count++] = ss_modulator_copy(dm);
+				}
+				/* 4. Preset mods: sum if identical, append if not */
+				for(size_t m = 0; m < preset_mod_count; m++) {
+					const SS_Modulator *pm = &preset_mods[m];
+					size_t match = sd->mod_count;
+					for(size_t k = 0; k < sd->mod_count; k++) {
+						if(mod_is_identical(&sd->modulators[k], pm)) { match = k; break; }
+					}
+					if(match == sd->mod_count) {
+						sd->modulators[sd->mod_count++] = ss_modulator_copy(pm);
+					} else {
+						sd->modulators[match].transform_amount += pm->transform_amount;
+					}
+				}
 			}
 		}
+
+		free(preset_mods);
 	}
 
 	*out_data = result;

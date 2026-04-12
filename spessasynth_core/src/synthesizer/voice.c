@@ -67,6 +67,7 @@ extern float ss_centibel_attenuation_to_gain(float db);
 /* ── Create ──────────────────────────────────────────────────────────────── */
 
 SS_Voice *ss_voice_create(uint32_t sample_rate,
+						  const SS_BasicPreset *preset,
                           const SS_AudioSample *audio_sample,
                           int midi_note, int velocity,
                           double current_time, int target_key, int real_key,
@@ -75,6 +76,7 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
 	SS_Voice *v = (SS_Voice *)calloc(1, sizeof(SS_Voice));
 	if(!v) return NULL;
 
+	v->preset = preset;
 	v->sample = *audio_sample;
 	v->midi_note = midi_note;
 	v->velocity = velocity;

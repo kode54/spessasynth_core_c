@@ -16,6 +16,7 @@
 #endif
 
 extern SS_Voice *ss_voice_create(uint32_t sr,
+								 const SS_BasicPreset *preset,
                                  const SS_AudioSample *audio_sample,
                                  int midi_note, int velocity,
                                  double current_time, int target_key, int real_key,
@@ -45,7 +46,6 @@ extern size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
                                            SS_SynthesisData **out);
 extern void ss_synthesis_data_free_array(SS_SynthesisData *data, size_t count);
 extern bool ss_sample_decode(SS_BasicSample *s);
-extern int16_t ss_generator_add_and_clamp(SS_GeneratorType t, int16_t p, int16_t i);
 
 static void ss_channel_update_tuning(SS_MIDIChannel *ch);
 void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
@@ -424,28 +424,10 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		if(!ss_sample_decode(samp)) continue;
 		if(!samp->audio_data || samp->audio_data_length == 0) continue;
 
-		/* Build flat generator array (sum preset + instrument, clamped) */
+		/* Generator array is fully resolved by ss_preset_get_synthesis_data:
+		 * defaults + inst layer + preset summed + EMU attenuation applied. */
 		int16_t generators[SS_GEN_COUNT];
-		/* Start with instrument defaults */
-		for(int g = 0; g < SS_GEN_COUNT; g++)
-			generators[g] = SS_GENERATOR_LIMITS[g].def;
-
-		/* Apply instrument generators */
-		for(size_t g = 0; g < sd->instrument_gen_count; g++) {
-			SS_GeneratorType t = sd->instrument_generators[g].type;
-			if(t >= 0 && t < SS_GEN_COUNT)
-				generators[t] = sd->instrument_generators[g].value;
-		}
-		/* Apply preset generators on top */
-		for(size_t g = 0; g < sd->preset_gen_count; g++) {
-			SS_GeneratorType t = sd->preset_generators[g].type;
-			if(t >= 0 && t < SS_GEN_COUNT)
-				generators[t] = ss_generator_add_and_clamp(t, sd->preset_generators[g].value, generators[t]);
-		}
-
-		/* EMU initial attenuation correction: multiply by 0.4 */
-		generators[SS_GEN_INITIAL_ATTENUATION] =
-		(int16_t)((int)generators[SS_GEN_INITIAL_ATTENUATION] * 4 / 10);
+		memcpy(generators, sd->generators, sizeof(generators));
 
 		int target_key = real_key;
 		if(generators[SS_GEN_KEYNUM] > -1)
@@ -484,20 +466,7 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		if(generators[SS_GEN_VELOCITY] > -1)
 			voice_vel = generators[SS_GEN_VELOCITY];
 
-		/* Collect modulators: use bank's default + voice mods */
-		const SS_Modulator *def_mods = SS_DEFAULT_MODULATORS;
-		size_t def_mod_count = SS_DEFAULT_MODULATOR_COUNT;
-		if(proc) {
-			for(int b = 0; b < proc->soundbank_count; b++) {
-				if(proc->soundbanks[b] && proc->soundbanks[b]->custom_default_modulators) {
-					def_mods = proc->soundbanks[b]->default_modulators;
-					def_mod_count = proc->soundbanks[b]->default_mod_count;
-					break;
-				}
-			}
-		}
-
-		SS_Voice *voice = ss_voice_create(sr, &audio, real_key, voice_vel,
+		SS_Voice *voice = ss_voice_create(sr, ch->preset, &audio, real_key, voice_vel,
 		                                  time, target_key, real_key,
 		                                  generators,
 		                                  sd->modulators, sd->mod_count);
@@ -547,7 +516,7 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		}
 
 		/* Compute initial modulators */
-		ss_voice_compute_modulators_internal(voice, ch, def_mods, def_mod_count, time);
+		ss_voice_compute_modulators(voice, ch, time);
 
 		/* Recalculate the envelopes */
 		ss_volume_envelope_recalculate(voice, &voice->volume_env, voice->modulated_generators, voice->target_key, voice->is_in_release, voice->release_start_time, time);

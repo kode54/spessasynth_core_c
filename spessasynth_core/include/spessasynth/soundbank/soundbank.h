@@ -136,11 +136,10 @@ typedef struct {
 
 typedef struct {
 	SS_BasicSample *sample;
-	SS_Generator *preset_generators;
-	size_t preset_gen_count;
-	SS_Generator *instrument_generators;
-	size_t instrument_gen_count;
-	SS_Modulator *modulators;
+	/* Fully resolved generator array: defaults overridden by instrument layer,
+	 * then preset layer summed in (with int16 clamp), EMU attenuation applied. */
+	int16_t generators[SS_GEN_COUNT];
+	SS_Modulator *modulators; /* inst + inst global (unique) + bank defaults (unique) + preset (summed) */
 	size_t mod_count;
 } SS_SynthesisData;
 

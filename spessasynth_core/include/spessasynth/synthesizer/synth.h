@@ -148,6 +148,8 @@ typedef struct SS_Voice {
 	SS_VolumeEnvelope volume_env;
 	SS_ModulationEnvelope modulation_env;
 
+	const SS_BasicPreset *preset; /* non-owning */
+
 	float gain;
 	int16_t generators[SS_GEN_COUNT];
 	int16_t modulated_generators[SS_GEN_COUNT];
@@ -198,6 +200,7 @@ typedef struct SS_Voice {
 } SS_Voice;
 
 SS_Voice *ss_voice_create(uint32_t sample_rate,
+						  const SS_BasicPreset *preset,
                           const SS_AudioSample *audio_sample,
                           int midi_note, int velocity,
                           double current_time, int target_key, int real_key,
@@ -276,6 +279,7 @@ typedef struct SS_MIDIChannel {
 	uint8_t cc2; /* CC2 controller number (GS/XG, default 2) */
 	int rx_channel; /* receive channel override (-1 = off), default = channel_number */
 
+	SS_SoundBank *bank; /* non-owning */
 	SS_BasicPreset *preset; /* non-owning */
 	bool lock_preset;
 
