@@ -12,9 +12,11 @@
 #include <string.h>
 #if __has_include(<spessasynth_core/spessasynth.h>)
 #include <spessasynth_core/indexed_byte_array.h>
+#include <spessasynth_core/midi_enums.h>
 #include <spessasynth_core/riff_chunk.h>
 #include <spessasynth_core/soundbank.h>
 #else
+#include "spessasynth/midi/midi_enums.h"
 #include "spessasynth/soundbank/soundbank.h"
 #include "spessasynth/utils/indexed_byte_array.h"
 #include "spessasynth/utils/riff_chunk.h"
@@ -47,12 +49,16 @@ static SS_Modulator read_modulator(SS_IBA *iba) {
 	/* source_enum bit 7 = is_cc, bits 6-0 = cc_index */
 	bool is_cc = (m.source_enum & 0x80) != 0;
 	uint8_t idx = m.source_enum & 0x7F;
-	if(is_cc && (idx == 91 || idx == 93))
+	if(is_cc && (idx == SS_MIDCON_REVERB_DEPTH || idx == SS_MIDCON_CHORUS_DEPTH))
 		m.is_effect_modulator = true;
 
 	/* Mark default resonant modulator (cc74, linear bipolar) */
-	if(is_cc && idx == 74)
+	if(is_cc && idx == SS_MIDCON_FILTER_RESONANCE)
 		m.is_default_resonant_modulator = true;
+
+	/* Mark modulation wheel modulator */
+	if(is_cc && idx == SS_MIDCON_MODULATION_WHEEL && (m.dest_enum == SS_GEN_MOD_LFO_TO_PITCH || m.dest_enum == SS_GEN_VIB_LFO_TO_PITCH))
+		m.is_mod_wheel_modulator = true;
 
 	return m;
 }

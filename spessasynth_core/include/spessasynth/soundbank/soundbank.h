@@ -25,6 +25,7 @@ typedef struct {
 	float current_value; /* runtime: computed modulator output */
 	bool is_effect_modulator;
 	bool is_default_resonant_modulator;
+	bool is_mod_wheel_modulator;
 } SS_Modulator;
 
 SS_Modulator ss_modulator_copy(const SS_Modulator *src);

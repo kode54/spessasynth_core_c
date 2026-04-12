@@ -127,12 +127,30 @@ SS_Modulator ss_modulator_copy(const SS_Modulator *src) {
 
 #define MODSRC(curve, isbip, isneg, iscc, idx) (uint16_t)(((uint16_t)(curve) << 10) | (((isbip) ? 1 : 0) << 9) | (((isneg) ? 1 : 0) << 8) | (((iscc) ? 1 : 0) << 7) | (idx))
 
+#define MODISEFFECT(s1, s2, dest) \
+	((s1 == 0x00db || s2 == 0x00dd) && s2 == 0x0000 && (dest == SS_GEN_REVERB_EFFECTS_SEND || dest == SS_GEN_CHORUS_EFFECTS_SEND))
+
+#define MODISDEFAULTRESONANT(s1, s2, dest) \
+	(s1 == DEFAULT_RESONANT_MOD_SOURCE && s2 == 0x0 && dest == SS_GEN_INITIAL_FILTER_Q)
+
+#define MODISMODWHEEL(s1, s2, dest) \
+	(((((s1 & (1 << 7)) != 0) && ((s1 & 127) == SS_MIDCON_MODULATION_WHEEL)) || ((s1 & (1 << 7)) != 0) && ((s1 & 127) == SS_MIDCON_MODULATION_WHEEL)) && (dest == SS_GEN_MOD_LFO_TO_PITCH || dest == SS_GEN_VIB_LFO_TO_PITCH))
+
+#define MODULATOR(s1, s2, dest, amount, transform) { s1, s2, dest, amount, transform, 0, MODISEFFECT(s1, s2, dest), MODISDEFAULTRESONANT(s1, s2, dest), MODISMODWHEEL(s1, s2, dest) }
+
 #define DEFAULT_ATTENUATION_MOD_AMOUNT 960
 #define DEFAULT_ATTENUATION_MOD_CURVE_TYPE SS_MODCURVE_CONCAVE
 
+static const uint16_t DEFAULT_RESONANT_MOD_SOURCE = MODSRC(
+SS_MODCURVE_LINEAR,
+true,
+false,
+true,
+SS_MIDCON_FILTER_RESONANCE); /* Linear forwards bipolar cc 74 */
+
 const SS_Modulator SS_DEFAULT_MODULATORS[] = {
 	/* 1. Velocity -> Attenuation */
-	{
+	MODULATOR(
 	MODSRC(
 	DEFAULT_ATTENUATION_MOD_CURVE_TYPE,
 	false,
@@ -142,13 +160,13 @@ const SS_Modulator SS_DEFAULT_MODULATORS[] = {
 	0x0,
 	SS_GEN_INITIAL_ATTENUATION,
 	DEFAULT_ATTENUATION_MOD_AMOUNT,
-	0, 0, false, false },
+	0),
 
 	/* 2. Mod Wheel -> Vibrato */
-	{ 0x0081, 0x0, SS_GEN_VIB_LFO_TO_PITCH, 50, 0, 0, false, false },
+	MODULATOR(0x0081, 0x0, SS_GEN_VIB_LFO_TO_PITCH, 50, 0),
 
 	/* 3. Volume -> Attenuation */
-	{
+	MODULATOR(
 	MODSRC(
 	DEFAULT_ATTENUATION_MOD_CURVE_TYPE,
 	false,
@@ -158,20 +176,20 @@ const SS_Modulator SS_DEFAULT_MODULATORS[] = {
 	0x0,
 	SS_GEN_INITIAL_ATTENUATION,
 	DEFAULT_ATTENUATION_MOD_AMOUNT,
-	0, 0, false, false },
+	0),
 
 	/* 4. Channel pressure -> Vibrato */
-	{ 0x000d, 0x0, SS_GEN_VIB_LFO_TO_PITCH, 50, 0, 0, false, false },
+	MODULATOR(0x000d, 0x0, SS_GEN_VIB_LFO_TO_PITCH, 50, 0),
 
 	/* 5. Pitch wheel -> Tuning */
-	{ 0x020e, 0x0010, SS_GEN_FINE_TUNE, 12700, 0, 0, false, false },
+	MODULATOR(0x020e, 0x0010, SS_GEN_FINE_TUNE, 12700, 0),
 
 	/* 6. Pan -> Pan */
 	/* Amount is 500, not 1000, see SpessaSynth#59 */
-	{ 0x028a, 0x0, SS_GEN_PAN, 500, 0, 0, false, false },
+	MODULATOR(0x028a, 0x0, SS_GEN_PAN, 500, 0),
 
 	/* 7. Expression -> Attenuation */
-	{
+	MODULATOR(
 	MODSRC(
 	DEFAULT_ATTENUATION_MOD_CURVE_TYPE,
 	false,
@@ -181,57 +199,30 @@ const SS_Modulator SS_DEFAULT_MODULATORS[] = {
 	0x0,
 	SS_GEN_INITIAL_ATTENUATION,
 	DEFAULT_ATTENUATION_MOD_AMOUNT,
-	0, 0, false, false },
+	0),
 
 	/* 8. Reverb effects to send */
-	{ 0x00db, 0x0, SS_GEN_REVERB_EFFECTS_SEND, 200, 0, 0, true, false },
+	MODULATOR(0x00db, 0x0, SS_GEN_REVERB_EFFECTS_SEND, 200, 0),
 
 	/* 9. Chorus effects to send */
-	{ 0x00dd, 0x0, SS_GEN_CHORUS_EFFECTS_SEND, 200, 0, 0, true, false },
+	MODULATOR(0x00dd, 0x0, SS_GEN_CHORUS_EFFECTS_SEND, 200, 0),
 
 	/* Now all the SpessaSynth default modulators! */
-
-	/* 1. Poly Pressure to Vibrato */
-	{
-	MODSRC(
-	SS_MODCURVE_LINEAR,
-	false,
-	false,
-	false,
-	SS_MODSRC_POLY_PRESSURE),
-	0x0,
-	SS_GEN_VIB_LFO_TO_PITCH,
-	50,
-	0, 0, false, false },
-
-	/* 2. CC 92 (tremolo) to modLFO volume */
-	{
-	MODSRC(
-	SS_MODCURVE_LINEAR,
-	false,
-	false,
-	true,
-	SS_MIDCON_TREMOLO_DEPTH), /* Linear forward unipolar cc 92 */
-	0x0, /* No controller */
-	SS_GEN_MOD_LFO_TO_VOLUME,
-	24,
-	0, 0, false, false },
-
-	/* 3. CC 73 (attack time) to volEnv attack */
-	{
+	/* 1. Cc 73 (attack time) to volEnv attack */
+	MODULATOR(
 	MODSRC(
 	SS_MODCURVE_CONVEX,
 	true,
 	false,
 	true,
-	SS_MIDCON_ATTACK_TIME), /* Convex forward bipolar cc 72 */
+	SS_MIDCON_ATTACK_TIME), /* Linear forward bipolar cc 72 */
 	0x0, /* No controller */
 	SS_GEN_ATTACK_VOL_ENV,
 	6000,
-	0, 0, false, false },
+	0),
 
-	/* 4. CC 72 (release time) to volEnv release */
-	{
+	/* 2. Cc 72 (release time) to volEnv release */
+	MODULATOR(
 	MODSRC(
 	SS_MODCURVE_LINEAR,
 	true,
@@ -241,34 +232,80 @@ const SS_Modulator SS_DEFAULT_MODULATORS[] = {
 	0x0, /* No controller */
 	SS_GEN_RELEASE_VOL_ENV,
 	3600,
-	0, 0, false, false },
+	0),
 
-	/* 5. CC 74 (brightness) to filterFc */
-	{
+	/* 3. Cc 75 (decay time) to vol env decay */
+	MODULATOR(
 	MODSRC(
 	SS_MODCURVE_LINEAR,
 	true,
 	false,
 	true,
-	SS_MIDCON_BRIGHTNESS), /* Linear forward bipolar cc 74 */
+	SS_MIDCON_DECAY_TIME), /* Linear forward bipolar cc 75 */
+	0x0, /* No controller */
+	SS_GEN_DECAY_VOL_ENV,
+	3600,
+	0),
+
+	/* 4. Cc 74 (brightness) to filterFc */
+	MODULATOR(
+	MODSRC(
+	SS_MODCURVE_LINEAR,
+	true,
+	false,
+	true,
+	SS_MIDCON_BRIGHTNESS), /* Linear forwards bipolar cc 74 */
 	0x0, /* No controller */
 	SS_GEN_INITIAL_FILTER_FC,
-	6000,
-	0, 0, false, false },
+	9600,
+	0),
 
-	/* 6. CC 71 (filter Q) to filter Q (default resonant modulator) */
-	{
+	/* 5. Cc 71 (filter Q) to filter Q (default resonant modulator) */
+	MODULATOR(
+	DEFAULT_RESONANT_MOD_SOURCE,
+	0x0, /* No controller */
+	SS_GEN_INITIAL_FILTER_Q,
+	200,
+	0),
+
+	/* 6. Cc 67 (soft pedal) to attenuation */
+	MODULATOR(
+	MODSRC(
+	SS_MODCURVE_SWITCH,
+	false,
+	false,
+	true,
+	SS_MIDCON_SOFT_PEDAL), /* Switch unipolar positive 67 */
+	0x0, /* No controller */
+	SS_GEN_INITIAL_ATTENUATION,
+	50,
+	0),
+
+	/* 7. Cc 67 (soft pedal) to filter fc */
+	MODULATOR(
+	MODSRC(
+	SS_MODCURVE_SWITCH,
+	false,
+	false,
+	true,
+	SS_MIDCON_SOFT_PEDAL), /* Switch unipolar positive 67 */
+	0x0, /* No controller */
+	SS_GEN_INITIAL_FILTER_FC,
+	-2400,
+	0),
+
+	/* 8. Cc 8 (balance) to pan */
+	MODULATOR(
 	MODSRC(
 	SS_MODCURVE_LINEAR,
 	true,
 	false,
 	true,
-	SS_MIDCON_FILTER_RESONANCE), /* Default resonance modulator */
+	SS_MIDCON_BALANCE), /* Linear bipolar positive 8 */
 	0x0, /* No controller */
-	SS_GEN_INITIAL_FILTER_Q,
-	250,
-	0, 0, false, true /* Default resonance modulator */
-	}
+	SS_GEN_PAN,
+	500,
+	0)
 };
 
 const size_t SS_DEFAULT_MODULATOR_COUNT =
