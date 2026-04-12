@@ -14,7 +14,7 @@
 #include "spessasynth/synthesizer/synth.h"
 #endif
 
-#define FILTER_SMOOTHING_FACTOR 0.1f
+#define FILTER_SMOOTHING_FACTOR 0.03f
 
 extern float ss_abs_cents_to_hz(int cents);
 extern float ss_centibel_attenuation_to_gain(float cb);
