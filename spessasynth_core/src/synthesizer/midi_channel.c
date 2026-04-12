@@ -538,6 +538,14 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		if(drum_exclusive_override != 0)
 			voice->exclusive_class = drum_exclusive_override;
 
+		/* Apply channel generator overrides (AWE32/sysex) to voice base generators */
+		if(ch->generator_overrides_enabled) {
+			for(int g = 0; g < SS_GEN_COUNT; g++) {
+				if(ch->generator_overrides[g] != GENERATOR_OVERRIDE_NO_CHANGE_VALUE)
+					voice->generators[g] = ch->generator_overrides[g];
+			}
+		}
+
 		/* Compute initial modulators */
 		ss_voice_compute_modulators_internal(voice, ch, def_mods, def_mod_count, time);
 
@@ -773,6 +781,12 @@ static void ss_channel_set_generator_override(SS_MIDIChannel *ch, SS_GeneratorTy
 	ch->generator_overrides[gen] = val;
 	ch->generator_overrides_enabled = true;
 	if(realtime) {
+		/* Patch voice->generators directly, matching TS setGeneratorOverride realtime path */
+		for(size_t vi = 0; vi < ch->voice_count; vi++) {
+			SS_Voice *v = ch->voices[vi];
+			if(v->is_active)
+				v->generators[gen] = (int16_t)val;
+		}
 		ss_channel_compute_modulators(ch, time);
 	}
 }
