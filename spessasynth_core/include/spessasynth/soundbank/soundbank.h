@@ -216,6 +216,7 @@ SS_SoundBank *bank,
 uint8_t program,
 uint16_t bank_msb,
 uint16_t bank_lsb,
+uint16_t bank_offset,
 int midi_system,
 bool is_drum_channel);
 

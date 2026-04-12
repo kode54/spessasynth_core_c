@@ -41,8 +41,9 @@ static SS_BasicPreset *find_preset_all_banks(SS_Processor *proc,
 	for(int b = 0; b < proc->soundbank_count; b++) {
 		SS_SoundBank *bank = proc->soundbanks[b];
 		if(!bank) continue;
+		uint16_t bank_offset = proc->soundbank_offsets[b];
 		SS_BasicPreset *p = ss_soundbank_find_preset(bank, program,
-		                                             bank_msb, bank_lsb,
+		                                             bank_msb, bank_lsb, bank_offset,
 		                                             (int)proc->master_params.midi_system,
 		                                             is_drum);
 		if(p) return p;
@@ -161,7 +162,7 @@ SS_SoundBank *ss_processor_get_soundbank(SS_Processor *proc, const char *id) {
 }
 
 bool ss_processor_load_soundbank(SS_Processor *proc,
-                                 SS_SoundBank *bank, const char *id) {
+                                 SS_SoundBank *bank, const char *id, int offset) {
 	if(!bank || !id) return false;
 
 	/* Replace if same ID already exists */
@@ -169,6 +170,9 @@ bool ss_processor_load_soundbank(SS_Processor *proc,
 		if(strcmp(proc->soundbank_ids[i], id) == 0) {
 			ss_soundbank_free(proc->soundbanks[i]);
 			proc->soundbanks[i] = bank;
+			if(offset >= 0 && offset <= 65535) {
+				proc->soundbank_offsets[i] = (uint16_t)offset;
+			}
 			proc_refresh_presets(proc);
 			return true;
 		}
@@ -178,6 +182,9 @@ bool ss_processor_load_soundbank(SS_Processor *proc,
 
 	int idx = proc->soundbank_count++;
 	proc->soundbanks[idx] = bank;
+	if(offset >= 0 && offset <= 65535) {
+		proc->soundbank_offsets[idx] = (uint16_t)offset;
+	}
 	strncpy(proc->soundbank_ids[idx], id, sizeof(proc->soundbank_ids[idx]) - 1);
 
 	proc_refresh_presets(proc);

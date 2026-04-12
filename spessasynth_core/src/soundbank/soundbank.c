@@ -588,6 +588,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
                                          uint8_t program,
                                          uint16_t bank_msb,
                                          uint16_t bank_lsb,
+                                         uint16_t bank_offset,
                                          int midi_system,
                                          bool is_drum_channel) {
 	(void)midi_system;
@@ -595,6 +596,11 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 
 	const bool isXG = midi_system == 2;
 	const bool xgDrums = (bank_msb == 120 || bank_msb == 127) && isXG;
+
+	if(bank_offset) {
+		if(bank_msb >= bank_offset) bank_msb -= bank_offset;
+		if(bank_lsb >= bank_offset) bank_lsb -= bank_offset;
+	}
 
 	for(size_t i = 0; i < bank->preset_count; i++) {
 		SS_BasicPreset *p = &bank->presets[i];

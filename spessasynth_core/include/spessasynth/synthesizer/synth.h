@@ -382,6 +382,7 @@ typedef struct SS_Processor {
 
 	SS_SoundBank *soundbanks[SS_MAX_SOUNDBANKS];
 	char soundbank_ids[SS_MAX_SOUNDBANKS][64];
+	uint16_t soundbank_offsets[SS_MAX_SOUNDBANKS];
 	int soundbank_count;
 
 	int total_voices;
@@ -424,7 +425,7 @@ void ss_processor_free(SS_Processor *proc);
 
 SS_SoundBank *ss_processor_get_soundbank(SS_Processor *proc, const char *id);
 bool ss_processor_load_soundbank(SS_Processor *proc,
-                                 SS_SoundBank *bank, const char *id);
+                                 SS_SoundBank *bank, const char *id, int offset);
 bool ss_processor_remove_soundbank(SS_Processor *proc, const char *id, bool dontfree);
 
 /**

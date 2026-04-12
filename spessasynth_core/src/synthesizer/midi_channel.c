@@ -1280,8 +1280,9 @@ void ss_channel_program_change(SS_MIDIChannel *ch, int program) {
 	for(int b = 0; b < proc->soundbank_count; b++) {
 		SS_SoundBank *bank = proc->soundbanks[b];
 		if(!bank) continue;
+		uint16_t bank_offset = proc->soundbank_offsets[b];
 		SS_BasicPreset *p = ss_soundbank_find_preset(bank,
-		                                             ch->program, ch->bank_msb, ch->bank_lsb,
+		                                             ch->program, ch->bank_msb, ch->bank_lsb, bank_offset,
 		                                             (int)proc->master_params.midi_system, ch->drum_channel);
 		if(p) {
 			ch->preset = p;
