@@ -203,16 +203,9 @@ void ss_voice_release(SS_Voice *v, double current_time, double min_note_length) 
 }
 
 void ss_voice_exclusive_release(SS_Voice *v, double current_time) {
+	v->override_release_vol_env = EXCLUSIVE_CUTOFF_TIME; /* Make the release nearly instant */
 	v->is_in_release = false;
 	ss_voice_release(v, current_time, MIN_EXCLUSIVE_LENGTH);
-	v->override_release_vol_env = EXCLUSIVE_CUTOFF_TIME;
-	v->modulated_generators[SS_GEN_RELEASE_MOD_ENV] = EXCLUSIVE_MOD_CUTOFF_TIME;
-	ss_volume_envelope_recalculate(v, &v->volume_env, v->modulated_generators,
-	                               v->target_key, true,
-	                               v->release_start_time, v->start_time);
-	ss_modulation_envelope_recalculate(&v->modulation_env, v->modulated_generators,
-	                                   v->midi_note, true,
-	                                   v->release_start_time, v->start_time);
 }
 
 /* ── Compute modulators ──────────────────────────────────────────────────── */
@@ -326,6 +319,7 @@ void ss_voice_compute_modulators_internal(SS_Voice *v, const SS_MIDIChannel *ch,
 				int32_t new_val = (int32_t)g + (int32_t)val;
 				new_val = ss_generator_clamp((SS_GeneratorType)m->dest_enum, (int16_t)new_val);
 				v->modulated_generators[m->dest_enum] = (int16_t)new_val;
+				val = new_val;
 			}
 			/* Update stored current_value (for snapshot purposes) */
 			if(arr) /* Can't overwrite the default modulators */

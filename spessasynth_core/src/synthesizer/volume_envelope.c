@@ -69,6 +69,8 @@ void ss_volume_envelope_recalculate(SS_Voice *v,
 	(void)start_time;
 	(void)release_start_time;
 
+	env->entered_release = false;
+
 	env->can_end_on_silent_sustain = mod_gens[SS_GEN_SUSTAIN_VOL_ENV] >= PERCEIVED_CB_SILENCE;
 
 	/* Attenuation target (dB) */
