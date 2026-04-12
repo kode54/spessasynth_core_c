@@ -52,6 +52,7 @@ void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController ty
 void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
 static void ss_channel_set_modulation_depth(SS_MIDIChannel *ch, float cents);
 static float ss_portamento_time_to_seconds(float portamento_time, float distance);
+extern float ss_timecents_to_seconds(int tc);
 
 #define VOICE_GROW_BY 16
 
@@ -520,6 +521,10 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 
 		/* Compute initial modulators */
 		ss_voice_compute_modulators_internal(voice, ch, def_mods, def_mod_count, time);
+
+		/* Calculate LFO start times */
+		voice->vib_lfo_start_time = time + ss_timecents_to_seconds(voice->modulated_generators[SS_GEN_DELAY_VIB_LFO]);
+		voice->mod_lfo_start_time = time + ss_timecents_to_seconds(voice->modulated_generators[SS_GEN_DELAY_MOD_LFO]);
 
 		/* Modulate sample offsets (these are not real time) */
 		const ssize_t cursorStartOffset =

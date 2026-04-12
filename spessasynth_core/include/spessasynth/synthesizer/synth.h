@@ -176,6 +176,8 @@ typedef struct SS_Voice {
 	double portamento_duration;
 
 	/* LFO triangle-wave phase accumulators [0,1), initialized to 0.25 */
+	double vib_lfo_start_time;
+	double mod_lfo_start_time;
 	float vib_lfo_phase;
 	float mod_lfo_phase;
 

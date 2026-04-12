@@ -55,7 +55,6 @@ extern void ss_modulation_envelope_start_release(SS_ModulationEnvelope *env,
                                                  double start_time);
 extern float ss_modulation_envelope_get_value(const SS_ModulationEnvelope *env,
                                               double current_time);
-extern float ss_timecents_to_seconds(int tc);
 extern float ss_abs_cents_to_hz(int cents);
 extern float ss_lfo_value(double start_time, float freq_hz, double current_time);
 extern float ss_centibel_attenuation_to_gain(float db);
@@ -397,12 +396,12 @@ bool ss_voice_render(SS_Voice *v,
 	 * Triangle: value = 1 - 4*|phase - 0.5|, phase in [0,1).
 	 * rateInc = (freqHz * sampleCount) / sampleRate
 	 */
-	int vib_pitch = v->modulated_generators[SS_GEN_VIB_LFO_TO_PITCH];
-	int vib_filter_depth = v->modulated_generators[SS_GEN_VIB_LFO_TO_FILTER_FC];
-	int vib_amplitude_depth = v->modulated_generators[SS_GEN_VIB_LFO_AMPLITUDE_DEPTH];
-	if(vib_pitch || vib_filter_depth || vib_amplitude_depth) {
-		double vib_start = v->start_time + ss_timecents_to_seconds(v->modulated_generators[SS_GEN_DELAY_VIB_LFO]);
-		if(time_now >= vib_start) {
+	const double vib_start = v->vib_lfo_start_time;
+	if(time_now >= vib_start) {
+		int vib_pitch = v->modulated_generators[SS_GEN_VIB_LFO_TO_PITCH];
+		int vib_filter_depth = v->modulated_generators[SS_GEN_VIB_LFO_TO_FILTER_FC];
+		int vib_amplitude_depth = v->modulated_generators[SS_GEN_VIB_LFO_AMPLITUDE_DEPTH];
+		if(vib_pitch || vib_filter_depth || vib_amplitude_depth) {
 			float vib_rate = (float)v->modulated_generators[SS_GEN_VIB_LFO_RATE] / 100.0f;
 			float vib_freq = ss_abs_cents_to_hz(v->modulated_generators[SS_GEN_FREQ_VIB_LFO]) + vib_rate;
 			if(vib_freq < 0.0f) vib_freq = 0.0f;
@@ -419,13 +418,13 @@ bool ss_voice_render(SS_Voice *v,
 	}
 
 	/* Mod LFO — same triangle wave approach */
-	int mod_pitch = v->modulated_generators[SS_GEN_MOD_LFO_TO_PITCH];
-	int mod_vol = v->modulated_generators[SS_GEN_MOD_LFO_TO_VOLUME];
-	int mod_filter = v->modulated_generators[SS_GEN_MOD_LFO_TO_FILTER_FC];
-	int mod_amplitude_depth = v->modulated_generators[SS_GEN_MOD_LFO_AMPLITUDE_DEPTH];
-	if(mod_pitch || mod_vol || mod_filter || mod_amplitude_depth) {
-		double mod_start = v->start_time + ss_timecents_to_seconds(v->modulated_generators[SS_GEN_DELAY_MOD_LFO]);
-		if(time_now >= mod_start) {
+	double mod_start = v->mod_lfo_start_time;
+	if(time_now >= mod_start) {
+		int mod_pitch = v->modulated_generators[SS_GEN_MOD_LFO_TO_PITCH];
+		int mod_vol = v->modulated_generators[SS_GEN_MOD_LFO_TO_VOLUME];
+		int mod_filter = v->modulated_generators[SS_GEN_MOD_LFO_TO_FILTER_FC];
+		int mod_amplitude_depth = v->modulated_generators[SS_GEN_MOD_LFO_AMPLITUDE_DEPTH];
+		if(mod_pitch || mod_vol || mod_filter || mod_amplitude_depth) {
 			float mod_rate = (float)v->modulated_generators[SS_GEN_MOD_LFO_RATE] / 100.0f;
 			float mod_freq = ss_abs_cents_to_hz(v->modulated_generators[SS_GEN_FREQ_MOD_LFO]) + mod_rate;
 			if(mod_freq < 0.0f) mod_freq = 0.0f;
