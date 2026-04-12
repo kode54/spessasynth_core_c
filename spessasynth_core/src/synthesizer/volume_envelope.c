@@ -69,6 +69,8 @@ void ss_volume_envelope_recalculate(SS_Voice *v,
 	(void)start_time;
 	(void)release_start_time;
 
+	env->can_end_on_silent_sustain = mod_gens[SS_GEN_SUSTAIN_VOL_ENV] >= PERCEIVED_CB_SILENCE;
+
 	/* Attenuation target (dB) */
 	env->current_gain = ss_centibel_attenuation_to_gain(mod_gens[SS_GEN_INITIAL_ATTENUATION]);
 
@@ -176,7 +178,7 @@ void ss_volume_envelope_start_release(SS_Voice *v,
 				break;
 
 			case SS_VOLENV_DECAY:
-				release_start_cb = (1.0 - (double)(env->decay_end - env->release_start_time_samples) / (double)env->decay_duration) * sustain_cb;
+				release_start_cb = (1.0 - ((double)(env->decay_end - env->release_start_time_samples) / (double)env->decay_duration)) * sustain_cb;
 				break;
 
 			case SS_VOLENV_SUSTAIN:
