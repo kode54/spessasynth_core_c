@@ -104,7 +104,19 @@ static bool non_resettable_controllers[128] = {
 	[SS_MIDCON_VIBRATO_RATE] = true,
 	[SS_MIDCON_VIBRATO_DEPTH] = true,
 	[SS_MIDCON_VIBRATO_DELAY] = true,
-	[SS_MIDCON_SOUND_CONTROLLER_10] = true
+	[SS_MIDCON_SOUND_CONTROLLER_10] = true,
+	[SS_MIDCON_POLY_MODE_ON] = true,
+	[SS_MIDCON_MONO_MODE_ON] = true,
+	[SS_MIDCON_OMNI_MODE_ON] = true,
+	[SS_MIDCON_OMNI_MODE_OFF] = true,
+
+	// RP-15: Do not reset RPN or NRPN
+	[SS_MIDCON_DATA_ENTRY_MSB] = true,
+	[SS_MIDCON_DATA_ENTRY_LSB] = true,
+	[SS_MIDCON_NRPN_LSB] = true,
+	[SS_MIDCON_NRPN_MSB] = true,
+	[SS_MIDCON_RPN_LSB] = true,
+	[SS_MIDCON_RPN_MSB] = true
 };
 
 /* Values come from Falcosoft MidiPlayer 6 */
