@@ -212,7 +212,7 @@ void ss_voice_exclusive_release(SS_Voice *v, double current_time) {
 
 /* ── Compute modulators ──────────────────────────────────────────────────── */
 
-float ss_modcurve_get_value(SS_ModulatorTransformType transform_type, SS_ModulatorCurveType curve_type, int index_0_to_16_383);
+float ss_modcurve_get_value(int transform_type, SS_ModulatorCurveType curve_type, int index_0_to_16_383);
 
 /*
  * Evaluate the modulator source value.
@@ -230,7 +230,8 @@ static float get_source_value(const SS_MIDIChannel *ch, const SS_Voice *v,
 	 */
 	bool is_cc = (source_enum & 0x80) != 0;
 	uint8_t idx = source_enum & 0x7F;
-	int transform = (source_enum >> 8) & 3;
+	bool is_negative = (source_enum & 0x100) != 0;
+	bool is_bipolar = (source_enum & 0x200) != 0;
 	int curve = (source_enum >> 10) & 3;
 
 	int raw = 0;
@@ -264,7 +265,9 @@ static float get_source_value(const SS_MIDIChannel *ch, const SS_Voice *v,
 	else if(raw > 16383)
 		raw = 16383;
 
-	return ss_modcurve_get_value((SS_ModulatorTransformType)transform, (SS_ModulatorCurveType)curve, raw);
+	const int transform = (SS_ModulatorTransformType)((is_bipolar ? 2 : 0) | (is_negative ? 1 : 0));
+
+	return ss_modcurve_get_value(transform, (SS_ModulatorCurveType)curve, raw);
 }
 
 static const float EFFECT_MODULATOR_TRANSFORM_MULTIPLIER = 1000 / 200;

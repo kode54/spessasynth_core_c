@@ -160,7 +160,7 @@ static float convex[MODULATOR_RESOLUTION + 1];
 
 static float precomputed_transforms[MODULATOR_RESOLUTION * MOD_SOURCE_TRANSFORM_POSSIBILITIES * MOD_CURVE_TYPES_AMOUNT];
 
-static float get_modulator_curve_value(SS_ModulatorTransformType transform, SS_ModulatorCurveType curve, float value) {
+static float get_modulator_curve_value(int transform, SS_ModulatorCurveType curve, float value) {
 	const bool is_bipolar = !!(transform & 2);
 	const bool is_negative = !!(transform & 1);
 
@@ -221,14 +221,14 @@ void init_modcurve_table(void) {
 		for(int transform_type = 0; transform_type < MOD_SOURCE_TRANSFORM_POSSIBILITIES; transform_type++) {
 			const int table_index = MODULATOR_RESOLUTION * (curve_type * MOD_CURVE_TYPES_AMOUNT + transform_type);
 			for(int value = 0; value < MODULATOR_RESOLUTION; value++) {
-				precomputed_transforms[table_index + value] = get_modulator_curve_value((SS_ModulatorTransformType)transform_type, (SS_ModulatorCurveType)curve_type, (float)value / (float)MODULATOR_RESOLUTION);
+				precomputed_transforms[table_index + value] = get_modulator_curve_value(transform_type, (SS_ModulatorCurveType)curve_type, (float)value / (float)MODULATOR_RESOLUTION);
 			}
 		}
 	}
 	modcurve_initialized = true;
 }
 
-float ss_modcurve_get_value(SS_ModulatorTransformType transform_type, SS_ModulatorCurveType curve_type, int index_0_to_16_383) {
+float ss_modcurve_get_value(int transform_type, SS_ModulatorCurveType curve_type, int index_0_to_16_383) {
 	if(!modcurve_initialized) init_modcurve_table();
 	return precomputed_transforms[MODULATOR_RESOLUTION * (curve_type * MOD_CURVE_TYPES_AMOUNT + transform_type) + index_0_to_16_383];
 }
