@@ -27,10 +27,6 @@ extern void ss_voice_free(SS_Voice *v);
 extern void ss_voice_release(SS_Voice *v, double current_time, double min_note_length);
 extern void ss_voice_exclusive_release(SS_Voice *v, double current_time);
 extern void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch, double time);
-extern void ss_voice_compute_modulators_internal(SS_Voice *v, const SS_MIDIChannel *ch,
-                                                 const SS_Modulator *default_mods,
-                                                 size_t default_mod_count,
-                                                 double time);
 extern bool ss_voice_render(SS_Voice *v, const SS_MIDIChannel *ch,
                             double time_now,
                             float *ol, float *or_,
@@ -702,17 +698,8 @@ enum {
 };
 
 void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time) {
-	SS_BasicPreset *p = ch->preset;
-	/* Collect modulators: use bank's default + voice mods */
-	const SS_Modulator *def_mods = SS_DEFAULT_MODULATORS;
-	size_t def_mod_count = SS_DEFAULT_MODULATOR_COUNT;
-	if(p && p->parent_bank && p->parent_bank->custom_default_modulators) {
-		def_mods = p->parent_bank->default_modulators;
-		def_mod_count = p->parent_bank->default_mod_count;
-	}
-
 	for(size_t v = 0; v < ch->voice_count; v++) {
-		ss_voice_compute_modulators_internal(ch->voices[v], ch, def_mods, def_mod_count, time);
+		ss_voice_compute_modulators(ch->voices[v], ch, time);
 	}
 }
 

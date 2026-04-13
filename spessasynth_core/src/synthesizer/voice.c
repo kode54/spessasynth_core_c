@@ -275,78 +275,56 @@ static float get_source_value(const SS_MIDIChannel *ch, const SS_Voice *v,
 
 static const float EFFECT_MODULATOR_TRANSFORM_MULTIPLIER = 1000 / 200;
 
-void ss_voice_compute_modulators_internal(SS_Voice *v, const SS_MIDIChannel *ch,
-                                          const SS_Modulator *default_mods, size_t default_mod_count,
-                                          double time) {
+void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch,
+                                 double time) {
 	/* Reset modulated generators to base values */
 	memcpy(v->modulated_generators, v->generators, SS_GEN_COUNT * sizeof(int16_t));
 
-	/* Collect all modulators (default + voice-specific) */
-	const SS_Modulator *mod_arrays[2] = { default_mods, v->modulators };
-	size_t mod_counts[2] = { default_mod_count, v->modulator_count };
-
 	v->resonance_offset = 0.0f;
 
-	for(int arr = 0; arr < 2; arr++) {
-		if(!mod_arrays[arr]) continue;
-		for(size_t mi = 0; mi < mod_counts[arr]; mi++) {
-			const SS_Modulator *m = &mod_arrays[arr][mi];
-			if(m->dest_enum >= SS_GEN_COUNT) continue;
+	for(size_t mi = 0; mi < v->modulator_count; mi++) {
+		const SS_Modulator *m = &v->modulators[mi];
+		if(m->dest_enum >= SS_GEN_COUNT) continue;
 
-			if(!m->transform_amount) continue;
+		if(!m->transform_amount) continue;
 
-			float src = get_source_value(ch, v, m->source_enum);
-			float asrc = (m->amount_source_enum != 0) ? get_source_value(ch, v, m->amount_source_enum) : 1.0f;
+		float src = get_source_value(ch, v, m->source_enum);
+		float asrc = (m->amount_source_enum != 0) ? get_source_value(ch, v, m->amount_source_enum) : 1.0f;
 
-			/* Effect modulators: scale CC91/CC93 as in spessasynth */
-			float transform_amount = (float)m->transform_amount;
-			if(m->is_effect_modulator && transform_amount <= 1000) {
-				transform_amount *= EFFECT_MODULATOR_TRANSFORM_MULTIPLIER;
-				if(transform_amount > 1000.0) transform_amount = 1000.0;
-			}
-
-			float val = src * asrc * transform_amount;
-
-			if(m->transform_type == SS_MODTRANS_ABSOLUTE) {
-				/* Abs value */
-				val = fabs(val);
-			}
-
-			/* Default resonant modulator: track separately */
-			if(m->is_default_resonant_modulator) {
-				/* Half the gain, negates the filter */
-				v->resonance_offset = (val > 0) ? val / 2 : 0;
-			}
-
-			if(m->is_mod_wheel_modulator) {
-				val *= ch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER];
-			}
-
-			{
-				int16_t g = v->modulated_generators[m->dest_enum];
-				int32_t new_val = (int32_t)g + (int32_t)val;
-				new_val = ss_generator_clamp((SS_GeneratorType)m->dest_enum, (int16_t)new_val);
-				v->modulated_generators[m->dest_enum] = (int16_t)new_val;
-				val = new_val;
-			}
-			/* Update stored current_value (for snapshot purposes) */
-			if(arr) /* Can't overwrite the default modulators */
-				((SS_Modulator *)m)->current_value = val;
+		/* Effect modulators: scale CC91/CC93 as in spessasynth */
+		float transform_amount = (float)m->transform_amount;
+		if(m->is_effect_modulator && transform_amount <= 1000) {
+			transform_amount *= EFFECT_MODULATOR_TRANSFORM_MULTIPLIER;
+			if(transform_amount > 1000.0) transform_amount = 1000.0;
 		}
-	}
-}
 
-void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch, double time) {
-	const SS_BasicPreset *p = v->preset;
-	/* Collect modulators: use bank's default + voice mods */
-	const SS_Modulator *def_mods = SS_DEFAULT_MODULATORS;
-	size_t def_mod_count = SS_DEFAULT_MODULATOR_COUNT;
-	if(p && p->parent_bank && p->parent_bank->custom_default_modulators) {
-		def_mods = p->parent_bank->default_modulators;
-		def_mod_count = p->parent_bank->default_mod_count;
-	}
+		float val = src * asrc * transform_amount;
 
-	ss_voice_compute_modulators_internal(v, ch, def_mods, def_mod_count, time);
+		if(m->transform_type == SS_MODTRANS_ABSOLUTE) {
+			/* Abs value */
+			val = fabs(val);
+		}
+
+		/* Default resonant modulator: track separately */
+		if(m->is_default_resonant_modulator) {
+			/* Half the gain, negates the filter */
+			v->resonance_offset = (val > 0) ? val / 2 : 0;
+		}
+
+		if(m->is_mod_wheel_modulator) {
+			val *= ch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER];
+		}
+
+		{
+			int16_t g = v->modulated_generators[m->dest_enum];
+			int32_t new_val = (int32_t)g + (int32_t)val;
+			new_val = ss_generator_clamp((SS_GeneratorType)m->dest_enum, (int16_t)new_val);
+			v->modulated_generators[m->dest_enum] = (int16_t)new_val;
+			val = new_val;
+		}
+		/* Update stored current_value (for snapshot purposes) */
+		((SS_Modulator *)m)->current_value = val;
+	}
 }
 
 /* ── Render voice ────────────────────────────────────────────────────────── */
