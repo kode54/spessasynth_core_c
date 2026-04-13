@@ -1057,7 +1057,7 @@ because I wanted support for Touhou MIDIs :-)
 					const bool is_gs = ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_GS;
 					const bool is_50cent = is_gs && ch->bank_lsb != 1;
 					const float range = is_50cent ? 50.0 : 100.0;
-					const float fine_range = is_50cent ? 0.5 : 1.0;
+					const float fine_range = range / 64.0;
 					ch->drum_params[nrpn_fine].pitch = ((int)ch->drum_params[nrpn_fine].pitch / range) * range + (((float)val) - 64.0) * fine_range;
 					break;
 				}
