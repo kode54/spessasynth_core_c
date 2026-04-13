@@ -333,6 +333,19 @@ void ss_voice_compute_modulators_internal(SS_Voice *v, const SS_MIDIChannel *ch,
 	}
 }
 
+void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch, double time) {
+	const SS_BasicPreset *p = v->preset;
+	/* Collect modulators: use bank's default + voice mods */
+	const SS_Modulator *def_mods = SS_DEFAULT_MODULATORS;
+	size_t def_mod_count = SS_DEFAULT_MODULATOR_COUNT;
+	if(p && p->parent_bank && p->parent_bank->custom_default_modulators) {
+		def_mods = p->parent_bank->default_modulators;
+		def_mod_count = p->parent_bank->default_mod_count;
+	}
+
+	ss_voice_compute_modulators_internal(v, ch, def_mods, def_mod_count, time);
+}
+
 /* ── Render voice ────────────────────────────────────────────────────────── */
 
 bool ss_voice_render(SS_Voice *v,
