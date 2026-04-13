@@ -3,7 +3,7 @@
 <img src='https://raw.githubusercontent.com/kode54/spessasynth_core_c/refs/heads/main/website/spessasynth_logo_rounded.png' width='300' alt='SpessaSynth logo'>
 </p>
 
-_A powerful multipurpose SF2/DLS/MIDI library, now ported to C, through the magic of vibes and lots of manual labor as well. It should be fairly compatible with any C11 compiler, but it may work with something older as well.
+_A powerful multipurpose SF2/DLS/MIDI library, now ported to C, through the magic of vibes and lots of manual labor as well._ It should be fairly compatible with any C11 compiler, but it may work with something older as well.
 
 It allows you to:
 
