@@ -206,7 +206,7 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
                           double current_time, int target_key, int real_key,
                           const int16_t *generators,
                           const SS_Modulator *modulators, size_t mod_count);
-SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int real_key);
+/*SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int real_key);*/
 void ss_voice_free(SS_Voice *v);
 
 /* ── Custom controller indices ───────────────────────────────────────────── */

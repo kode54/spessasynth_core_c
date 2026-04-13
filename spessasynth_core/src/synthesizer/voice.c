@@ -29,25 +29,25 @@ extern void ss_lowpass_filter_apply(SS_LowpassFilter *f,
 extern bool ss_volume_envelope_apply(SS_VolumeEnvelope *env,
                                      float *buf, int count,
                                      float gain_target);
-extern void ss_volume_envelope_recalculate(SS_Voice *v,
+/*extern void ss_volume_envelope_recalculate(SS_Voice *v,
                                            SS_VolumeEnvelope *env,
                                            const int16_t *mod_gens,
                                            int target_key,
                                            bool is_in_release,
                                            double release_start_time,
-                                           double start_time);
+                                           double start_time);*/
 extern void ss_volume_envelope_start_release(SS_Voice *v,
                                              SS_VolumeEnvelope *env,
                                              const int16_t *mod_gens,
                                              int target_key,
                                              double release_start_time,
                                              double start_time);
-extern void ss_modulation_envelope_recalculate(SS_ModulationEnvelope *env,
+/*extern void ss_modulation_envelope_recalculate(SS_ModulationEnvelope *env,
                                                const int16_t *mod_gens,
                                                int midi_note,
                                                bool is_in_release,
                                                double release_start_time,
-                                               double start_time);
+                                               double start_time);*/
 extern void ss_modulation_envelope_start_release(SS_ModulationEnvelope *env,
                                                  const int16_t *mod_gens,
                                                  int midi_note,
@@ -140,6 +140,7 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
 
 /* ── Copy ────────────────────────────────────────────────────────────────── */
 
+#if 0
 SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int real_key) {
 	SS_Voice *v = (SS_Voice *)calloc(1, sizeof(SS_Voice));
 	if(!v) return NULL;
@@ -181,6 +182,7 @@ SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int real_key) 
 	                                   v->midi_note, false, 0.0, current_time);
 	return v;
 }
+#endif
 
 /* ── Free ────────────────────────────────────────────────────────────────── */
 
