@@ -48,7 +48,7 @@ Featuring Reverb, Chorus, Delay, Insertion effects and more!
 - **Modular design:** _Easy integration into other projects (only load what you need)_
 - **Flexible:** _It's not just a MIDI player!_ Well, not totally.
 - **Easy to Use:** _Basic setup is
-  just [a few lines of code!](https://github.com/losnoco/Cog/blob/main/Plugins/MIDI/MIDI/SpessaPlayer.mm)_
+  just [a few lines of code!](https://github.com/kode54/spessasynth_core_c/blob/main/spessasynth_core/examples/example.c)_
 - **Minimal and only optional dependencies:** _Batteries included!_ Except for STB Vorbis and libFLAC, if you want those!
 
 ### Powerful MIDI Synthesizer
