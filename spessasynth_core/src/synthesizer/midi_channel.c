@@ -1044,13 +1044,23 @@ because I wanted support for Touhou MIDIs :-)
 					ch->drum_params[nrpn_fine].filter_resonance = (float)val * 128.0;
 					break;
 
-				case SS_NRPN_GS_MSB_DRUM_PITCH_COARSE:
-					ch->drum_params[nrpn_fine].pitch = (((float)val) - 64.0) * 100.0;
+				case SS_NRPN_GS_MSB_DRUM_PITCH_COARSE: {
+					/* Pitch range */
+					const bool is_gs = ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_GS;
+					const bool is_50cent = is_gs && ch->bank_lsb != 1;
+					const float range = is_50cent ? 50.0 : 100.0;
+					ch->drum_params[nrpn_fine].pitch = (((float)val) - 64.0) * range;
 					break;
+				}
 
-				case SS_NRPN_GS_MSB_DRUM_PITCH_FINE:
-					ch->drum_params[nrpn_fine].pitch = ((int)ch->drum_params[nrpn_fine].pitch / 100.0) * 100.0 + ((float)val) - 64.0;
+				case SS_NRPN_GS_MSB_DRUM_PITCH_FINE: {
+					const bool is_gs = ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_GS;
+					const bool is_50cent = is_gs && ch->bank_lsb != 1;
+					const float range = is_50cent ? 50.0 : 100.0;
+					const float fine_range = is_50cent ? 0.5 : 1.0;
+					ch->drum_params[nrpn_fine].pitch = ((int)ch->drum_params[nrpn_fine].pitch / range) * range + (((float)val) - 64.0) * fine_range;
 					break;
+				}
 
 				case SS_NRPN_GS_MSB_DRUM_TVA_LEVEL:
 					ch->drum_params[nrpn_fine].gain = ((float)val) / 127.0;
