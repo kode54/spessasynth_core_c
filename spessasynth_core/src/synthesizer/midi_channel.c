@@ -618,7 +618,7 @@ void ss_channel_note_off(SS_MIDIChannel *ch, int note, double time) {
 	for(size_t i = 0; i < ch->voice_count; i++) {
 		SS_Voice *v = ch->voices[i];
 		if(!v->is_active || v->is_in_release) continue;
-		if(v->midi_note != note) continue;
+		if(v->real_key != real_key) continue;
 		if(sustained) {
 			/* Add to sustained list */
 			if(ch->sustained_count >= ch->sustained_capacity) {
