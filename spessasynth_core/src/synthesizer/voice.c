@@ -132,12 +132,6 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
 	ss_volume_envelope_init(&v->volume_env, sample_rate,
 	                        generators[SS_GEN_SUSTAIN_VOL_ENV]);
 
-	/* Initial envelope recalculation */
-	ss_volume_envelope_recalculate(v, &v->volume_env, v->modulated_generators,
-	                               target_key, false, 0.0, current_time);
-	ss_modulation_envelope_recalculate(&v->modulation_env, v->modulated_generators,
-	                                   midi_note, false, 0.0, current_time);
-
 	/* Store current_pan in generator units (-500..500) to match TS smoothing behaviour */
 	v->current_pan = (float)v->modulated_generators[SS_GEN_PAN];
 
