@@ -380,11 +380,11 @@ void ss_processor_program_change(SS_Processor *proc, int ch, int program, double
 	proc_emit(proc, SS_EVENT_PROGRAM_CHANGE, ch, program, 0);
 }
 
-void ss_processor_pitch_wheel(SS_Processor *proc, int ch, int value, double t) {
+void ss_processor_pitch_wheel(SS_Processor *proc, int ch, int value, int midi_note, double t) {
 	(void)t;
 	if(ch < 0 || ch >= proc->channel_count) return;
-	ss_channel_pitch_wheel(proc->midi_channels[ch], value, t);
-	proc_emit(proc, SS_EVENT_PITCH_WHEEL, ch, value, 0);
+	ss_channel_pitch_wheel(proc->midi_channels[ch], value, midi_note, t);
+	proc_emit(proc, SS_EVENT_PITCH_WHEEL, ch, value, midi_note);
 }
 
 void ss_processor_channel_pressure(SS_Processor *proc, int ch, int pressure, double t) {

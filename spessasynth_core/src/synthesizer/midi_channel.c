@@ -16,7 +16,7 @@
 #endif
 
 extern SS_Voice *ss_voice_create(uint32_t sr,
-								 const SS_BasicPreset *preset,
+                                 const SS_BasicPreset *preset,
                                  const SS_AudioSample *audio_sample,
                                  int midi_note, int velocity,
                                  double current_time, int target_key, int real_key,
@@ -189,7 +189,7 @@ static void reset_controllers_rp15_compliant(SS_MIDIChannel *ch, double time) {
 
 	memset(ch->channel_octave_tuning, 0, sizeof(ch->channel_octave_tuning));
 
-	ss_channel_pitch_wheel(ch, 8192, time);
+	ss_channel_pitch_wheel(ch, 8192, -1, time);
 
 	reset_vibrato_params(ch);
 
@@ -253,7 +253,7 @@ static void reset_controllers_to_defaults(SS_MIDIChannel *ch) {
 	ch->channel_tuning_cents = 0;
 
 	ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = 2 << 7; /* Default 2 semitones */
-	ss_channel_pitch_wheel(ch, 8192, 0);
+	ss_channel_pitch_wheel(ch, 8192, -1, 0);
 
 	reset_portamento(ch);
 	reset_drum_params(ch);
@@ -1342,11 +1342,32 @@ void ss_channel_program_change(SS_MIDIChannel *ch, int program) {
 
 /* ── Pitch wheel ─────────────────────────────────────────────────────────── */
 
-void ss_channel_pitch_wheel(SS_MIDIChannel *ch, int value, double time) {
-	/* value: 0..16383, 8192 = center */
-	ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL] = value;
+void ss_channel_pitch_wheel(SS_MIDIChannel *ch, int value, int midi_note, double time) {
+	/* value: 0..16383, 8192 = center; midi_note == -1 for channel-wide pitch wheel */
+	if(ch->locked_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL]) return;
 
-	ss_channel_compute_modulators(ch, time);
+	if(midi_note == -1) {
+		/* Global pitch wheel: disable per-note mode */
+		ch->per_note_pitch = false;
+		ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL] = (int16_t)value;
+		ss_channel_compute_modulators(ch, time);
+	} else {
+		/* Per-note pitch wheel */
+		if(!ch->per_note_pitch) {
+			/* Entering per-note mode: seed all notes with the current global value */
+			int16_t current = ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL];
+			for(int i = 0; i < 128; i++) ch->pitch_wheels[i] = current;
+		}
+		ch->per_note_pitch = true;
+		ch->pitch_wheels[midi_note] = (int16_t)value;
+		/* Recompute modulators only for active voices on this note */
+		for(size_t i = 0; i < ch->voice_count; i++) {
+			SS_Voice *v = ch->voices[i];
+			if(v && v->is_active && v->real_key == midi_note) {
+				ss_voice_compute_modulators(v, ch, time);
+			}
+		}
+	}
 }
 
 /* ── Reset controllers ───────────────────────────────────────────────────── */

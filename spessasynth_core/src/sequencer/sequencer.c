@@ -217,7 +217,7 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 					if(e->data_length >= 2)
 						ss_processor_pitch_wheel(seq->proc, ch,
 						                         (e->data[1] << 7) | e->data[0],
-						                         ev_time);
+						                         -1, ev_time);
 					break;
 					/* Notes are skipped during seek */
 			}
@@ -275,7 +275,7 @@ static void process_event(SS_Sequencer *seq, SS_MIDIFile *midi,
 			case 0xE0: /* pitch wheel */
 				if(e->data_length >= 2)
 					ss_processor_pitch_wheel(seq->proc, ch,
-					                         (e->data[1] << 7) | e->data[0], t);
+					                         (e->data[1] << 7) | e->data[0], -1, t);
 				break;
 			case 0xA0: /* poly pressure */
 				if(e->data_length >= 2)

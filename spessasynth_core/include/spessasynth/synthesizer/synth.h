@@ -200,7 +200,7 @@ typedef struct SS_Voice {
 } SS_Voice;
 
 SS_Voice *ss_voice_create(uint32_t sample_rate,
-						  const SS_BasicPreset *preset,
+                          const SS_BasicPreset *preset,
                           const SS_AudioSample *audio_sample,
                           int midi_note, int velocity,
                           double current_time, int target_key, int real_key,
@@ -287,6 +287,9 @@ typedef struct SS_MIDIChannel {
 
 	SS_DrumParameters drum_params[128]; /* per-key drum parameters */
 
+	bool per_note_pitch; /* true when MIDI 2.0 per-note pitch wheel is active */
+	int16_t pitch_wheels[128]; /* per-note pitch wheel values (0..16383, 8192 = center) */
+
 	SS_Voice **voices; /* owned */
 	size_t voice_count;
 	size_t voice_capacity;
@@ -307,7 +310,7 @@ void ss_channel_all_notes_off(SS_MIDIChannel *ch, double time);
 void ss_channel_all_sound_off(SS_MIDIChannel *ch);
 void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time);
 void ss_channel_program_change(SS_MIDIChannel *ch, int program);
-void ss_channel_pitch_wheel(SS_MIDIChannel *ch, int value, double time);
+void ss_channel_pitch_wheel(SS_MIDIChannel *ch, int value, int midi_note, double time);
 void ss_channel_reset_controllers(SS_MIDIChannel *ch);
 
 /**
@@ -454,7 +457,7 @@ void ss_processor_note_on(SS_Processor *proc, int ch, int note, int vel, double 
 void ss_processor_note_off(SS_Processor *proc, int ch, int note, double t);
 void ss_processor_control_change(SS_Processor *proc, int ch, int cc, int val, double t);
 void ss_processor_program_change(SS_Processor *proc, int ch, int program, double t);
-void ss_processor_pitch_wheel(SS_Processor *proc, int ch, int value, double t);
+void ss_processor_pitch_wheel(SS_Processor *proc, int ch, int value, int midi_note, double t);
 void ss_processor_channel_pressure(SS_Processor *proc, int ch, int pressure, double t);
 void ss_processor_poly_pressure(SS_Processor *proc, int ch, int note, int pressure, double t);
 void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, double t);

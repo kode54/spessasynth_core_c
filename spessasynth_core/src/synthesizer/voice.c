@@ -67,7 +67,7 @@ extern float ss_centibel_attenuation_to_gain(float db);
 /* ── Create ──────────────────────────────────────────────────────────────── */
 
 SS_Voice *ss_voice_create(uint32_t sample_rate,
-						  const SS_BasicPreset *preset,
+                          const SS_BasicPreset *preset,
                           const SS_AudioSample *audio_sample,
                           int midi_note, int velocity,
                           double current_time, int target_key, int real_key,
@@ -250,6 +250,9 @@ static float get_source_value(const SS_MIDIChannel *ch, const SS_Voice *v,
 				break;
 			case SS_MODSRC_POLY_PRESSURE:
 				raw = v->pressure << 7;
+				break;
+			case SS_MODSRC_PITCH_WHEEL:
+				raw = ch->per_note_pitch ? (int)ch->pitch_wheels[v->real_key] : ch->midi_controllers[SS_MODSRC_PITCH_WHEEL + NON_CC_INDEX_OFFSET];
 				break;
 			default:
 				if(idx + NON_CC_INDEX_OFFSET >= SS_MIDI_CONTROLLER_COUNT)
