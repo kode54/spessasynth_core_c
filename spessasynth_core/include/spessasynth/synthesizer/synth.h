@@ -131,8 +131,8 @@ typedef struct {
 	float gain; /* gain multiplier (default 1) */
 	uint8_t exclusive_class; /* exclusive class override (default 0 = off) */
 	uint8_t pan; /* pan 1-127 (64=center, 0=random), default 64 */
-	float filter_cutoff; /* filter cutoff frequency, default 1.0 */
-	float filter_resonance; /* filter resonance, default 0 */
+	uint8_t filter_cutoff; /* filter cutoff frequency, default 64 */
+	uint8_t filter_resonance; /* filter resonance, default 0 */
 	float reverb_gain; /* reverb send multiplier (default 0) */
 	float chorus_gain; /* chorus send multiplier (default 1) */
 	float delay_gain; /* delay send multiplier (default 1) */

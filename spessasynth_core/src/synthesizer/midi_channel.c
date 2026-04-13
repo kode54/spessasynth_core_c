@@ -207,7 +207,7 @@ static void reset_drum_params(SS_MIDIChannel *ch) {
 		ch->drum_params[k].gain = 1.0f;
 		ch->drum_params[k].exclusive_class = 0;
 		ch->drum_params[k].pan = 64;
-		ch->drum_params[k].filter_cutoff = 1.0f;
+		ch->drum_params[k].filter_cutoff = 64;
 		ch->drum_params[k].filter_resonance = 0.0f;
 		ch->drum_params[k].reverb_gain = drum_params_reverb(k);
 		ch->drum_params[k].chorus_gain = 0.0f; /* No drums have chorus */
@@ -355,8 +355,8 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	}
 
 	/* Drum parameter checks */
-	float drum_filter_cutoff = 1.0;
-	float drum_filter_resonance = 0.0f;
+	int drum_filter_cutoff = -1;
+	int drum_filter_resonance = -1;
 	float drum_pitch_offset = 0.0f;
 	float drum_reverb_send = 1.0f;
 	float drum_chorus_send = 1.0f;
@@ -510,22 +510,26 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 			}
 		}
 
+		/* Apply the drum overrides */
+		int16_t backup_brightness = ch->midi_controllers[SS_MIDCON_BRIGHTNESS];
+		int16_t backup_filter_resonance = ch->midi_controllers[SS_MIDCON_FILTER_RESONANCE];
+
+		if(drum_filter_cutoff != -1) {
+			ch->midi_controllers[SS_MIDCON_BRIGHTNESS] = drum_filter_cutoff << 7;
+		}
+		if(drum_filter_resonance != -1) {
+			ch->midi_controllers[SS_MIDCON_FILTER_RESONANCE] = drum_filter_resonance << 7;
+		}
+
 		/* Compute initial modulators */
 		ss_voice_compute_modulators(voice, ch, time);
+
+		ch->midi_controllers[SS_MIDCON_BRIGHTNESS] = backup_brightness;
+		ch->midi_controllers[SS_MIDCON_FILTER_RESONANCE] = backup_filter_resonance;
 
 		/* Recalculate the envelopes */
 		ss_volume_envelope_recalculate(voice, &voice->volume_env, voice->modulated_generators, voice->target_key, voice->is_in_release, voice->release_start_time, time);
 		ss_modulation_envelope_recalculate(&voice->modulation_env, voice->modulated_generators, voice->target_key, voice->is_in_release, voice->release_start_time, time);
-
-		/* Apply the drum overrides */
-		if(drum_filter_cutoff != 1.0) {
-			float cutoff = (float)voice->modulated_generators[SS_GEN_INITIAL_FILTER_FC] * drum_filter_cutoff;
-			if(cutoff > 13499.0) cutoff = 13499.0;
-			voice->modulated_generators[SS_GEN_INITIAL_FILTER_FC] = (uint16_t)cutoff;
-		}
-		if(drum_filter_resonance != 0.0) {
-			voice->resonance_offset += drum_filter_resonance; /* I think? */
-		}
 
 		/* Calculate LFO start times */
 		voice->vib_lfo_start_time = time + ss_timecents_to_seconds(voice->modulated_generators[SS_GEN_DELAY_VIB_LFO]);
@@ -1037,11 +1041,11 @@ because I wanted support for Touhou MIDIs :-)
 					break;
 
 				case SS_NRPN_GS_MSB_DRUM_FILTER_CUTOFF:
-					ch->drum_params[nrpn_fine].filter_cutoff = (((float)val) - 64.0) / 64.0;
+					ch->drum_params[nrpn_fine].filter_cutoff = val;
 					break;
 
 				case SS_NRPN_GS_MSB_DRUM_FILTER_Q:
-					ch->drum_params[nrpn_fine].filter_resonance = (float)val * 128.0;
+					ch->drum_params[nrpn_fine].filter_resonance = val;
 					break;
 
 				case SS_NRPN_GS_MSB_DRUM_PITCH_COARSE: {
@@ -1054,11 +1058,7 @@ because I wanted support for Touhou MIDIs :-)
 				}
 
 				case SS_NRPN_GS_MSB_DRUM_PITCH_FINE: {
-					const bool is_gs = ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_GS;
-					const bool is_50cent = is_gs && ch->bank_lsb != 1;
-					const float range = is_50cent ? 50.0 : 100.0;
-					const float fine_range = range / 64.0;
-					ch->drum_params[nrpn_fine].pitch = ((int)ch->drum_params[nrpn_fine].pitch / range) * range + (((float)val) - 64.0) * fine_range;
+					ch->drum_params[nrpn_fine].pitch += ((float)val) - 64.0;
 					break;
 				}
 
