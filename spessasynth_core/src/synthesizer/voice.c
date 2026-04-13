@@ -325,6 +325,14 @@ void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch,
 		/* Update stored current_value (for snapshot purposes) */
 		((SS_Modulator *)m)->current_value = val;
 	}
+
+	/* Apply generator-specific limits to all modulated generators.
+	 * Matches TypeScript computeModulators second pass (compute_modulator.ts lines 119-130).
+	 * This clamps base generator values (e.g. sustainVolEnv = -461 from preset+inst summing)
+	 * that were never touched by any modulator but still need to be in spec range. */
+	for(int g = 0; g < SS_GEN_COUNT; g++) {
+		v->modulated_generators[g] = ss_generator_clamp((SS_GeneratorType)g, v->modulated_generators[g]);
+	}
 }
 
 /* ── Render voice ────────────────────────────────────────────────────────── */
