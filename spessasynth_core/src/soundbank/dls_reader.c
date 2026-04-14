@@ -699,6 +699,7 @@ SS_SoundBank *ss_dls_load(const uint8_t *data, size_t size) {
 	/* Temporary per-instrument storage */
 	typedef struct {
 		uint32_t bank_msb;
+		uint32_t bank_lsb;
 		uint32_t patch;
 		bool is_drum;
 		SS_BasicInstrument *inst;
@@ -771,6 +772,7 @@ SS_SoundBank *ss_dls_load(const uint8_t *data, size_t size) {
 							uint32_t bank_val = (uint32_t)ss_iba_read_le(&sub.data, 4);
 							uint32_t patch = (uint32_t)ss_iba_read_le(&sub.data, 4);
 							entry->bank_msb = (bank_val >> 8) & 0x7F;
+							entry->bank_lsb = bank_val & 0x7F;
 							entry->patch = patch & 0x7F;
 							entry->is_drum = (bank_val & 0x80000000u) != 0;
 							(void)n_regions;
@@ -1074,7 +1076,7 @@ SS_SoundBank *ss_dls_load(const uint8_t *data, size_t size) {
 		strncpy(p->name, inst->name, sizeof(p->name) - 1);
 		p->program = (uint8_t)(e->patch & 0x7F);
 		p->bank_msb = (uint8_t)e->bank_msb;
-		p->bank_lsb = 0;
+		p->bank_lsb = (uint8_t)e->bank_lsb;
 		p->is_gm_gs_drum = e->is_drum;
 		p->parent_bank = bank;
 
