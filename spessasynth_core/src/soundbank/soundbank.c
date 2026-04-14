@@ -700,6 +700,8 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 	SS_BasicPreset *match = NULL;
 
 	const bool isXG = midi_system == SS_SYSTEM_XG;
+	const uint16_t bank_offset_msb = bank_offset & 127;
+	const uint16_t bank_offset_lsb = bank_offset >> 8;
 
 	if(is_drum_channel && isXG) {
 		/* This shouldn't happen */
@@ -715,7 +717,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 		if(p->program != program) continue;
 		const bool is_drum_match = (is_drum_channel == p->is_gm_gs_drum);
 		if(!is_drum_match && !isXG) continue;
-		if((p->bank_lsb + bank_offset) != bank_lsb || (p->bank_msb + bank_offset) != bank_msb) continue;
+		if((p->bank_lsb + bank_offset_lsb) != bank_lsb || (p->bank_msb + bank_offset_msb) != bank_msb) continue;
 		match = p;
 		break;
 	}
@@ -838,7 +840,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 	if(isXG) {
 		for(size_t i = 0; i < match_count; i++) {
 			SS_BasicPreset *p = matches[i];
-			if((p->bank_lsb + bank_offset) == bank_lsb) {
+			if((p->bank_lsb + bank_offset_lsb) == bank_lsb) {
 				match = p;
 				break;
 			}
@@ -846,7 +848,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 	} else {
 		for(size_t i = 0; i < match_count; i++) {
 			SS_BasicPreset *p = matches[i];
-			if((p->bank_msb + bank_offset) == bank_msb) {
+			if((p->bank_msb + bank_offset_msb) == bank_msb) {
 				match = p;
 				break;
 			}
@@ -869,7 +871,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 		/* Any matching bank. */
 		for(size_t i = 0; i < match_count; i++) {
 			SS_BasicPreset *p = matches[i];
-			if((p->bank_lsb + bank_offset) == bank || (p->bank_msb + bank_offset) == bank) {
+			if((p->bank_lsb + bank_offset_lsb) == bank || (p->bank_msb + bank_offset_msb) == bank) {
 				free(matches);
 				return p;
 			}
