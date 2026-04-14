@@ -828,7 +828,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 	if(isXG) {
 		for(size_t i = 0; i < match_count; i++) {
 			SS_BasicPreset *p = matches[i];
-			if(p->bank_lsb == bank_lsb) {
+			if((p->bank_lsb + bank_offset) == bank_lsb) {
 				match = p;
 				break;
 			}
@@ -836,7 +836,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 	} else {
 		for(size_t i = 0; i < match_count; i++) {
 			SS_BasicPreset *p = matches[i];
-			if(p->bank_msb == bank_msb) {
+			if((p->bank_msb + bank_offset) == bank_msb) {
 				match = p;
 				break;
 			}
@@ -859,7 +859,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 		/* Any matching bank. */
 		for(size_t i = 0; i < match_count; i++) {
 			SS_BasicPreset *p = matches[i];
-			if(p->bank_lsb == bank || p->bank_msb == bank) {
+			if((p->bank_lsb + bank_offset) == bank || (p->bank_msb + bank_offset) == bank) {
 				free(matches);
 				return p;
 			}
