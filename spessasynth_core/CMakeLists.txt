@@ -72,6 +72,7 @@ endif()
 
 # ── libFLAC ──────────────────────────────────────────────────────────────────
 if(SS_ENABLE_SF3_FLAC)
+    find_package(Threads QUIET)
     find_package(FLAC QUIET)
     if(FLAC_FOUND)
         target_sources(spessasynth_core PRIVATE src/soundbank/flac_decode.c)
