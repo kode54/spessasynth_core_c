@@ -1238,6 +1238,9 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 			   ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_XG) {
 				ch->bank_msb = 127;
 			}
+			if(ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_XG) {
+				ch->drum_channel = ch->bank_msb == 120 || ch->bank_msb == 127;
+			}
 			break;
 
 		case SS_MIDCON_BANK_SELECT_LSB:
