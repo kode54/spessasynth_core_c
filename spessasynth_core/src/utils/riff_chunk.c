@@ -21,7 +21,7 @@ bool ss_riff_read_chunk(SS_File *file, SS_RIFFChunk *out, bool skip_size, bool r
 		/* Non-owning slice of exactly sz bytes */
 		size_t start = ss_file_tell(file);
 		if(sz > ss_file_remaining(file)) sz = ss_file_remaining(file);
-		
+
 		out->file = ss_file_slice(file, start, sz);
 
 		ss_file_skip(file, sz);

@@ -21,16 +21,15 @@ struct SS_Mutex {
 	pthread_mutex_t mutex;
 };
 
-SS_Mutex *ss_mutex_create(void)
-{
+SS_Mutex *ss_mutex_create(void) {
 	SS_Mutex *res = calloc(1, sizeof(*res));
 	if(!res) return NULL;
 
 	pthread_mutexattr_t attr;
 	pthread_mutexattr_init(&attr);
 	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-	
-	if (pthread_mutex_init(&res->mutex, &attr) != 0) {
+
+	if(pthread_mutex_init(&res->mutex, &attr) != 0) {
 		free(res);
 		return NULL;
 	}
@@ -38,8 +37,7 @@ SS_Mutex *ss_mutex_create(void)
 	return res;
 }
 
-void ss_mutex_free(SS_Mutex *mutex)
-{
+void ss_mutex_free(SS_Mutex *mutex) {
 	if(!mutex) return;
 
 	pthread_mutex_destroy(&mutex->mutex);
@@ -47,15 +45,13 @@ void ss_mutex_free(SS_Mutex *mutex)
 	free(mutex);
 }
 
-void ss_mutex_enter(SS_Mutex *mutex)
-{
+void ss_mutex_enter(SS_Mutex *mutex) {
 	if(!mutex) return;
 
 	pthread_mutex_lock(&mutex->mutex);
 }
 
-void ss_mutex_leave(SS_Mutex *mutex)
-{
+void ss_mutex_leave(SS_Mutex *mutex) {
 	if(!mutex) return;
 
 	pthread_mutex_unlock(&mutex->mutex);
@@ -63,15 +59,14 @@ void ss_mutex_leave(SS_Mutex *mutex)
 
 #elif defined(_WIN32)
 
-#include <windows.h>
 #include <stdlib.h>
+#include <windows.h>
 
 struct SS_Mutex {
 	CRITICAL_SECTION mutex;
 };
 
-SS_Mutex *ss_mutex_create(void)
-{
+SS_Mutex *ss_mutex_create(void) {
 	SS_Mutex *res = calloc(1, sizeof(*res));
 	if(!res) return NULL;
 
@@ -80,8 +75,7 @@ SS_Mutex *ss_mutex_create(void)
 	return res;
 }
 
-void ss_mutex_free(SS_Mutex *mutex)
-{
+void ss_mutex_free(SS_Mutex *mutex) {
 	if(!mutex) return;
 
 	DeleteCriticalSection(&mutex->mutex);
@@ -89,15 +83,13 @@ void ss_mutex_free(SS_Mutex *mutex)
 	free(mutex);
 }
 
-void ss_mutex_enter(SS_Mutex *mutex)
-{
+void ss_mutex_enter(SS_Mutex *mutex) {
 	if(!mutex) return;
 
 	EnterCriticalSection(&mutex->mutex);
 }
 
-void ss_mutex_leave(SS_Mutex *mutex)
-{
+void ss_mutex_leave(SS_Mutex *mutex) {
 	if(!mutex) return;
 
 	LeaveCriticalSection(&mutex->mutex);

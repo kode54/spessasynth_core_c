@@ -6,8 +6,8 @@
 #include <stdint.h>
 
 #if __has_include(<spessasynth_core/generator_types.h>)
-#include <spessasynth_core/midi_enums.h>
 #include <spessasynth_core/file.h>
+#include <spessasynth_core/midi_enums.h>
 #else
 #include "spessasynth/midi/midi_enums.h"
 #include "spessasynth/utils/file.h"

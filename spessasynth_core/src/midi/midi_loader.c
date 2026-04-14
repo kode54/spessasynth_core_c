@@ -586,7 +586,7 @@ SS_MIDIFile *ss_midi_load(SS_File *file, const char *file_name) {
 		size_t riff_size = ss_file_read_le(file, 4, 4);
 		char rmid_id[5];
 		ss_file_read_string(file, 8, rmid_id, 4);
-		
+
 		if(strcmp(rmid_id, "RMID") != 0) goto bad;
 
 		bool is_sf2_rmidi = false;
@@ -603,7 +603,7 @@ SS_MIDIFile *ss_midi_load(SS_File *file, const char *file_name) {
 		ss_file_read_string(file, pos, data_id, 4);
 
 		if(strcmp(data_id, "data") != 0) goto bad;
-		
+
 		size_t smf_chunk_size = ss_file_read_le(file, pos + 4, 4);
 
 		pos += 8;

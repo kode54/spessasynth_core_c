@@ -37,11 +37,10 @@ typedef struct SS_FileMemory {
 	size_t allocated;
 } SS_FileMemory;
 
-static SS_File *ss_file_memory_dup(SS_File *file)
-{
+static SS_File *ss_file_memory_dup(SS_File *file) {
 	SS_FileMemory *fm = (SS_FileMemory *)file;
 
-	SS_FileMemory *res = (SS_FileMemory *) malloc(sizeof(*res));
+	SS_FileMemory *res = (SS_FileMemory *)malloc(sizeof(*res));
 	if(!res) return NULL;
 
 	if(!file->ref_count) {
@@ -60,8 +59,7 @@ static SS_File *ss_file_memory_dup(SS_File *file)
 	return &res->base;
 }
 
-static void ss_file_memory_close(SS_File *file)
-{
+static void ss_file_memory_close(SS_File *file) {
 	SS_FileMemory *fm = (SS_FileMemory *)file;
 
 	if(file->owns_file) {
@@ -69,8 +67,7 @@ static void ss_file_memory_close(SS_File *file)
 	}
 }
 
-static uint8_t ss_file_memory_read_u8(SS_File *file)
-{
+static uint8_t ss_file_memory_read_u8(SS_File *file) {
 	SS_FileMemory *fm = (SS_FileMemory *)file;
 
 	if(file->current_offset < file->scope_end) {
@@ -80,8 +77,7 @@ static uint8_t ss_file_memory_read_u8(SS_File *file)
 	return 0;
 }
 
-static void ss_file_memory_read_bytes(SS_File *file, uint8_t *out, size_t count)
-{
+static void ss_file_memory_read_bytes(SS_File *file, uint8_t *out, size_t count) {
 	SS_FileMemory *fm = (SS_FileMemory *)file;
 
 	const size_t max_to_read = file->scope_end - file->current_offset;
@@ -99,8 +95,7 @@ static void ss_file_memory_read_bytes(SS_File *file, uint8_t *out, size_t count)
 	}
 }
 
-static bool ss_file_memory_write_u8(SS_File *file, uint8_t v)
-{
+static bool ss_file_memory_write_u8(SS_File *file, uint8_t v) {
 	SS_FileMemory *fm = (SS_FileMemory *)file;
 
 	if(file->current_offset + 1 < fm->allocated) {
@@ -108,7 +103,7 @@ static bool ss_file_memory_write_u8(SS_File *file, uint8_t v)
 		size_t new_allocated = fm->allocated;
 		do {
 			new_allocated = new_allocated ? new_allocated * 2 : 1024;
-		} while (new_allocated < new_min_size);
+		} while(new_allocated < new_min_size);
 		uint8_t *new_buf = (uint8_t *)realloc(fm->buf, new_allocated);
 		if(!new_buf) {
 			return false;
@@ -117,7 +112,7 @@ static bool ss_file_memory_write_u8(SS_File *file, uint8_t v)
 		memset(new_buf + fm->allocated, 0, new_allocated - fm->allocated);
 		fm->allocated = new_allocated;
 	}
-	
+
 	if(file->current_offset < file->scope_end) {
 		fm->buf[file->current_offset++] = v;
 		return true;
@@ -126,8 +121,7 @@ static bool ss_file_memory_write_u8(SS_File *file, uint8_t v)
 	}
 }
 
-static bool ss_file_memory_write_bytes(SS_File *file, const uint8_t *src, size_t count)
-{
+static bool ss_file_memory_write_bytes(SS_File *file, const uint8_t *src, size_t count) {
 	SS_FileMemory *fm = (SS_FileMemory *)file;
 
 	if(file->current_offset + count < fm->allocated) {
@@ -135,7 +129,7 @@ static bool ss_file_memory_write_bytes(SS_File *file, const uint8_t *src, size_t
 		size_t new_allocated = fm->allocated;
 		do {
 			new_allocated = new_allocated ? new_allocated * 2 : 1024;
-		} while (new_allocated < new_min_size);
+		} while(new_allocated < new_min_size);
 		uint8_t *new_buf = (uint8_t *)realloc(fm->buf, new_allocated);
 		if(!new_buf) {
 			return false;
@@ -144,7 +138,7 @@ static bool ss_file_memory_write_bytes(SS_File *file, const uint8_t *src, size_t
 		memset(new_buf + fm->allocated, 0, new_allocated - fm->allocated);
 		fm->allocated = new_allocated;
 	}
-	
+
 	const size_t max_to_write = file->scope_end - file->current_offset;
 	const size_t offset = file->current_offset;
 	const size_t to_write = count > max_to_write ? max_to_write : count;
@@ -158,8 +152,7 @@ static bool ss_file_memory_write_bytes(SS_File *file, const uint8_t *src, size_t
 	return to_write == count;
 }
 
-SS_File *ss_file_open_from_memory(const uint8_t *buffer, size_t size, bool owned)
-{
+SS_File *ss_file_open_from_memory(const uint8_t *buffer, size_t size, bool owned) {
 	SS_FileMemory *res = calloc(1, sizeof(*res));
 	if(!res) return NULL;
 
@@ -184,8 +177,7 @@ SS_File *ss_file_open_from_memory(const uint8_t *buffer, size_t size, bool owned
 	return &res->base;
 }
 
-SS_File *ss_file_open_blank_memory(void)
-{
+SS_File *ss_file_open_blank_memory(void) {
 	SS_FileMemory *res = calloc(1, sizeof(*res));
 	if(!res) return NULL;
 
@@ -218,8 +210,7 @@ typedef struct SS_FileStdio {
 	FILE *file;
 } SS_FileStdio;
 
-static SS_File *ss_file_stdio_dup(SS_File *file)
-{
+static SS_File *ss_file_stdio_dup(SS_File *file) {
 	SS_FileStdio *fs = (SS_FileStdio *)file;
 	SS_FileStdio *res = (SS_FileStdio *)calloc(1, sizeof(*res));
 	if(!res) return NULL;
@@ -245,8 +236,7 @@ static SS_File *ss_file_stdio_dup(SS_File *file)
 	return &res->base;
 }
 
-static void ss_file_stdio_close(SS_File *file)
-{
+static void ss_file_stdio_close(SS_File *file) {
 	SS_FileStdio *fs = (SS_FileStdio *)file;
 
 	if(file->owns_file) {
@@ -256,8 +246,7 @@ static void ss_file_stdio_close(SS_File *file)
 	free(fs->last_offset);
 }
 
-static uint8_t ss_file_stdio_read_u8(SS_File *file)
-{
+static uint8_t ss_file_stdio_read_u8(SS_File *file) {
 	SS_FileStdio *fs = (SS_FileStdio *)file;
 
 	if(file->current_offset != *(fs->last_offset)) {
@@ -272,7 +261,7 @@ static uint8_t ss_file_stdio_read_u8(SS_File *file)
 
 	if(to_read) {
 		size_t bytes_read = fread(&v, 1, 1, fs->file);
-		
+
 		file->current_offset += bytes_read;
 		*(fs->last_offset) = ftell(fs->file);
 	}
@@ -280,8 +269,7 @@ static uint8_t ss_file_stdio_read_u8(SS_File *file)
 	return v;
 }
 
-static void ss_file_stdio_read_bytes(SS_File *file, uint8_t *out, size_t count)
-{
+static void ss_file_stdio_read_bytes(SS_File *file, uint8_t *out, size_t count) {
 	SS_FileStdio *fs = (SS_FileStdio *)file;
 
 	if(file->current_offset != *(fs->last_offset)) {
@@ -305,8 +293,7 @@ static void ss_file_stdio_read_bytes(SS_File *file, uint8_t *out, size_t count)
 	}
 }
 
-static bool ss_file_stdio_write_u8(SS_File *file, uint8_t v)
-{
+static bool ss_file_stdio_write_u8(SS_File *file, uint8_t v) {
 	SS_FileStdio *fs = (SS_FileStdio *)file;
 
 	const size_t max_bytes_to_write = file->scope_end - file->current_offset;
@@ -323,8 +310,7 @@ static bool ss_file_stdio_write_u8(SS_File *file, uint8_t v)
 	return false;
 }
 
-static bool ss_file_stdio_write_bytes(SS_File *file, const uint8_t *src, size_t count)
-{
+static bool ss_file_stdio_write_bytes(SS_File *file, const uint8_t *src, size_t count) {
 	SS_FileStdio *fs = (SS_FileStdio *)file;
 
 	const size_t max_bytes_to_write = file->scope_end - file->current_offset;
@@ -340,9 +326,8 @@ static bool ss_file_stdio_write_bytes(SS_File *file, const uint8_t *src, size_t 
 	return bytes_written == count;
 }
 
-SS_File *ss_file_open_from_file(const char *path)
-{
-	SS_FileStdio *res = (SS_FileStdio *) calloc(1, sizeof(*res));
+SS_File *ss_file_open_from_file(const char *path) {
+	SS_FileStdio *res = (SS_FileStdio *)calloc(1, sizeof(*res));
 	if(!res) return NULL;
 
 	res->base.mutex = ss_mutex_create();
@@ -383,9 +368,8 @@ SS_File *ss_file_open_from_file(const char *path)
 	return &res->base;
 }
 
-SS_File *ss_file_open_blank_file(const char *path)
-{
-	SS_FileStdio *res = (SS_FileStdio *) calloc(1, sizeof(*res));
+SS_File *ss_file_open_blank_file(const char *path) {
+	SS_FileStdio *res = (SS_FileStdio *)calloc(1, sizeof(*res));
 	if(!res) return NULL;
 
 	res->base.mutex = ss_mutex_create();
@@ -426,8 +410,7 @@ SS_File *ss_file_dup(SS_File *file) {
 	return res;
 }
 
-SS_File *ss_file_slice(SS_File *file, size_t offset, size_t size)
-{
+SS_File *ss_file_slice(SS_File *file, size_t offset, size_t size) {
 	ss_mutex_enter(file->mutex);
 	SS_File *res = file->dup(file);
 	ss_mutex_leave(file->mutex);
@@ -451,8 +434,7 @@ SS_File *ss_file_slice(SS_File *file, size_t offset, size_t size)
 	return res;
 }
 
-void ss_file_close(SS_File *file)
-{
+void ss_file_close(SS_File *file) {
 	if(!file) return;
 
 	SS_Mutex *mutex = file->mutex;
@@ -473,8 +455,7 @@ void ss_file_close(SS_File *file)
 	}
 }
 
-size_t ss_file_remaining(SS_File *file)
-{
+size_t ss_file_remaining(SS_File *file) {
 	if(!file) return 0;
 
 	ss_mutex_enter(file->mutex);
@@ -486,8 +467,7 @@ size_t ss_file_remaining(SS_File *file)
 	return res;
 }
 
-uint8_t ss_file_read_u8(SS_File *file, size_t offset)
-{
+uint8_t ss_file_read_u8(SS_File *file, size_t offset) {
 	if(!file || !file->read_u8) return 0;
 	ss_mutex_enter(file->mutex);
 	file->current_offset = file->scope_begin + offset;
@@ -499,8 +479,7 @@ uint8_t ss_file_read_u8(SS_File *file, size_t offset)
 	return res;
 }
 
-size_t ss_file_read_le(SS_File *file, size_t offset, size_t byte_count)
-{
+size_t ss_file_read_le(SS_File *file, size_t offset, size_t byte_count) {
 	if(!file || !file->read_u8) return 0;
 
 	size_t v = 0;
@@ -512,8 +491,7 @@ size_t ss_file_read_le(SS_File *file, size_t offset, size_t byte_count)
 		file->current_offset = file->scope_end;
 	}
 
-	for(size_t i = 0; i < byte_count; i++)
-	{
+	for(size_t i = 0; i < byte_count; i++) {
 		v |= (size_t)file->read_u8(file) << (8 * i);
 	}
 
@@ -522,8 +500,7 @@ size_t ss_file_read_le(SS_File *file, size_t offset, size_t byte_count)
 	return v;
 }
 
-size_t ss_file_read_be(SS_File *file, size_t offset, size_t byte_count)
-{
+size_t ss_file_read_be(SS_File *file, size_t offset, size_t byte_count) {
 	if(!file || !file->read_u8) return 0;
 
 	size_t v = 0;
@@ -535,8 +512,7 @@ size_t ss_file_read_be(SS_File *file, size_t offset, size_t byte_count)
 		file->current_offset = file->scope_end;
 	}
 
-	for(size_t i = 0; i < byte_count; i++)
-	{
+	for(size_t i = 0; i < byte_count; i++) {
 		v <<= 8;
 		v |= (size_t)file->read_u8(file);
 	}
@@ -546,8 +522,7 @@ size_t ss_file_read_be(SS_File *file, size_t offset, size_t byte_count)
 	return v;
 }
 
-size_t ss_file_read_vlq(SS_File *file, size_t offset)
-{
+size_t ss_file_read_vlq(SS_File *file, size_t offset) {
 	if(!file || !file->read_u8) {
 		return 0;
 	}
@@ -572,8 +547,7 @@ size_t ss_file_read_vlq(SS_File *file, size_t offset)
 	return value;
 }
 
-void ss_file_read_bytes(SS_File *file, size_t offset, uint8_t *out, size_t count)
-{
+void ss_file_read_bytes(SS_File *file, size_t offset, uint8_t *out, size_t count) {
 	if(!file || !file->read_bytes) {
 		memset(out, 0, count);
 		return;
@@ -591,8 +565,7 @@ void ss_file_read_bytes(SS_File *file, size_t offset, uint8_t *out, size_t count
 	ss_mutex_leave(file->mutex);
 }
 
-void ss_file_read_string(SS_File *file, size_t offset, char *out, size_t count)
-{
+void ss_file_read_string(SS_File *file, size_t offset, char *out, size_t count) {
 	if(!file || !file->read_bytes) {
 		memset(out, 0, count + 1);
 		return;
@@ -611,8 +584,7 @@ void ss_file_read_string(SS_File *file, size_t offset, char *out, size_t count)
 	ss_mutex_leave(file->mutex);
 }
 
-bool ss_file_write_u8(SS_File *file, uint8_t v)
-{
+bool ss_file_write_u8(SS_File *file, uint8_t v) {
 	if(!file || !file->write_u8) {
 		return false;
 	}
@@ -626,8 +598,7 @@ bool ss_file_write_u8(SS_File *file, uint8_t v)
 	return res;
 }
 
-bool ss_file_write_le(SS_File *file, size_t v, size_t byte_count)
-{
+bool ss_file_write_le(SS_File *file, size_t v, size_t byte_count) {
 	if(!file || !file->write_u8) {
 		return false;
 	}
@@ -646,8 +617,7 @@ bool ss_file_write_le(SS_File *file, size_t v, size_t byte_count)
 	return res;
 }
 
-bool ss_file_write_be(SS_File *file, size_t v, size_t byte_count)
-{
+bool ss_file_write_be(SS_File *file, size_t v, size_t byte_count) {
 	if(!file || !file->write_u8) {
 		return false;
 	}
@@ -665,8 +635,7 @@ bool ss_file_write_be(SS_File *file, size_t v, size_t byte_count)
 	return res;
 }
 
-bool ss_file_write_vlq(SS_File *file, size_t v)
-{
+bool ss_file_write_vlq(SS_File *file, size_t v) {
 	if(!file || !file->write_u8) {
 		return false;
 	}
@@ -688,8 +657,7 @@ bool ss_file_write_vlq(SS_File *file, size_t v)
 	return res;
 }
 
-bool ss_file_write_bytes(SS_File *file, const uint8_t *src, size_t count)
-{
+bool ss_file_write_bytes(SS_File *file, const uint8_t *src, size_t count) {
 	if(!file || !file->write_bytes) {
 		return false;
 	}
@@ -703,8 +671,7 @@ bool ss_file_write_bytes(SS_File *file, const uint8_t *src, size_t count)
 	return res;
 }
 
-bool ss_file_write_string(SS_File *file, const char *s, size_t count)
-{
+bool ss_file_write_string(SS_File *file, const char *s, size_t count) {
 	if(!file || !file->write_bytes || !file->write_u8) {
 		return false;
 	}
@@ -727,8 +694,7 @@ bool ss_file_write_string(SS_File *file, const char *s, size_t count)
 	return res;
 }
 
-size_t ss_file_tell(SS_File *file)
-{
+size_t ss_file_tell(SS_File *file) {
 	if(!file) {
 		return 0;
 	}
@@ -742,8 +708,7 @@ size_t ss_file_tell(SS_File *file)
 	return res;
 }
 
-bool ss_file_retrieve_memory(SS_File *file, uint8_t **out, size_t *out_size)
-{
+bool ss_file_retrieve_memory(SS_File *file, uint8_t **out, size_t *out_size) {
 	if(!file || !out || !out_size || file->read_u8 || file->read_bytes || file->read_u8 != ss_file_memory_read_u8) {
 		return false;
 	}
@@ -751,12 +716,11 @@ bool ss_file_retrieve_memory(SS_File *file, uint8_t **out, size_t *out_size)
 	SS_FileMemory *fm = (SS_FileMemory *)file;
 	*out = fm->buf;
 	*out_size = file->current_offset;
-	
+
 	return true;
 }
 
-void ss_file_skip(SS_File *file, size_t skip)
-{
+void ss_file_skip(SS_File *file, size_t skip) {
 	if(!file) {
 		return;
 	}
@@ -771,8 +735,7 @@ void ss_file_skip(SS_File *file, size_t skip)
 	ss_mutex_leave(file->mutex);
 }
 
-size_t ss_file_size(SS_File *file)
-{
+size_t ss_file_size(SS_File *file) {
 	if(!file) return 0;
 
 	ss_mutex_enter(file->mutex);
@@ -784,8 +747,7 @@ size_t ss_file_size(SS_File *file)
 	return res;
 }
 
-void ss_file_seek(SS_File *file, size_t offset)
-{
+void ss_file_seek(SS_File *file, size_t offset) {
 	if(!file) return;
 
 	ss_mutex_enter(file->mutex);

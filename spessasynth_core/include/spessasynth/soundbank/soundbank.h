@@ -5,11 +5,11 @@
 #include <stddef.h>
 #include <stdint.h>
 #if __has_include(<spessasynth_core/spessasynth.h>)
-#include <spessasynth_core/soundbank_enums.h>
 #include <spessasynth_core/file.h>
+#include <spessasynth_core/soundbank_enums.h>
 #else
-#include "soundbank_enums.h"
 #include "../utils/file.h"
+#include "soundbank_enums.h"
 #endif
 
 #ifdef __cplusplus
