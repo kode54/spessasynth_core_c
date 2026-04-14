@@ -696,36 +696,45 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
                                          uint16_t bank_offset,
                                          int midi_system,
                                          bool is_drum_channel) {
-	(void)midi_system;
 	SS_BasicPreset *match = NULL;
 
 	const bool isXG = midi_system == SS_SYSTEM_XG;
+
+	if(is_drum_channel && isXG) {
+		/* This shouldn't happen */
+		is_drum_channel = false;
+		bank_lsb = 0;
+		bank_msb = 127;
+	}
+
 	const bool xgDrums = (bank_msb == 120 || bank_msb == 127) && isXG;
 
 	for(size_t i = 0; i < bank->preset_count; i++) {
 		SS_BasicPreset *p = &bank->presets[i];
-		bool drum_match = ((is_drum_channel == p->is_gm_gs_drum) || xgDrums);
-		bool drum_patch = p->is_gm_gs_drum || p->is_xg_drum;
-		if(!drum_match && is_drum_channel) continue;
-		if(drum_patch != is_drum_channel) continue;
 		if(p->program != program) continue;
-		if((p->bank_lsb + bank_offset) == bank_lsb && (p->bank_msb + bank_offset) == bank_msb) {
-			match = p;
-			break;
-		}
+		if((p->bank_lsb + bank_offset) != bank_lsb || (p->bank_msb + bank_offset) != bank_msb) continue;
+		match = p;
+		break;
 	}
 
 	if(match) {
-		if(!xgDrums || (xgDrums == match->is_xg_drum)) {
+		/* Special case:
+		 * Non XG banks sometimes specify melodic "MT" presets at bank 127,
+		 * Which matches XG banks.
+		 * Testcase: 4gmgsmt-sf2_04-compat.sf2
+		 * Only match if the preset declares itself as drums
+		 */
+		if(!xgDrums || (xgDrums && match->is_xg_drum)) {
 			return match;
 		}
 	}
 
-	/* No exact match */
+	/* No exact match... */
 	if(is_drum_channel) {
+		/* GM/GS drums: check for the exact program match */
 		for(size_t i = 0; i < bank->preset_count; i++) {
 			SS_BasicPreset *p = &bank->presets[i];
-			if(p->is_gm_gs_drum && p->program == program) {
+			if(p->program == program && p->is_gm_gs_drum) {
 				return p;
 			}
 		}
@@ -733,7 +742,22 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 		/* No match, pick any matching drum */
 		for(size_t i = 0; i < bank->preset_count; i++) {
 			SS_BasicPreset *p = &bank->presets[i];
-			if(p->is_gm_gs_drum || (isXG && p->is_xg_drum)) {
+			if(p->program == program && (p->is_gm_gs_drum || p->is_xg_drum)) {
+				return p;
+			}
+		}
+
+		/* No match, pick the first drum preset, preferring GM/GS */
+		for(size_t i = 0; i < bank->preset_count; i++) {
+			SS_BasicPreset *p = &bank->presets[i];
+			if(p->is_gm_gs_drum) {
+				return p;
+			}
+		}
+
+		for(size_t i = 0; i < bank->preset_count; i++) {
+			SS_BasicPreset *p = &bank->presets[i];
+			if(p->is_gm_gs_drum || p->is_xg_drum) {
 				return p;
 			}
 		}
@@ -750,7 +774,22 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 		/* No match, pick any matching drum */
 		for(size_t i = 0; i < bank->preset_count; i++) {
 			SS_BasicPreset *p = &bank->presets[i];
-			if(p->is_gm_gs_drum || (isXG && p->is_xg_drum)) {
+			if(p->program == program && (p->is_xg_drum || p->is_gm_gs_drum)) {
+				return p;
+			}
+		}
+
+		/* Pick any drums, preferring XG */
+		for(size_t i = 0; i < bank->preset_count; i++) {
+			SS_BasicPreset *p = &bank->presets[i];
+			if(p->is_xg_drum) {
+				return p;
+			}
+		}
+
+		for(size_t i = 0; i < bank->preset_count; i++) {
+			SS_BasicPreset *p = &bank->presets[i];
+			if(p->is_xg_drum || p->is_gm_gs_drum) {
 				return p;
 			}
 		}
@@ -779,6 +818,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 		}
 	}
 
+	/* No matches, return the first available preset */
 	if(match_count < 1) {
 		free(matches);
 		return &bank->presets[0];
@@ -811,8 +851,10 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 	/* Special XG case: 64 on LSB can't default to 64 MSB.
 	 * Testcase: Cybergate.mid
 	 * Selects 64 LSB on warm pad, on DLSbyXG.dls it gets replaced with Bird 2 SFX
+	 *
+	 * Extra case: Bank lsb 126 on Chrono_Trigger_-_To_Far_Away_Times.mid
 	 */
-	if(bank_lsb != 64 || !isXG) {
+	if((bank_lsb != 64 && bank_lsb != 126) || !isXG) {
 		const int bank = bank_msb > bank_lsb ? bank_msb : bank_lsb;
 		/* Any matching bank. */
 		for(size_t i = 0; i < match_count; i++) {
@@ -824,6 +866,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 		}
 	}
 
+	/* Return the first match */
 	match = matches[0];
 	free(matches);
 
