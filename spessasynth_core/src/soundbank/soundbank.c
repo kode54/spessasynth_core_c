@@ -695,7 +695,8 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
                                          uint16_t bank_lsb,
                                          uint16_t bank_offset,
                                          int midi_system,
-                                         bool is_drum_channel) {
+                                         bool is_drum_channel,
+                                         bool try_inexact) {
 	SS_BasicPreset *match = NULL;
 
 	const bool isXG = midi_system == SS_SYSTEM_XG;
@@ -729,6 +730,13 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 		if(!xgDrums || (xgDrums && match->is_xg_drum)) {
 			return match;
 		}
+	}
+
+	if(!try_inexact) {
+		/* If we have multiple banks loaded, we want non-exact matches to
+		 * fall back on the next bank, all the way to the last bank.
+		 */
+		return NULL;
 	}
 
 	/* No exact match... */

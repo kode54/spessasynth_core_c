@@ -1324,7 +1324,8 @@ void ss_channel_program_change(SS_MIDIChannel *ch, int program) {
 		uint16_t bank_offset = proc->soundbank_offsets[b];
 		SS_BasicPreset *p = ss_soundbank_find_preset(bank,
 		                                             ch->program, ch->bank_msb, ch->bank_lsb, bank_offset,
-		                                             (int)proc->master_params.midi_system, ch->drum_channel);
+		                                             (int)proc->master_params.midi_system, ch->drum_channel,
+		                                             (b + 1) == proc->soundbank_count);
 		if(p) {
 			ch->preset = p;
 			bool is_drum_preset = p->is_gm_gs_drum || p->is_xg_drum;

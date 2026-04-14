@@ -217,7 +217,8 @@ uint16_t bank_msb,
 uint16_t bank_lsb,
 uint16_t bank_offset,
 int midi_system,
-bool is_drum_channel);
+bool is_drum_channel,
+bool try_inexact);
 
 /**
  * Load a SoundFont2/SF3 or DLS soundbank from a raw buffer.

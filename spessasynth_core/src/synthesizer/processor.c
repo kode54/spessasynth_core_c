@@ -45,7 +45,7 @@ static SS_BasicPreset *find_preset_all_banks(SS_Processor *proc,
 		SS_BasicPreset *p = ss_soundbank_find_preset(bank, program,
 		                                             bank_msb, bank_lsb, bank_offset,
 		                                             (int)proc->master_params.midi_system,
-		                                             is_drum);
+		                                             is_drum, (b + 1) == proc->soundbank_count);
 		if(p) return p;
 	}
 	return NULL;
