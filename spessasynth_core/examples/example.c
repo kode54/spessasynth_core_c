@@ -37,32 +37,18 @@ static void AudioCallback(ma_device *pDevice, void *pOutput, const void *pInput,
 }
 
 bool load_midi_file(SS_Sequencer *seq, const char *midiName) {
-	uint8_t *midiFile;
-	FILE *fMidiFile = fopen(midiName, "rb");
+	SS_File *fMidiFile = ss_file_open_from_file(midiName);
 	if(!fMidiFile) {
 		fprintf(stderr, "Could not load MIDI file\n");
 		return false;
 	}
 
-	fseek(fMidiFile, 0, SEEK_END);
-	size_t midiSize = ftell(fMidiFile);
-	fseek(fMidiFile, 0, SEEK_SET);
-
-	midiFile = malloc(midiSize);
-	if(!midiFile) {
-		fprintf(stderr, "Out of memory\n");
-		return false;
-	}
-
-	fread(midiFile, 1, midiSize, fMidiFile);
-	fclose(fMidiFile);
-
-	g_midiFile = ss_midi_load(midiFile, midiSize, midiName);
+	g_midiFile = ss_midi_load(fMidiFile, midiName);
+	ss_file_close(fMidiFile);
 	if(!g_midiFile) {
 		fprintf(stderr, "Could not load MIDI file\n");
 		return false;
 	}
-	free(midiFile);
 
 	if(!ss_sequencer_load_midi(seq, g_midiFile)) {
 		fprintf(stderr, "Could not load MIDI file into sequencer\n");
@@ -95,31 +81,18 @@ int main(int argc, char *argv[]) {
 
 	// Load the SoundFont from a file
 	const char *soundBankName = (argc >= 2 ? argv[1] : "florestan-subset.sf2");
-	FILE *fSoundBank = fopen(soundBankName, "rb");
+	SS_File *fSoundBank = ss_file_open_from_file(soundBankName);
 	if(!fSoundBank) {
 		fprintf(stderr, "Could not load SoundFont\n");
 		return 1;
 	}
 
-	fseek(fSoundBank, 0, SEEK_END);
-	size_t soundBankSize = ftell(fSoundBank);
-	fseek(fSoundBank, 0, SEEK_SET);
-
-	uint8_t *soundBank = malloc(soundBankSize);
-	if(!soundBank) {
-		fprintf(stderr, "Out of memory");
-		return 1;
-	}
-
-	fread(soundBank, 1, soundBankSize, fSoundBank);
-	fclose(fSoundBank);
-
-	g_soundBank = ss_soundbank_load(soundBank, soundBankSize);
+	g_soundBank = ss_soundbank_load(fSoundBank);
+	ss_file_close(fSoundBank);
 	if(!g_soundBank) {
 		fprintf(stderr, "Could not load SoundFont\n");
 		return 1;
 	}
-	free(soundBank);
 
 	// Set the SoundFont rendering output mode
 	g_processor = ss_processor_create((int)deviceConfig.sampleRate, NULL);

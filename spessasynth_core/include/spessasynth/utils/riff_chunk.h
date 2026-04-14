@@ -2,9 +2,9 @@
 #define SS_RIFF_CHUNK_H
 
 #if __has_include(<spessasynth_core/spessasynth.h>)
-#include <spessasynth_core/indexed_byte_array.h>
+#include <spessasynth_core/file.h>
 #else
-#include "indexed_byte_array.h"
+#include "file.h"
 #endif
 
 #ifdef __cplusplus
@@ -18,7 +18,7 @@ extern "C" {
 typedef struct {
 	char header[5]; /* 4-char FourCC + NUL */
 	size_t size;
-	SS_IBA data; /* non-owning slice */
+	SS_File *file; /* scoped slice */
 } SS_RIFFChunk;
 
 /**
@@ -29,12 +29,14 @@ typedef struct {
  *
  * Returns true on success, false on underflow.
  */
-bool ss_riff_read_chunk(SS_IBA *iba, SS_RIFFChunk *out, bool skip_size, bool riff64);
+bool ss_riff_read_chunk(SS_File *iba, SS_RIFFChunk *out, bool skip_size, bool riff64);
 
 /** Convenience: read a chunk and verify its header equals expected_header. */
-bool ss_riff_read_chunk_expect(SS_IBA *iba, SS_RIFFChunk *out,
+bool ss_riff_read_chunk_expect(SS_File *file, SS_RIFFChunk *out,
                                const char *expected_header,
                                bool riff64);
+
+void ss_riff_close_chunk(SS_RIFFChunk *chunk);
 
 #ifdef __cplusplus
 }

@@ -11,39 +11,40 @@
 #include <stdlib.h>
 #include <string.h>
 #if __has_include(<spessasynth_core/spessasynth.h>)
-#include <spessasynth_core/indexed_byte_array.h>
+#include <spessasynth_core/file.h>
 #include <spessasynth_core/midi_enums.h>
 #include <spessasynth_core/riff_chunk.h>
 #include <spessasynth_core/soundbank.h>
 #else
 #include "spessasynth/midi/midi_enums.h"
 #include "spessasynth/soundbank/soundbank.h"
-#include "spessasynth/utils/indexed_byte_array.h"
+#include "spessasynth/utils/file.h"
 #include "spessasynth/utils/riff_chunk.h"
 #endif
 
 /* ── Internal helpers ───────────────────────────────────────────────────── */
 
-static int16_t read_s16le(SS_IBA *iba) {
-	uint16_t u = (uint16_t)ss_iba_read_le(iba, 2);
+static int16_t read_s16le(SS_File *file, size_t pos) {
+	uint16_t u = (uint16_t)ss_file_read_le(file, pos, 2);
 	return (int16_t)u;
 }
 
-static int8_t read_s8(SS_IBA *iba) {
-	uint8_t b = ss_iba_read_u8(iba);
+static int8_t read_s8(SS_File *file, size_t pos) {
+	uint8_t b = ss_file_read_u8(file, pos);
 	return (int8_t)b;
 }
 
 /* ── Modulator reader ────────────────────────────────────────────────────── */
 
-static SS_Modulator read_modulator(SS_IBA *iba) {
+static SS_Modulator read_modulator(SS_File *file) {
 	SS_Modulator m;
 	memset(&m, 0, sizeof(m));
-	m.source_enum = (uint16_t)ss_iba_read_le(iba, 2);
-	m.dest_enum = (uint16_t)ss_iba_read_le(iba, 2);
-	m.transform_amount = read_s16le(iba);
-	m.amount_source_enum = (uint16_t)ss_iba_read_le(iba, 2);
-	m.transform_type = (uint16_t)ss_iba_read_le(iba, 2);
+	size_t pos = ss_file_tell(file);
+	m.source_enum = (uint16_t)ss_file_read_le(file, pos, 2);
+	m.dest_enum = (uint16_t)ss_file_read_le(file, pos + 2, 2);
+	m.transform_amount = read_s16le(file, pos + 4);
+	m.amount_source_enum = (uint16_t)ss_file_read_le(file, pos + 6, 2);
+	m.transform_type = (uint16_t)ss_file_read_le(file, pos + 8, 2);
 
 	/* Mark effect modulators (CC91 reverb / CC93 chorus) */
 	/* source_enum bit 7 = is_cc, bits 6-0 = cc_index */
@@ -65,10 +66,11 @@ static SS_Modulator read_modulator(SS_IBA *iba) {
 
 /* ── Generator reader ────────────────────────────────────────────────────── */
 
-static SS_Generator read_generator(SS_IBA *iba) {
+static SS_Generator read_generator(SS_File *file) {
 	SS_Generator g;
-	g.type = (SS_GeneratorType)(int16_t)ss_iba_read_le(iba, 2);
-	g.value = read_s16le(iba);
+	size_t pos = ss_file_tell(file);
+	g.type = (SS_GeneratorType)(int16_t)ss_file_read_le(file, pos, 2);
+	g.value = read_s16le(file, pos + 2);
 	return g;
 }
 
@@ -79,23 +81,25 @@ typedef struct {
 	uint32_t mod_index;
 } ZoneIndex;
 
-static ZoneIndex read_zone_index(SS_IBA *iba) {
+static ZoneIndex read_zone_index(SS_File *file) {
 	ZoneIndex z;
-	z.gen_index = (uint16_t)ss_iba_read_le(iba, 2);
-	z.mod_index = (uint16_t)ss_iba_read_le(iba, 2);
+	size_t pos = ss_file_tell(file);
+	z.gen_index = (uint16_t)ss_file_read_le(file, pos, 2);
+	z.mod_index = (uint16_t)ss_file_read_le(file, pos + 2, 2);
 	return z;
 }
 
 /* ── Sample header reader (SHDR sub-chunk) ───────────────────────────────── */
 
-static void read_sample_header(SS_IBA *iba, SS_BasicSample *s,
+static void read_sample_header(SS_File *file, SS_BasicSample *s,
                                uint32_t *out_start, uint32_t *out_end,
                                uint32_t *out_link, uint16_t *out_type,
-                               SS_IBA *xiba, bool useXdta) {
+                               SS_File *xfile, bool useXdta) {
 	char name[41];
-	ss_iba_read_string(iba, name, 20);
+	size_t pos = ss_file_tell(file);
+	ss_file_read_string(file, pos, name, 20);
 	if(useXdta) {
-		ss_iba_read_string(xiba, name + 20, 20);
+		ss_file_read_string(xfile, pos, name + 20, 20);
 		strncpy(s->name, name, 40);
 		s->name[40] = '\0';
 	} else {
@@ -103,26 +107,20 @@ static void read_sample_header(SS_IBA *iba, SS_BasicSample *s,
 		s->name[20] = '\0';
 	}
 
-	uint32_t sample_start = (uint32_t)ss_iba_read_le(iba, 4);
-	uint32_t sample_end = (uint32_t)ss_iba_read_le(iba, 4);
-	s->loop_start = (uint32_t)ss_iba_read_le(iba, 4);
-	s->loop_end = (uint32_t)ss_iba_read_le(iba, 4);
-	s->sample_rate = (uint32_t)ss_iba_read_le(iba, 4);
-	uint8_t pitch = ss_iba_read_u8(iba);
+	uint32_t sample_start = (uint32_t)ss_file_read_le(file, pos + 20, 4);
+	uint32_t sample_end = (uint32_t)ss_file_read_le(file, pos + 24, 4);
+	s->loop_start = (uint32_t)ss_file_read_le(file, pos + 28, 4);
+	s->loop_end = (uint32_t)ss_file_read_le(file, pos + 32, 4);
+	s->sample_rate = (uint32_t)ss_file_read_le(file, pos + 36, 4);
+	uint8_t pitch = ss_file_read_u8(file, pos + 40);
 	s->original_key = (pitch > 127) ? 60 : pitch;
-	s->pitch_correction = read_s8(iba);
+	s->pitch_correction = read_s8(file, pos + 41);
 
-	/* Skip the extensions for the above */
+	*out_link = (uint16_t)ss_file_read_le(file, pos + 42, 2);
 	if(useXdta)
-		xiba->current_index += 22;
+		*out_link |= (uint32_t)ss_file_read_le(file, pos + 42, 2) * 65536;
 
-	*out_link = (uint16_t)ss_iba_read_le(iba, 2);
-	if(useXdta)
-		*out_link |= (uint32_t)ss_iba_read_le(xiba, 2) * 65536;
-
-	*out_type = (uint16_t)ss_iba_read_le(iba, 2);
-	if(useXdta)
-		xiba->current_index += 2;
+	*out_type = (uint16_t)ss_file_read_le(file, pos + 44, 2);
 
 	*out_start = sample_start;
 	*out_end = sample_end;
@@ -133,153 +131,26 @@ static void read_sample_header(SS_IBA *iba, SS_BasicSample *s,
 bool ss_vorbis_decode(SS_BasicSample *s);
 bool ss_flac_decode(SS_BasicSample *s);
 
-SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
+SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 	const size_t size_size = riff64 ? 8 : 4;
-	SS_IBA main_iba;
-	ss_iba_wrap(&main_iba, data, size);
-
 	SS_SoundBank *bank = ss_soundbank_new();
 	if(!bank) return NULL;
 
-	/* Read top-level RIFF chunk */
+	SS_File *smpl_data = NULL;
+
 	SS_RIFFChunk riff;
-	if(!ss_riff_read_chunk(&main_iba, &riff, true, riff64)) goto fail;
-
-	bool is_sf2pack = false;
-	char type_id[5];
-	ss_iba_read_string(&riff.data, type_id, 4);
-	if(strncmp(type_id, "sfpk", 4) == 0)
-		is_sf2pack = true;
-	else if(strncmp(type_id, "sfbk", 4) != 0 &&
-	        strncmp(type_id, "sfen", 4) != 0)
-		goto fail;
-
-	/* ── INFO chunk ─────────────────────────────────────────────────────── */
 	SS_RIFFChunk info_chunk;
-	if(!ss_riff_read_chunk(&riff.data, &info_chunk, false, riff64)) goto fail;
-	if(strncasecmp(info_chunk.header, "list", 4) != 0) goto fail;
-
-	char info_id[5];
-	ss_iba_read_string(&info_chunk.data, info_id, 4);
-	if(strcmp(info_id, "INFO") != 0) goto fail;
-	/* Should be "INFO" */
-
 	SS_RIFFChunk xdta;
 	SS_RIFFChunk isfe;
+	SS_RIFFChunk sdta;
+	SS_RIFFChunk pdta;
+	memset(&riff, 0, sizeof(SS_RIFFChunk));
+	memset(&info_chunk, 0, sizeof(SS_RIFFChunk));
 	memset(&xdta, 0, sizeof(SS_RIFFChunk));
 	memset(&isfe, 0, sizeof(SS_RIFFChunk));
+	memset(&sdta, 0, sizeof(SS_RIFFChunk));
+	memset(&pdta, 0, sizeof(SS_RIFFChunk));
 
-	while(ss_iba_remaining(&info_chunk.data) >= (8 + size_size)) {
-		SS_RIFFChunk sub;
-		if(!ss_riff_read_chunk(&info_chunk.data, &sub, false, riff64)) break;
-		if(strcmp(sub.header, "INAM") == 0 || strcmp(sub.header, "inam") == 0) {
-			size_t n = sub.data.length < 256 ? sub.data.length : 256;
-			memcpy(bank->name, sub.data.data, n);
-			bank->name[n] = '\0';
-		} else if(strcmp(sub.header, "isng") == 0 || strcmp(sub.header, "ISNG") == 0) {
-			size_t n = sub.data.length < 256 ? sub.data.length : 256;
-			memcpy(bank->sound_engine, sub.data.data, n);
-		} else if(strcmp(sub.header, "ISFT") == 0 || strcmp(sub.header, "isft") == 0) {
-			size_t n = sub.data.length < 256 ? sub.data.length : 256;
-			memcpy(bank->software, sub.data.data, n);
-		} else if(strcmp(sub.header, "ifil") == 0) {
-			bank->version.major = (uint16_t)ss_iba_read_le(&sub.data, 2);
-			bank->version.minor = (uint16_t)ss_iba_read_le(&sub.data, 2);
-		} else if(strcmp(sub.header, "DMOD") == 0) {
-			/* Custom default modulators */
-			size_t n_mods = sub.data.length / 10;
-			if(n_mods > 0) {
-				bank->default_modulators = (SS_Modulator *)malloc(n_mods * sizeof(SS_Modulator));
-				if(bank->default_modulators) {
-					for(size_t m = 0; m < n_mods; m++)
-						bank->default_modulators[m] = read_modulator(&sub.data);
-					bank->default_mod_count = n_mods;
-					bank->custom_default_modulators = true;
-				}
-			}
-		} else if(strcmp(sub.header, "LIST") == 0) {
-			// possible xdta
-			char list_id[5];
-			ss_iba_read_string(&sub.data, list_id, 4);
-			if(strcmp(list_id, "xdta") == 0) {
-				xdta = sub;
-			} else if(strcmp(list_id, "ISFe") == 0) {
-				isfe = sub;
-			}
-		}
-	}
-
-	/* ── sdta chunk (sample data) ────────────────────────────────────────── */
-	SS_RIFFChunk sdta;
-	if(!ss_riff_read_chunk(&riff.data, &sdta, false, riff64)) goto fail;
-
-	/* smpl chunk is inside sdta */
-	char sdta_id[5];
-	ss_iba_read_string(&sdta.data, sdta_id, 4);
-	if(strcmp(sdta_id, "sdta") != 0) goto fail;
-
-	SS_IBA smpl_data;
-	memset(&smpl_data, 0, sizeof(smpl_data));
-	bool smpl_is_float32 = false; /* SF2Pack decoded float */
-
-	SS_BasicSample sf2pack_samples;
-	memset(&sf2pack_samples, 0, sizeof(sf2pack_samples));
-
-	while(ss_iba_remaining(&sdta.data) >= (8 + size_size)) {
-		SS_RIFFChunk sub;
-		if(!ss_riff_read_chunk(&sdta.data, &sub, false, riff64)) break;
-		if(strcmp(sub.header, "smpl") == 0) {
-			if(is_sf2pack) {
-#if defined(SS_HAVE_STB_VORBIS) || defined(SS_HAVE_LIBFLAC)
-				/* SF2Pack: smpl is a single Ogg Vorbis stream covering all samples */
-				/* We decode it and get a Float32 array */
-				/* For now, copy raw compressed data; decode lazily */
-				const uint8_t *hdr = sub.data.data;
-				if(sub.data.length >= 4) {
-					if(hdr[0] == 'O' && hdr[1] == 'g' && hdr[2] == 'g' && hdr[3] == 'S') {
-#ifdef SS_HAVE_STB_VORBIS
-						sf2pack_samples.compressed_data = sub.data.data;
-						sf2pack_samples.compressed_data_length = sub.data.length;
-						if(ss_vorbis_decode(&sf2pack_samples)) {
-							smpl_data.data = (uint8_t *)sf2pack_samples.audio_data;
-							smpl_data.length = sf2pack_samples.audio_data_length * sizeof(float);
-							smpl_data.owns_data = true;
-							smpl_is_float32 = true;
-						}
-#endif
-					}
-					if(hdr[0] == 'f' && hdr[1] == 'L' && hdr[2] == 'a' && hdr[3] == 'C') {
-#ifdef SS_HAVE_LIBFLAC
-						sf2pack_samples.compressed_data = sub.data.data;
-						sf2pack_samples.compressed_data_length = sub.data.length;
-						if(ss_flac_decode(&sf2pack_samples)) {
-							smpl_data.data = (uint8_t *)sf2pack_samples.audio_data;
-							smpl_data.length = sf2pack_samples.audio_data_length * sizeof(float);
-							smpl_data.owns_data = true;
-							smpl_is_float32 = true;
-						}
-#endif
-					}
-				}
-
-#else
-				goto fail;
-#endif
-			} else {
-				smpl_data = sub.data;
-			}
-		}
-		/* sm24 (24-bit extension) is ignored — we only handle 16-bit */
-	}
-
-	/* ── pdta chunk (preset/instrument/sample headers) ───────────────────── */
-	SS_RIFFChunk pdta;
-	if(!ss_riff_read_chunk(&riff.data, &pdta, false, riff64)) goto fail;
-	char pdta_id[5];
-	ss_iba_read_string(&pdta.data, pdta_id, 4);
-	if(strcmp(pdta_id, "pdta") != 0) goto fail;
-
-	/* Collect all sub-chunks of pdta */
 	SS_RIFFChunk phdr_c, pbag_c, pmod_c, pgen_c;
 	SS_RIFFChunk inst_c, ibag_c, imod_c, igen_c;
 	SS_RIFFChunk shdr_c;
@@ -293,9 +164,161 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 	memset(&igen_c, 0, sizeof(SS_RIFFChunk));
 	memset(&shdr_c, 0, sizeof(SS_RIFFChunk));
 
-	while(ss_iba_remaining(&pdta.data) >= (8 + size_size)) {
+	SS_RIFFChunk xphdr_c, xpbag_c, xpmod_c, xpgen_c;
+	SS_RIFFChunk xinst_c, xibag_c, ximod_c, xigen_c;
+	SS_RIFFChunk xshdr_c;
+	memset(&xphdr_c, 0, sizeof(SS_RIFFChunk));
+	memset(&xpbag_c, 0, sizeof(SS_RIFFChunk));
+	memset(&xpmod_c, 0, sizeof(SS_RIFFChunk));
+	memset(&xpgen_c, 0, sizeof(SS_RIFFChunk));
+	memset(&xinst_c, 0, sizeof(SS_RIFFChunk));
+	memset(&xibag_c, 0, sizeof(SS_RIFFChunk));
+	memset(&ximod_c, 0, sizeof(SS_RIFFChunk));
+	memset(&xigen_c, 0, sizeof(SS_RIFFChunk));
+	memset(&xshdr_c, 0, sizeof(SS_RIFFChunk));
+
+	/* Start at the beginning */
+	ss_file_seek(main_file, 0);
+
+	/* Read top-level RIFF chunk */
+	if(!ss_riff_read_chunk(main_file, &riff, true, riff64)) goto fail;
+
+	bool is_sf2pack = false;
+	char type_id[5];
+	ss_file_read_string(riff.file, 0, type_id, 4);
+	if(strncmp(type_id, "sfpk", 4) == 0)
+		is_sf2pack = true;
+	else if(strncmp(type_id, "sfbk", 4) != 0 &&
+	        strncmp(type_id, "sfen", 4) != 0)
+		goto fail;
+
+	/* ── INFO chunk ─────────────────────────────────────────────────────── */
+	if(!ss_riff_read_chunk(riff.file, &info_chunk, false, riff64)) goto fail;
+	if(strncasecmp(info_chunk.header, "list", 4) != 0) goto fail;
+
+	char info_id[5];
+	ss_file_read_string(info_chunk.file, 0, info_id, 4);
+	if(strcmp(info_id, "INFO") != 0) goto fail;
+	/* Should be "INFO" */
+
+	while(ss_file_remaining(info_chunk.file) >= (8 + size_size)) {
 		SS_RIFFChunk sub;
-		if(!ss_riff_read_chunk(&pdta.data, &sub, false, riff64)) break;
+		if(!ss_riff_read_chunk(info_chunk.file, &sub, false, riff64)) break;
+		if(strcmp(sub.header, "INAM") == 0 || strcmp(sub.header, "inam") == 0) {
+			size_t n = ss_file_remaining(sub.file) < 256 ? ss_file_remaining(sub.file) : 256;
+			ss_file_read_string(sub.file, 0, bank->name, n);
+			bank->name[n] = '\0';
+		} else if(strcmp(sub.header, "isng") == 0 || strcmp(sub.header, "ISNG") == 0) {
+			size_t n = ss_file_remaining(sub.file) < 256 ? ss_file_remaining(sub.file) : 256;
+			ss_file_read_string(sub.file, 0, bank->sound_engine, n);
+		} else if(strcmp(sub.header, "ISFT") == 0 || strcmp(sub.header, "isft") == 0) {
+			size_t n = ss_file_remaining(sub.file) < 256 ? ss_file_remaining(sub.file) : 256;
+			ss_file_read_string(sub.file, 0, bank->software, n);
+		} else if(strcmp(sub.header, "ifil") == 0) {
+			bank->version.major = (uint16_t)ss_file_read_le(sub.file, 0, 2);
+			bank->version.minor = (uint16_t)ss_file_read_le(sub.file, 2, 2);
+		} else if(strcmp(sub.header, "DMOD") == 0) {
+			/* Custom default modulators */
+			size_t n_mods = ss_file_remaining(sub.file) / 10;
+			if(n_mods > 0) {
+				bank->default_modulators = (SS_Modulator *)malloc(n_mods * sizeof(SS_Modulator));
+				if(bank->default_modulators) {
+					for(size_t m = 0; m < n_mods; m++)
+						bank->default_modulators[m] = read_modulator(sub.file);
+					bank->default_mod_count = n_mods;
+					bank->custom_default_modulators = true;
+				}
+			}
+		} else if(strcmp(sub.header, "LIST") == 0) {
+			// possible xdta
+			char list_id[5];
+			ss_file_read_string(sub.file, 0, list_id, 4);
+			if(strcmp(list_id, "xdta") == 0) {
+				xdta = sub;
+				sub.file = NULL;
+			} else if(strcmp(list_id, "ISFe") == 0) {
+				isfe = sub;
+				sub.file = NULL;
+			}
+		}
+		ss_riff_close_chunk(&sub);
+	}
+
+	ss_riff_close_chunk(&info_chunk);
+
+	/* ── sdta chunk (sample data) ────────────────────────────────────────── */
+	if(!ss_riff_read_chunk(riff.file, &sdta, false, riff64)) goto fail;
+
+	/* smpl chunk is inside sdta */
+	char sdta_id[5];
+	ss_file_read_string(sdta.file, 0, sdta_id, 4);
+	if(strcmp(sdta_id, "sdta") != 0) goto fail;
+
+	bool smpl_is_float32 = false; /* SF2Pack decoded float */
+
+	SS_BasicSample sf2pack_samples;
+	memset(&sf2pack_samples, 0, sizeof(sf2pack_samples));
+
+	while(ss_file_remaining(sdta.file) >= (8 + size_size)) {
+		SS_RIFFChunk sub;
+		if(!ss_riff_read_chunk(sdta.file, &sub, false, riff64)) break;
+		if(strcmp(sub.header, "smpl") == 0) {
+			if(is_sf2pack) {
+#if defined(SS_HAVE_STB_VORBIS) || defined(SS_HAVE_LIBFLAC)
+				/* SF2Pack: smpl is a single Ogg Vorbis stream covering all samples */
+				/* We decode it and get a Float32 array */
+				/* For now, copy raw compressed data; decode lazily */
+				size_t chunk_size = ss_file_remaining(sub.file);
+				if(chunk_size >= 4) {
+					uint8_t hdr[4];
+					ss_file_read_bytes(sub.file, 0, hdr, 4);
+					if(hdr[0] == 'O' && hdr[1] == 'g' && hdr[2] == 'g' && hdr[3] == 'S') {
+#ifdef SS_HAVE_STB_VORBIS
+						sf2pack_samples.compressed_data = malloc(chunk_size);
+						if(!sf2pack_samples.compressed_data) goto fail;
+						ss_file_read_bytes(sub.file, 0, sf2pack_samples.compressed_data, chunk_size);
+						sf2pack_samples.compressed_data_length = chunk_size;
+						if(ss_vorbis_decode(&sf2pack_samples)) {
+							smpl_data = ss_file_open_from_memory((uint8_t *)sf2pack_samples.audio_data, sf2pack_samples.audio_data_length * sizeof(float), true);
+						}
+#endif
+					}
+					if(hdr[0] == 'f' && hdr[1] == 'L' && hdr[2] == 'a' && hdr[3] == 'C') {
+#ifdef SS_HAVE_LIBFLAC
+						sf2pack_samples.compressed_data = malloc(chunk_size);
+						if(!sf2pack_samples.compressed_data) goto fail;
+						ss_file_read_bytes(sub.file, 0, sf2pack_samples.compressed_data, chunk_size);
+						sf2pack_samples.compressed_data_length = chunk_size;
+						if(ss_flac_decode(&sf2pack_samples)) {
+							smpl_data = ss_file_open_from_memory((uint8_t *)sf2pack_samples.audio_data, sf2pack_samples.audio_data_length * sizeof(float), true);
+						}
+#endif
+					}
+				}
+#else
+				goto fail;
+#endif
+			} else {
+				smpl_data = sub.file;
+				sub.file = NULL;
+			}
+		}
+		/* sm24 (24-bit extension) is ignored — we only handle 16-bit */
+		ss_riff_close_chunk(&sub);
+	}
+
+	ss_riff_close_chunk(&sdta);
+
+	/* ── pdta chunk (preset/instrument/sample headers) ───────────────────── */
+	if(!ss_riff_read_chunk(riff.file, &pdta, false, riff64)) goto fail;
+	char pdta_id[5];
+	ss_file_read_string(pdta.file, 0, pdta_id, 4);
+	if(strcmp(pdta_id, "pdta") != 0) goto fail;
+
+	/* Collect all sub-chunks of pdta */
+	while(ss_file_remaining(pdta.file) >= (8 + size_size)) {
+		SS_RIFFChunk sub;
+		if(!ss_riff_read_chunk(pdta.file, &sub, false, riff64)) break;
 		if(strcmp(sub.header, "phdr") == 0)
 			phdr_c = sub;
 		else if(strcmp(sub.header, "pbag") == 0)
@@ -314,24 +337,14 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 			igen_c = sub;
 		else if(strcmp(sub.header, "shdr") == 0)
 			shdr_c = sub;
+		else
+			ss_riff_close_chunk(&sub);
 	}
 
 	/* Collect all sub-chunks of xdta, if present */
-	SS_RIFFChunk xphdr_c, xpbag_c, xpmod_c, xpgen_c;
-	SS_RIFFChunk xinst_c, xibag_c, ximod_c, xigen_c;
-	SS_RIFFChunk xshdr_c;
-	memset(&xphdr_c, 0, sizeof(SS_RIFFChunk));
-	memset(&xpbag_c, 0, sizeof(SS_RIFFChunk));
-	memset(&xpmod_c, 0, sizeof(SS_RIFFChunk));
-	memset(&xpgen_c, 0, sizeof(SS_RIFFChunk));
-	memset(&xinst_c, 0, sizeof(SS_RIFFChunk));
-	memset(&xibag_c, 0, sizeof(SS_RIFFChunk));
-	memset(&ximod_c, 0, sizeof(SS_RIFFChunk));
-	memset(&xigen_c, 0, sizeof(SS_RIFFChunk));
-	memset(&xshdr_c, 0, sizeof(SS_RIFFChunk));
-	while(ss_iba_remaining(&xdta.data) >= (8 + size_size)) {
+	while(ss_file_remaining(xdta.file) >= (8 + size_size)) {
 		SS_RIFFChunk sub;
-		if(!ss_riff_read_chunk(&xdta.data, &sub, false, riff64)) break;
+		if(!ss_riff_read_chunk(xdta.file, &sub, false, riff64)) break;
 		if(strcmp(sub.header, "phdr") == 0)
 			xphdr_c = sub;
 		else if(strcmp(sub.header, "pbag") == 0)
@@ -350,26 +363,28 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 			xigen_c = sub;
 		else if(strcmp(sub.header, "shdr") == 0)
 			xshdr_c = sub;
+		else
+			ss_riff_close_chunk(&sub);
 	}
 
 	/* ── Parse generators ────────────────────────────────────────────────── */
-	size_t pgen_count = pgen_c.data.length / 4;
+	size_t pgen_count = ss_file_size(pgen_c.file) / 4;
 	SS_Generator *pgens = (SS_Generator *)malloc((pgen_count + 1) * sizeof(SS_Generator));
 	if(!pgens && pgen_count > 0) goto fail;
 	for(size_t i = 0; i < pgen_count; i++)
-		pgens[i] = read_generator(&pgen_c.data);
+		pgens[i] = read_generator(pgen_c.file);
 
-	size_t igen_count = igen_c.data.length / 4;
+	size_t igen_count = ss_file_size(igen_c.file) / 4;
 	SS_Generator *igens = (SS_Generator *)malloc((igen_count + 1) * sizeof(SS_Generator));
 	if(!igens && igen_count > 0) {
 		free(pgens);
 		goto fail;
 	}
 	for(size_t i = 0; i < igen_count; i++)
-		igens[i] = read_generator(&igen_c.data);
+		igens[i] = read_generator(igen_c.file);
 
 	/* ── Parse modulators ────────────────────────────────────────────────── */
-	size_t pmod_count = pmod_c.data.length / 10;
+	size_t pmod_count = ss_file_size(pmod_c.file) / 10;
 	SS_Modulator *pmods = (SS_Modulator *)malloc((pmod_count + 1) * sizeof(SS_Modulator));
 	if(!pmods && pmod_count > 0) {
 		free(pgens);
@@ -377,9 +392,9 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 		goto fail;
 	}
 	for(size_t i = 0; i < pmod_count; i++)
-		pmods[i] = read_modulator(&pmod_c.data);
+		pmods[i] = read_modulator(pmod_c.file);
 
-	size_t imod_count = imod_c.data.length / 10;
+	size_t imod_count = ss_file_size(imod_c.file) / 10;
 	SS_Modulator *imods = (SS_Modulator *)malloc((imod_count + 1) * sizeof(SS_Modulator));
 	if(!imods && imod_count > 0) {
 		free(pgens);
@@ -388,38 +403,38 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 		goto fail;
 	}
 	for(size_t i = 0; i < imod_count; i++)
-		imods[i] = read_modulator(&imod_c.data);
+		imods[i] = read_modulator(imod_c.file);
 
 	/* ── Parse zone index arrays (pbag / ibag) ───────────────────────────── */
-	size_t pbag_count = pbag_c.data.length / 4;
+	size_t pbag_count = ss_file_size(pbag_c.file) / 4;
 	ZoneIndex *pbags = (ZoneIndex *)malloc((pbag_count + 1) * sizeof(ZoneIndex));
 	if(!pbags && pbag_count > 0) goto fail_mods;
 	for(size_t i = 0; i < pbag_count; i++) {
-		pbags[i] = read_zone_index(&pbag_c.data);
+		pbags[i] = read_zone_index(pbag_c.file);
 	}
 
-	size_t xpbag_count = xpbag_c.data.length / 4;
+	size_t xpbag_count = ss_file_size(xpbag_c.file) / 4;
 	if(xpbag_count && xpbag_count == pbag_count) {
 		for(size_t i = 0; i < pbag_count; i++) {
-			ZoneIndex xp = read_zone_index(&xpbag_c.data);
+			ZoneIndex xp = read_zone_index(xpbag_c.file);
 			pbags[i].gen_index |= xp.gen_index * 65536;
 			pbags[i].mod_index |= xp.mod_index * 65536;
 		}
 	}
 
-	size_t ibag_count = ibag_c.data.length / 4;
+	size_t ibag_count = ss_file_size(ibag_c.file) / 4;
 	ZoneIndex *ibags = (ZoneIndex *)malloc((ibag_count + 1) * sizeof(ZoneIndex));
 	if(!ibags && ibag_count > 0) {
 		free(pbags);
 		goto fail_mods;
 	}
 	for(size_t i = 0; i < ibag_count; i++)
-		ibags[i] = read_zone_index(&ibag_c.data);
+		ibags[i] = read_zone_index(ibag_c.file);
 
-	size_t xibag_count = xibag_c.data.length / 4;
+	size_t xibag_count = ss_file_size(xibag_c.file) / 4;
 	if(xibag_count && xibag_count == ibag_count) {
 		for(size_t i = 0; i < ibag_count; i++) {
-			ZoneIndex xi = read_zone_index(&xibag_c.data);
+			ZoneIndex xi = read_zone_index(xibag_c.file);
 			ibags[i].gen_index |= xi.gen_index * 65536;
 			ibags[i].mod_index |= xi.mod_index * 65536;
 		}
@@ -427,7 +442,7 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 
 	/* ── Parse samples (shdr) ────────────────────────────────────────────── */
 	size_t shdr_entry_size = 46; /* SF2 spec */
-	size_t n_samples = shdr_c.data.length / shdr_entry_size;
+	size_t n_samples = ss_file_size(shdr_c.file) / shdr_entry_size;
 	if(n_samples > 0) n_samples--; /* Remove EOS sentinel */
 
 	bank->samples = (SS_BasicSample *)calloc(n_samples, sizeof(SS_BasicSample));
@@ -435,7 +450,7 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 	if(!bank->samples && n_samples > 0) goto fail_bags;
 
 	bool has_xsamples = false;
-	size_t n_xsamples = xshdr_c.data.length / shdr_entry_size;
+	size_t n_xsamples = ss_file_size(xshdr_c.file) / shdr_entry_size;
 	if(n_xsamples > 0) n_xsamples--; /* Remove EOS sentinel */
 	if(n_xsamples && n_xsamples == n_samples) has_xsamples = true;
 
@@ -451,20 +466,20 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 
 	for(size_t i = 0; i < n_samples; i++) {
 		uint16_t stype;
-		read_sample_header(&shdr_c.data, &bank->samples[i],
+		read_sample_header(shdr_c.file, &bank->samples[i],
 		                   &sample_starts[i], &sample_ends[i],
 		                   &sample_links[i], &stype,
-		                   &xshdr_c.data, has_xsamples);
+		                   xshdr_c.file, has_xsamples);
 		bool compressed = (stype & SS_SF3_COMPRESSED_FLAG) != 0;
 		bank->samples[i].sample_type = (SS_SampleType)(stype & ~SS_SF3_COMPRESSED_FLAG);
 		bank->samples[i].is_compressed = compressed;
 		bank->samples[i].owns_raw_data = true;
 		bank->samples[i].is_sf2pack = false;
 
-		if(smpl_data.data && smpl_data.length > 0) {
+		if(ss_file_size(smpl_data) > 0) {
 			uint32_t byte_start = sample_starts[i] * 2;
 			uint32_t byte_end = sample_ends[i] * 2;
-			if(byte_end > smpl_data.length) byte_end = (uint32_t)smpl_data.length;
+			if(byte_end > ss_file_size(smpl_data)) byte_end = (uint32_t)ss_file_size(smpl_data);
 			bank->samples[i].loop_start -= byte_start / 2;
 			bank->samples[i].loop_end -= byte_start / 2;
 
@@ -476,22 +491,20 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 				size_t offset = byte_start;
 				bank->samples[i].loop_start += byte_start;
 				bank->samples[i].loop_end += byte_start;
-				if(offset < smpl_data.length && offset + clen <= smpl_data.length) {
+				if(offset < ss_file_size(smpl_data) && offset + clen <= ss_file_size(smpl_data)) {
 					bank->samples[i].compressed_data = (uint8_t *)malloc(clen);
 					if(bank->samples[i].compressed_data) {
-						memcpy(bank->samples[i].compressed_data,
-						       smpl_data.data + offset, clen);
+						ss_file_read_bytes(smpl_data, offset, bank->samples[i].compressed_data, clen);
 						bank->samples[i].compressed_data_length = clen;
 					}
 				}
 			} else if(!smpl_is_float32) {
 				/* SF2: process raw s16le slice later */
-				if(byte_end > smpl_data.length) byte_end = (uint32_t)smpl_data.length;
+				if(byte_end > ss_file_size(smpl_data)) byte_end = (uint32_t)ss_file_size(smpl_data);
 				size_t slen = (byte_end > byte_start) ? (byte_end - byte_start) : 0;
 				bank->samples[i].s16le_data = (uint8_t *)malloc(slen + 1);
 				if(bank->samples[i].s16le_data) {
-					memcpy(bank->samples[i].s16le_data,
-					       smpl_data.data + byte_start, slen);
+					ss_file_read_bytes(smpl_data, byte_start, (uint8_t *)bank->samples[i].s16le_data, slen);
 					bank->samples[i].s16le_length = slen;
 				}
 			} else {
@@ -500,12 +513,11 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 				byte_end *= 2;
 				bank->samples[i].loop_start += byte_start / 4;
 				bank->samples[i].loop_end += byte_start / 4;
-				if(byte_end > smpl_data.length) byte_end = (uint32_t)smpl_data.length;
+				if(byte_end > ss_file_size(smpl_data)) byte_end = (uint32_t)ss_file_size(smpl_data);
 				size_t slen = (byte_end > byte_start) ? (byte_end - byte_start) : 0;
 				bank->samples[i].compressed_data = (uint8_t *)malloc(slen + 4 * sizeof(float));
 				if(bank->samples[i].compressed_data) {
-					memcpy(bank->samples[i].compressed_data,
-					       smpl_data.data + byte_start, slen);
+					ss_file_read_bytes(smpl_data, byte_start, bank->samples[i].compressed_data, slen);
 					bank->samples[i].compressed_data_length = slen;
 					memset(bank->samples[i].compressed_data + slen, 0, 4 * sizeof(float));
 					bank->samples[i].is_compressed = true;
@@ -515,11 +527,7 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 		}
 	}
 
-	if(smpl_is_float32) {
-		free(smpl_data.data);
-		smpl_data.data = NULL;
-		smpl_data.owns_data = false;
-	}
+	ss_file_close(smpl_data);
 
 	/* Fix sample loop points and link stereo pairs */
 	for(size_t i = 0; i < n_samples; i++) {
@@ -535,28 +543,29 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 	free(sample_links);
 
 	/* ── Parse instruments (inst) ────────────────────────────────────────── */
-	size_t n_insts = inst_c.data.length / 22;
+	size_t n_insts = ss_file_size(inst_c.file) / 22;
 	if(n_insts > 0) n_insts--; /* EOS */
 	bank->instruments = (SS_BasicInstrument *)calloc(n_insts, sizeof(SS_BasicInstrument));
 	bank->instrument_count = n_insts;
 	if(!bank->instruments && n_insts > 0) goto fail_bags;
 
 	bool has_xinsts = false;
-	size_t n_xinsts = xinst_c.data.length / 22;
+	size_t n_xinsts = ss_file_size(xinst_c.file) / 22;
 	if(n_xinsts > 0) n_xinsts--; /* EOS */
 	if(n_xinsts && n_xinsts == n_insts) has_xinsts = true;
 
 	uint32_t *inst_bag_indexes = (uint32_t *)malloc((n_insts + 1) * sizeof(uint32_t));
 	if(!inst_bag_indexes && n_insts > 0) goto fail_bags;
 
-	for(size_t i = 0; i <= n_insts; i++) {
+	for(size_t i = 0, pos = 0; i <= n_insts; i++) {
 		char iname[41];
-		ss_iba_read_string(&inst_c.data, iname, 20);
+		ss_file_read_string(inst_c.file, pos, iname, 20);
 		if(has_xinsts)
-			ss_iba_read_string(&xinst_c.data, iname + 20, 20);
-		uint32_t bag_idx = (uint16_t)ss_iba_read_le(&inst_c.data, 2);
+			ss_file_read_string(xinst_c.file, pos, iname + 20, 20);
+		uint32_t bag_idx = (uint16_t)ss_file_read_le(inst_c.file, pos + 20, 2);
 		if(has_xinsts)
-			bag_idx |= (uint32_t)ss_iba_read_le(&xinst_c.data, 2) * 65536;
+			bag_idx |= (uint32_t)ss_file_read_le(xinst_c.file, pos + 20, 2) * 65536;
+		pos += 22;
 		if(i < n_insts) {
 			const int namelen = has_xinsts ? 40 : 20;
 			strncpy(bank->instruments[i].name, iname, namelen);
@@ -667,7 +676,7 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 	free(inst_bag_indexes);
 
 	/* ── Parse presets (phdr) ────────────────────────────────────────────── */
-	size_t n_presets = phdr_c.data.length / 38;
+	size_t n_presets = ss_file_size(phdr_c.file) / 38;
 	if(n_presets > 0) n_presets--; /* EOP sentinel */
 	bank->presets = (SS_BasicPreset *)calloc(n_presets, sizeof(SS_BasicPreset));
 	bank->preset_count = n_presets;
@@ -677,31 +686,27 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 	if(!preset_bag_indexes && n_presets > 0) goto fail_bags;
 
 	bool has_xpresets = false;
-	size_t n_xpresets = xphdr_c.data.length / 38;
+	size_t n_xpresets = ss_file_size(xphdr_c.file) / 38;
 	if(n_xpresets > 0) n_xpresets--; /* EOP sentinel */
 	if(n_xpresets && n_xpresets == n_presets) has_xpresets = true;
 
-	for(size_t pi = 0; pi <= n_presets; pi++) {
+	for(size_t pi = 0, pos = 0; pi <= n_presets; pi++) {
 		char pname[41];
-		ss_iba_read_string(&phdr_c.data, pname, 20);
+		ss_file_read_string(phdr_c.file, pos, pname, 20);
 		if(has_xpresets)
-			ss_iba_read_string(&xphdr_c.data, pname + 20, 20);
-		uint16_t preset_num = (uint16_t)ss_iba_read_le(&phdr_c.data, 2);
-		uint16_t bank_num = (uint16_t)ss_iba_read_le(&phdr_c.data, 2);
-		/* Skip these */
-		if(has_xpresets)
-			xphdr_c.data.current_index += 4;
+			ss_file_read_string(xphdr_c.file, pos, pname + 20, 20);
+		uint16_t preset_num = (uint16_t)ss_file_read_le(phdr_c.file, pos + 20, 2);
+		uint16_t bank_num = (uint16_t)ss_file_read_le(phdr_c.file, pos + 22, 2);
 
-		uint32_t bag_idx = (uint16_t)ss_iba_read_le(&phdr_c.data, 2);
+		uint32_t bag_idx = (uint16_t)ss_file_read_le(phdr_c.file, pos + 24, 2);
 		if(has_xpresets)
-			bag_idx |= (uint32_t)ss_iba_read_le(&xphdr_c.data, 2) * 65536;
+			bag_idx |= (uint32_t)ss_file_read_le(xphdr_c.file, pos + 24, 2) * 65536;
 
-		uint32_t library = (uint32_t)ss_iba_read_le(&phdr_c.data, 4);
-		uint32_t genre = (uint32_t)ss_iba_read_le(&phdr_c.data, 4);
-		uint32_t morphology = (uint32_t)ss_iba_read_le(&phdr_c.data, 4);
-		/* Also skip these */
-		if(has_xpresets)
-			xphdr_c.data.current_index += 12;
+		uint32_t library = (uint32_t)ss_file_read_le(phdr_c.file, pos + 26, 4);
+		uint32_t genre = (uint32_t)ss_file_read_le(phdr_c.file, pos + 30, 4);
+		uint32_t morphology = (uint32_t)ss_file_read_le(phdr_c.file, pos + 34, 4);
+
+		pos += 38;
 
 		if(pi < n_presets) {
 			SS_BasicPreset *p = &bank->presets[pi];
@@ -815,6 +820,34 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 	free(pbags);
 	free(ibags);
 
+	/* Cleanup RIFF chunks */
+	ss_riff_close_chunk(&riff);
+	ss_riff_close_chunk(&info_chunk);
+	ss_riff_close_chunk(&xdta);
+	ss_riff_close_chunk(&isfe);
+	ss_riff_close_chunk(&sdta);
+	ss_riff_close_chunk(&pdta);
+
+	ss_riff_close_chunk(&phdr_c);
+	ss_riff_close_chunk(&pbag_c);
+	ss_riff_close_chunk(&pmod_c);
+	ss_riff_close_chunk(&pgen_c);
+	ss_riff_close_chunk(&inst_c);
+	ss_riff_close_chunk(&ibag_c);
+	ss_riff_close_chunk(&imod_c);
+	ss_riff_close_chunk(&igen_c);
+	ss_riff_close_chunk(&shdr_c);
+
+	ss_riff_close_chunk(&xphdr_c);
+	ss_riff_close_chunk(&xpbag_c);
+	ss_riff_close_chunk(&xpmod_c);
+	ss_riff_close_chunk(&xpgen_c);
+	ss_riff_close_chunk(&xinst_c);
+	ss_riff_close_chunk(&xibag_c);
+	ss_riff_close_chunk(&ximod_c);
+	ss_riff_close_chunk(&xigen_c);
+	ss_riff_close_chunk(&xshdr_c);
+
 	return bank;
 
 fail_bags:
@@ -826,6 +859,33 @@ fail_mods:
 	free(pmods);
 	free(imods);
 fail:
+	ss_riff_close_chunk(&riff);
+	ss_riff_close_chunk(&info_chunk);
+	ss_riff_close_chunk(&xdta);
+	ss_riff_close_chunk(&isfe);
+	ss_riff_close_chunk(&sdta);
+	ss_riff_close_chunk(&pdta);
+
+	ss_riff_close_chunk(&phdr_c);
+	ss_riff_close_chunk(&pbag_c);
+	ss_riff_close_chunk(&pmod_c);
+	ss_riff_close_chunk(&pgen_c);
+	ss_riff_close_chunk(&inst_c);
+	ss_riff_close_chunk(&ibag_c);
+	ss_riff_close_chunk(&imod_c);
+	ss_riff_close_chunk(&igen_c);
+	ss_riff_close_chunk(&shdr_c);
+
+	ss_riff_close_chunk(&xphdr_c);
+	ss_riff_close_chunk(&xpbag_c);
+	ss_riff_close_chunk(&xpmod_c);
+	ss_riff_close_chunk(&xpgen_c);
+	ss_riff_close_chunk(&xinst_c);
+	ss_riff_close_chunk(&xibag_c);
+	ss_riff_close_chunk(&ximod_c);
+	ss_riff_close_chunk(&xigen_c);
+	ss_riff_close_chunk(&xshdr_c);
+
 	ss_soundbank_free(bank);
 	return NULL;
 }

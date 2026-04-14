@@ -21,11 +21,9 @@
 #include <strings.h> /* strncasecmp */
 
 #if __has_include(<spessasynth_core/spessasynth.h>)
-#include <spessasynth_core/indexed_byte_array.h>
 #include <spessasynth_core/midi.h>
 #else
 #include "spessasynth/midi/midi.h"
-#include "spessasynth/utils/indexed_byte_array.h"
 #endif
 
 /* ── Data-bytes-per-message-type table ───────────────────────────────────── */
@@ -125,7 +123,7 @@ void ss_midi_free(SS_MIDIFile *m) {
 
 /* ── Tempo map ────────────────────────────────────────────────────────────── */
 
-static bool midi_push_tempo(SS_MIDIFile *m, uint32_t ticks, double bpm) {
+static bool midi_push_tempo(SS_MIDIFile *m, size_t ticks, double bpm) {
 	if(m->tempo_change_count >= m->tempo_change_capacity) {
 		size_t nc = m->tempo_change_capacity ? m->tempo_change_capacity * 2 : 16;
 		SS_TempoChange *tmp = (SS_TempoChange *)realloc(m->tempo_changes,
@@ -149,8 +147,8 @@ static int tempo_cmp_desc(const void *a, const void *b) {
 	return 0;
 }
 
-double ss_midi_ticks_to_seconds(const SS_MIDIFile *m, uint32_t ticks_in) {
-	uint32_t ticks = ticks_in;
+double ss_midi_ticks_to_seconds(const SS_MIDIFile *m, size_t ticks_in) {
+	size_t ticks = ticks_in;
 	if(m->tempo_change_count == 0 || m->time_division == 0) return 0.0;
 	double total = 0.0;
 	double current_tempo = 60000000.0 / 500000.0; /* Default */
@@ -158,7 +156,7 @@ double ss_midi_ticks_to_seconds(const SS_MIDIFile *m, uint32_t ticks_in) {
 	SS_TempoChange *tc;
 	size_t i;
 	for(i = 0, tc = m->tempo_changes; i < m->tempo_change_count && current_tick + ticks >= tc->ticks; i++, tc++) {
-		uint32_t delta = tc->ticks - current_tick;
+		size_t delta = tc->ticks - current_tick;
 		total += (double)delta * 60.0 / (tc->tempo * (double)m->time_division);
 		current_tick += delta;
 		ticks -= delta;
@@ -171,11 +169,11 @@ double ss_midi_ticks_to_seconds(const SS_MIDIFile *m, uint32_t ticks_in) {
 /* ── RMIDI info field copy ───────────────────────────────────────────────── */
 
 static void rmidi_set_field(uint8_t **dst, size_t *dst_len,
-                            const uint8_t *src, size_t len) {
+                            SS_File *file, size_t offset, size_t len) {
 	free(*dst);
 	*dst = (uint8_t *)malloc(len);
 	if(*dst) {
-		memcpy(*dst, src, len);
+		ss_file_read_bytes(file, offset, *dst, len);
 		*dst_len = len;
 	} else
 		*dst_len = 0;
@@ -190,18 +188,13 @@ typedef struct {
     size_t    data_offset; /* offset into parent IBA where data starts */
 } RiffChunk;
 
-static bool read_riff_chunk(SS_IBA *iba, RiffChunk *out)
+static bool read_riff_chunk(SS_File *file, RiffChunk *out)
 {
     if (iba->current_index + 8 > iba->length) return false;
-    memcpy(out->header, iba->data + iba->current_index, 4);
+	ss_file_read_bytes(file, out->header, 4);
     out->header[4] = '\0';
-    iba->current_index += 4;
     /* RIFF size is little-endian */
-    out->size = (uint32_t)iba->data[iba->current_index]
-              | ((uint32_t)iba->data[iba->current_index + 1] <<  8)
-              | ((uint32_t)iba->data[iba->current_index + 2] << 16)
-              | ((uint32_t)iba->data[iba->current_index + 3] << 24);
-    iba->current_index += 4;
+	out->size = ss_file_read_le(file, 4);
     out->data_offset = iba->current_index;
     return true;
 }
@@ -227,19 +220,6 @@ static bool read_midi_chunk(SS_IBA *iba, MIDIChunkHdr *out)
     return true;
 }
 #endif
-
-/* ── VLQ read from a local cursor ─────────────────────────────────────────── */
-
-static uint32_t read_vlq(const uint8_t *buf, size_t buf_len, size_t *pos) {
-	uint32_t v = 0;
-	for(int i = 0; i < 4; i++) {
-		if(*pos >= buf_len) break;
-		uint8_t b = buf[(*pos)++];
-		v = (v << 7) | (b & 0x7F);
-		if(!(b & 0x80)) break;
-	}
-	return v;
-}
 
 /* ── Read 3-byte big-endian tempo (µs/beat) → BPM ──────────────────────── */
 
@@ -472,23 +452,26 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 
 /* ── Parse a single MTrk chunk ───────────────────────────────────────────── */
 
-static bool parse_track(SS_MIDIFile *m, const uint8_t *buf, size_t buf_len,
-                        uint32_t start_ticks) {
+static bool parse_track(SS_MIDIFile *m, SS_File *file,
+                        size_t start_ticks) {
 	SS_MIDITrack *track = &m->tracks[m->track_count++];
 	memset(track, 0, sizeof(*track));
 	track->port = -1;
 
+	size_t buf_len = ss_file_remaining(file);
+
 	size_t pos = 0;
-	uint32_t abs_tick = start_ticks;
+	size_t abs_tick = start_ticks;
 	uint8_t running = 0; /* running status byte */
 
 	while(pos < buf_len) {
 		/* Delta time */
-		abs_tick += read_vlq(buf, buf_len, &pos);
+		abs_tick += ss_file_read_vlq(file, pos);
+		pos = ss_file_tell(file);
 
 		if(pos >= buf_len) break;
 
-		uint8_t status_check = buf[pos];
+		uint8_t status_check = ss_file_read_u8(file, pos);
 		uint8_t status_byte;
 
 		if(status_check >= 0x80) {
@@ -498,8 +481,9 @@ static bool parse_track(SS_MIDIFile *m, const uint8_t *buf, size_t buf_len,
 			if(status_byte == 0xFF) {
 				/* Meta event: next byte is the meta type */
 				if(pos >= buf_len) break;
-				uint8_t meta_type = buf[pos++];
-				uint32_t meta_len = read_vlq(buf, buf_len, &pos);
+				uint8_t meta_type = ss_file_read_u8(file, pos++);
+				size_t meta_len = ss_file_read_vlq(file, pos);
+				pos = ss_file_tell(file);
 
 				SS_MIDIMessage msg;
 				msg.ticks = abs_tick;
@@ -509,7 +493,9 @@ static bool parse_track(SS_MIDIFile *m, const uint8_t *buf, size_t buf_len,
 
 				if(meta_len > 0 && pos + meta_len <= buf_len) {
 					msg.data = (uint8_t *)malloc(meta_len);
-					if(msg.data) memcpy(msg.data, buf + pos, meta_len);
+					if(msg.data) {
+						ss_file_read_bytes(file, pos, msg.data, meta_len);
+					}
 				}
 				pos += meta_len;
 				ss_midi_track_push_event(track, msg);
@@ -518,7 +504,8 @@ static bool parse_track(SS_MIDIFile *m, const uint8_t *buf, size_t buf_len,
 
 			} else if(status_byte == 0xF0 || status_byte == 0xF7) {
 				/* SysEx */
-				uint32_t slen = read_vlq(buf, buf_len, &pos);
+				size_t slen = ss_file_read_vlq(file, pos);
+				pos = ss_file_tell(file);
 				SS_MIDIMessage msg;
 				msg.ticks = abs_tick;
 				msg.status_byte = status_byte;
@@ -526,7 +513,9 @@ static bool parse_track(SS_MIDIFile *m, const uint8_t *buf, size_t buf_len,
 				msg.data = NULL;
 				if(slen > 0 && pos + slen <= buf_len) {
 					msg.data = (uint8_t *)malloc(slen);
-					if(msg.data) memcpy(msg.data, buf + pos, slen);
+					if(msg.data) {
+						ss_file_read_bytes(file, pos, msg.data, slen);
+					}
 				}
 				pos += slen;
 				ss_midi_track_push_event(track, msg);
@@ -559,7 +548,9 @@ static bool parse_track(SS_MIDIFile *m, const uint8_t *buf, size_t buf_len,
 
 		if(data_bytes > 0) {
 			msg.data = (uint8_t *)malloc((size_t)data_bytes);
-			if(msg.data) memcpy(msg.data, buf + pos, (size_t)data_bytes);
+			if(msg.data) {
+				ss_file_read_bytes(file, pos, msg.data, data_bytes);
+			}
 		}
 		pos += (size_t)data_bytes;
 		ss_midi_track_push_event(track, msg);
@@ -570,8 +561,8 @@ static bool parse_track(SS_MIDIFile *m, const uint8_t *buf, size_t buf_len,
 
 /* ── Public loader ───────────────────────────────────────────────────────── */
 
-SS_MIDIFile *ss_midi_load(const uint8_t *data, size_t size, const char *file_name) {
-	if(!data || size < 14) return NULL;
+SS_MIDIFile *ss_midi_load(SS_File *file, const char *file_name) {
+	if(!file || ss_file_size(file) < 14) return NULL;
 
 	SS_MIDIFile *m = ss_midi_new();
 	if(!m) return NULL;
@@ -580,14 +571,23 @@ SS_MIDIFile *ss_midi_load(const uint8_t *data, size_t size, const char *file_nam
 		strncpy(m->file_name, file_name, sizeof(m->file_name) - 1);
 
 	/* ── Detect file type ──────────────────────────────────────────────── */
-	const uint8_t *smf_data = data;
+	size_t size = ss_file_size(file);
+	char header[5];
+	ss_file_read_string(file, 0, header, 4);
+
+	SS_File *smf_data = NULL;
 	size_t smf_size = size;
 
 	/* RMIDI: starts with "RIFF" */
-	if(data[0] == 'R' && data[1] == 'I' && data[2] == 'F' && data[3] == 'F') {
+	if(header[0] == 'R' && header[1] == 'I' && header[2] == 'F' && header[3] == 'F') {
 		/* Validate: offset 8 must be "RMID" */
-		if(size < 12) goto bad;
-		if(memcmp(data + 8, "RMID", 4) != 0) goto bad;
+		if(smf_size < 12) goto bad;
+
+		size_t riff_size = ss_file_read_le(file, 4, 4);
+		char rmid_id[5];
+		ss_file_read_string(file, 8, rmid_id, 4);
+		
+		if(strcmp(rmid_id, "RMID") != 0) goto bad;
 
 		bool is_sf2_rmidi = false;
 		bool found_dbnk = false;
@@ -597,10 +597,19 @@ SS_MIDIFile *ss_midi_load(const uint8_t *data, size_t size, const char *file_nam
 		size_t pos = 12;
 		/* Read "data" sub-chunk */
 		if(pos + 8 > size) goto bad;
-		if(memcmp(data + pos, "data", 4) != 0) goto bad;
-		uint32_t smf_chunk_size = (uint32_t)data[pos + 4] | ((uint32_t)data[pos + 5] << 8) | ((uint32_t)data[pos + 6] << 16) | ((uint32_t)data[pos + 7] << 24);
+		if(riff_size + 8 > size) goto bad;
+
+		char data_id[5];
+		ss_file_read_string(file, pos, data_id, 4);
+
+		if(strcmp(data_id, "data") != 0) goto bad;
+		
+		size_t smf_chunk_size = ss_file_read_le(file, pos + 4, 4);
+
 		pos += 8;
-		smf_data = data + pos;
+
+		smf_data = ss_file_slice(file, pos, smf_chunk_size);
+		if(!smf_data) goto bad;
 		smf_size = smf_chunk_size;
 		pos += smf_chunk_size;
 		if(pos & 1) pos++; /* RIFF pads to even */
@@ -608,9 +617,8 @@ SS_MIDIFile *ss_midi_load(const uint8_t *data, size_t size, const char *file_nam
 		/* Scan remaining chunks for RIFF(sfbk/dls) and LIST(INFO) */
 		while(pos + 8 <= size) {
 			char chunk_id[5];
-			memcpy(chunk_id, data + pos, 4);
-			chunk_id[4] = '\0';
-			uint32_t csz = (uint32_t)data[pos + 4] | ((uint32_t)data[pos + 5] << 8) | ((uint32_t)data[pos + 6] << 16) | ((uint32_t)data[pos + 7] << 24);
+			ss_file_read_string(file, pos, chunk_id, 4);
+			size_t csz = ss_file_read_le(file, pos + 4, 4);
 			size_t cdata_start = pos + 8;
 			size_t cdata_end = cdata_start + csz;
 			if(cdata_end > size) cdata_end = size;
@@ -621,8 +629,7 @@ SS_MIDIFile *ss_midi_load(const uint8_t *data, size_t size, const char *file_nam
 				/* Sub-RIFF: check 4-byte type */
 				if(cdata_start + 4 > size) continue;
 				char sub_type[5];
-				memcpy(sub_type, data + cdata_start, 4);
-				sub_type[4] = '\0';
+				ss_file_read_string(file, cdata_start, sub_type, 4);
 				/* lowercase compare */
 				for(int k = 0; k < 4; k++)
 					sub_type[k] = (char)tolower((unsigned char)sub_type[k]);
@@ -635,7 +642,7 @@ SS_MIDIFile *ss_midi_load(const uint8_t *data, size_t size, const char *file_nam
 					size_t bank_start = cdata_start - 8;
 					m->embedded_soundbank = (uint8_t *)malloc(bank_size);
 					if(m->embedded_soundbank) {
-						memcpy(m->embedded_soundbank, data + bank_start, bank_size);
+						ss_file_read_bytes(file, bank_start, m->embedded_soundbank, bank_size);
 						m->embedded_soundbank_size = bank_size;
 					}
 					if(strcmp(sub_type, "dls ") == 0) {
@@ -647,22 +654,23 @@ SS_MIDIFile *ss_midi_load(const uint8_t *data, size_t size, const char *file_nam
 			} else if(strcmp(chunk_id, "LIST") == 0) {
 				/* LIST/INFO */
 				if(cdata_start + 4 > size) continue;
-				if(memcmp(data + cdata_start, "INFO", 4) != 0) continue;
+				char info_id[5];
+				ss_file_read_string(file, cdata_start, info_id, 4);
+				if(strcmp(info_id, "INFO") != 0) continue;
 
 				size_t ip = cdata_start + 4;
 				while(ip + 8 <= cdata_end) {
 					char ifid[5];
-					memcpy(ifid, data + ip, 4);
-					ifid[4] = '\0';
-					uint32_t ifsz = (uint32_t)data[ip + 4] | ((uint32_t)data[ip + 5] << 8) | ((uint32_t)data[ip + 6] << 16) | ((uint32_t)data[ip + 7] << 24);
+					ss_file_read_string(file, ip, ifid, 4);
+					size_t ifsz = ss_file_read_le(file, ip + 4, 4);
 					ip += 8;
 					size_t ifend = ip + ifsz;
 					if(ifend > cdata_end) ifend = cdata_end;
 
-					const uint8_t *ifd = data + ip;
+					const size_t ifd = ip;
 					size_t ifdlen = ifend - ip;
 
-#define RMIDI_SET(field) rmidi_set_field(&m->rmidi_info.field, &m->rmidi_info.field##_len, ifd, ifdlen)
+#define RMIDI_SET(field) rmidi_set_field(&m->rmidi_info.field, &m->rmidi_info.field##_len, file, ifd, ifdlen)
 					if(strcmp(ifid, "INAM") == 0) {
 						RMIDI_SET(name);
 					} else if(strcmp(ifid, "IART") == 0) {
@@ -696,7 +704,7 @@ SS_MIDIFile *ss_midi_load(const uint8_t *data, size_t size, const char *file_nam
 					} else if(strcmp(ifid, "DBNK") == 0) {
 						/* 2-byte little-endian bank offset */
 						if(ifdlen >= 2)
-							m->bank_offset = (int)((uint16_t)ifd[0] | ((uint16_t)ifd[1] << 8));
+							m->bank_offset = (uint16_t)ss_file_read_le(file, ifd, 2);
 						found_dbnk = true;
 					}
 #undef RMIDI_SET
@@ -714,27 +722,34 @@ SS_MIDIFile *ss_midi_load(const uint8_t *data, size_t size, const char *file_nam
 		if(!m->embedded_soundbank)
 			m->bank_offset = 0;
 
-	} else if(data[0] == 'X' && data[1] == 'M' && data[2] == 'F' && data[3] == '_') {
+	} else if(header[0] == 'X' && header[1] == 'M' && header[2] == 'F' && header[3] == '_') {
 		/* XMF: not implemented — treat as plain SMF and hope for the best */
-		smf_data = data;
+		smf_data = ss_file_slice(file, 0, size);
+		smf_size = size;
+	} else {
+		smf_data = ss_file_slice(file, 0, size);
 		smf_size = size;
 	}
 	/* else: plain SMF */
+
+	if(!smf_data) goto bad;
 
 	/* ── Parse SMF ─────────────────────────────────────────────────────── */
 	{
 		size_t pos = 0;
 
 		/* MThd */
+		char mthd_id[5];
 		if(pos + 8 > smf_size) goto bad;
-		if(memcmp(smf_data + pos, "MThd", 4) != 0) goto bad;
-		uint32_t hdr_size = ((uint32_t)smf_data[pos + 4] << 24) | ((uint32_t)smf_data[pos + 5] << 16) | ((uint32_t)smf_data[pos + 6] << 8) | (uint32_t)smf_data[pos + 7];
+		ss_file_read_string(smf_data, 0, mthd_id, 4);
+		if(strcmp(mthd_id, "MThd") != 0) goto bad;
+		size_t hdr_size = ss_file_read_be(smf_data, 4, 4);
 		pos += 8;
 		if(hdr_size < 6 || pos + 6 > smf_size) goto bad;
 
-		m->format = smf_data[pos + 1]; /* low byte of big-endian uint16 */
-		uint16_t n_tracks = (uint16_t)(((uint16_t)smf_data[pos + 2] << 8) | smf_data[pos + 3]);
-		m->time_division = (uint16_t)(((uint16_t)smf_data[pos + 4] << 8) | smf_data[pos + 5]);
+		m->format = ss_file_read_u8(smf_data, pos + 1); /* low byte of big-endian uint16 */
+		uint16_t n_tracks = (uint16_t)ss_file_read_be(smf_data, pos + 2, 2);
+		m->time_division = (uint16_t)ss_file_read_be(smf_data, pos + 4, 2);
 		pos += hdr_size;
 
 		/* Allocate track array */
@@ -746,16 +761,18 @@ SS_MIDIFile *ss_midi_load(const uint8_t *data, size_t size, const char *file_nam
 
 		for(uint16_t ti = 0; ti < n_tracks; ti++) {
 			if(pos + 8 > smf_size) break;
-			if(memcmp(smf_data + pos, "MTrk", 4) != 0) {
+			char mtrk_id[5];
+			ss_file_read_string(smf_data, pos, mtrk_id, 4);
+			if(strcmp(mtrk_id, "MTrk") != 0) {
 				/* Skip unrecognized chunk */
-				uint32_t skip_sz = ((uint32_t)smf_data[pos + 4] << 24) | ((uint32_t)smf_data[pos + 5] << 16) | ((uint32_t)smf_data[pos + 6] << 8) | (uint32_t)smf_data[pos + 7];
+				size_t skip_sz = ss_file_read_be(smf_data, pos + 4, 4);
 				pos += 8 + skip_sz;
 				continue;
 			}
-			uint32_t trk_sz = ((uint32_t)smf_data[pos + 4] << 24) | ((uint32_t)smf_data[pos + 5] << 16) | ((uint32_t)smf_data[pos + 6] << 8) | (uint32_t)smf_data[pos + 7];
+			size_t trk_sz = ss_file_read_be(smf_data, pos + 4, 4);
 			pos += 8;
 
-			uint32_t start_ticks = 0;
+			size_t start_ticks = 0;
 			/* Format 2: tracks play sequentially; each track starts after the previous */
 			if(m->format == 2 && ti > 0) {
 				SS_MIDITrack *prev = &m->tracks[ti - 1];
@@ -766,7 +783,10 @@ SS_MIDIFile *ss_midi_load(const uint8_t *data, size_t size, const char *file_nam
 
 			size_t trk_end = pos + trk_sz;
 			if(trk_end > smf_size) trk_end = smf_size;
-			parse_track(m, smf_data + pos, trk_end - pos, start_ticks);
+			SS_File *trk_data = ss_file_slice(smf_data, pos, trk_end - pos);
+			if(!trk_data) goto bad;
+			parse_track(m, trk_data, start_ticks);
+			ss_file_close(trk_data);
 			pos = trk_end;
 		}
 	}
@@ -775,6 +795,7 @@ SS_MIDIFile *ss_midi_load(const uint8_t *data, size_t size, const char *file_nam
 	return m;
 
 bad:
+	ss_file_close(smf_data);
 	ss_midi_free(m);
 	return NULL;
 }

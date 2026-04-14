@@ -7,8 +7,10 @@
 
 #if __has_include(<spessasynth_core/generator_types.h>)
 #include <spessasynth_core/midi_enums.h>
+#include <spessasynth_core/file.h>
 #else
 #include "spessasynth/midi/midi_enums.h"
+#include "spessasynth/utils/file.h"
 #endif
 
 #ifdef __cplusplus
@@ -18,10 +20,10 @@ extern "C" {
 /* ── A single MIDI event ─────────────────────────────────────────────────── */
 
 typedef struct {
-	uint32_t ticks; /* absolute ticks from track start */
+	size_t ticks; /* absolute ticks from track start */
 	uint8_t status_byte; /* for voice: 0x80-0xEF; for meta/sysex: type byte */
 	uint8_t *data; /* owned; NULL for events with no data bytes */
-	uint32_t data_length;
+	size_t data_length;
 } SS_MIDIMessage;
 
 /** Free the data buffer inside a message (does not free the struct itself). */
@@ -47,15 +49,15 @@ void ss_midi_track_delete_event(SS_MIDITrack *track, size_t index);
 /* ── Tempo change entry ───────────────────────────────────────────────────── */
 
 typedef struct {
-	uint32_t ticks;
+	size_t ticks;
 	double tempo; /* BPM */
 } SS_TempoChange;
 
 /* ── Loop points ─────────────────────────────────────────────────────────── */
 
 typedef struct {
-	uint32_t start;
-	uint32_t end;
+	size_t start;
+	size_t end;
 } SS_MIDILoop;
 
 /* ── RMID info fields ─────────────────────────────────────────────────────── */
@@ -101,8 +103,8 @@ typedef struct {
 	uint16_t time_division;
 	uint8_t format; /* 0, 1, or 2 */
 	double duration; /* seconds */
-	uint32_t first_note_on; /* ticks */
-	uint32_t last_voice_event_tick;
+	size_t first_note_on; /* ticks */
+	size_t last_voice_event_tick;
 	SS_MIDILoop loop;
 	struct {
 		uint32_t min;
@@ -138,14 +140,13 @@ SS_MIDIFile *ss_midi_new(void);
 void ss_midi_free(SS_MIDIFile *midi);
 
 /** Parse a MIDI/RMIDI/XMF file from a raw buffer. Returns NULL on error. */
-SS_MIDIFile *ss_midi_load(const uint8_t *data, size_t size, const char *file_name);
+SS_MIDIFile *ss_midi_load(SS_File *file, const char *file_name);
 
 /** Serialize to Standard MIDI File format.  Caller must free() the buffer. */
-bool ss_midi_write(const SS_MIDIFile *midi,
-                   uint8_t **out_data, size_t *out_size);
+bool ss_midi_write(const SS_MIDIFile *midi, SS_File *file);
 
 /** Convert MIDI ticks to seconds using the embedded tempo map. */
-double ss_midi_ticks_to_seconds(const SS_MIDIFile *midi, uint32_t ticks);
+double ss_midi_ticks_to_seconds(const SS_MIDIFile *midi, size_t ticks);
 
 /** Rebuild internal caches (tempo map, loop, ports, name). Call after editing. */
 void ss_midi_flush(SS_MIDIFile *midi);

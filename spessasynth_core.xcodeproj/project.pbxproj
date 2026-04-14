@@ -36,8 +36,10 @@
 				include/spessasynth/synthesizer/dsp/insertion.h,
 				include/spessasynth/synthesizer/dsp/reverb.h,
 				include/spessasynth/synthesizer/synth.h,
+				include/spessasynth/utils/file.h,
 				include/spessasynth/utils/indexed_byte_array.h,
 				include/spessasynth/utils/riff_chunk.h,
+				include/spessasynth/utils/sync_primitives.h,
 			);
 			target = 8346D3A92F867F4900F3F5EC /* spessasynth_core */;
 		};

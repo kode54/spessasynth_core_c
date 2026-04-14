@@ -96,8 +96,8 @@ static inline size_t ss_iba_read_be(SS_IBA *iba, int byte_count) {
 }
 
 /** Read a MIDI variable-length quantity; advances current_index. */
-static inline uint32_t ss_iba_read_vlq(SS_IBA *iba) {
-	uint32_t value = 0;
+static inline size_t ss_iba_read_vlq(SS_IBA *iba) {
+	size_t value = 0;
 	uint8_t b;
 	do {
 		b = ss_iba_read_u8(iba);
@@ -129,14 +129,14 @@ static inline void ss_iba_write_u8(SS_IBA *iba, uint8_t v) {
 }
 
 /** Write little-endian value (byte_count bytes); advances current_index. */
-static inline void ss_iba_write_le(SS_IBA *iba, uint32_t v, int byte_count) {
+static inline void ss_iba_write_le(SS_IBA *iba, size_t v, int byte_count) {
 	for(int i = 0; i < byte_count; i++) {
 		ss_iba_write_u8(iba, (uint8_t)(v >> (i * 8)));
 	}
 }
 
 /** Write big-endian value (byte_count bytes); advances current_index. */
-static inline void ss_iba_write_be(SS_IBA *iba, uint32_t v, int byte_count) {
+static inline void ss_iba_write_be(SS_IBA *iba, size_t v, int byte_count) {
 	for(int i = byte_count - 1; i >= 0; i--) {
 		if(iba->current_index + (size_t)(byte_count - 1 - i) < iba->length)
 			iba->data[iba->current_index++] = (uint8_t)(v >> (i * 8));
@@ -144,8 +144,8 @@ static inline void ss_iba_write_be(SS_IBA *iba, uint32_t v, int byte_count) {
 }
 
 /** Write a MIDI variable-length quantity; advances current_index. */
-static inline void ss_iba_write_vlq(SS_IBA *iba, uint32_t v) {
-	uint8_t buf[4];
+static inline void ss_iba_write_vlq(SS_IBA *iba, size_t v) {
+	uint8_t buf[16];
 	int n = 0;
 	buf[n++] = v & 0x7F;
 	v >>= 7;

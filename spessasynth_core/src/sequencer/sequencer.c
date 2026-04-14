@@ -40,7 +40,7 @@ static bool decode_voice(uint8_t status_byte, uint8_t *type_out, int *ch_out)
 
 static SS_SequencerSong *current_song(const SS_Sequencer *seq) {
 	if(seq->song_count == 0) return NULL;
-	int idx = seq->current_song_index;
+	size_t idx = seq->current_song_index;
 	if(idx < 0 || (size_t)idx >= seq->song_count) return NULL;
 	return &seq->songs[idx];
 }
@@ -56,12 +56,12 @@ static void song_rewind(SS_SequencerSong *song) {
 static int find_first_event(const SS_SequencerSong *song,
                             const SS_MIDIFile *midi) {
 	int best_track = -1;
-	uint32_t best_tick = UINT32_MAX;
+	size_t best_tick = SIZE_T_MAX;
 
 	for(size_t ti = 0; ti < song->track_count; ti++) {
 		size_t ei = song->event_indexes[ti];
 		if(ei >= midi->tracks[ti].event_count) continue;
-		uint32_t t = midi->tracks[ti].events[ei].ticks;
+		size_t t = midi->tracks[ti].events[ei].ticks;
 		if(t < best_tick) {
 			best_tick = t;
 			best_track = (int)ti;

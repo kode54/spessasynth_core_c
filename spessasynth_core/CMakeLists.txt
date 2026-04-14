@@ -13,8 +13,9 @@ option(SS_BUILD_EXAMPLES     "Build example tools"                            ON
 # ── Core source list ─────────────────────────────────────────────────────────
 set(SS_SOURCES
     src/utils/byte_functions.c
-    src/utils/indexed_byte_array.c
+    src/utils/file.c
     src/utils/riff_chunk.c
+    src/utils/sync_primitives.c
     src/utils/wav_writer.c
     src/midi/midi_loader.c
     src/midi/midi_writer.c

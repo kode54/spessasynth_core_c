@@ -922,27 +922,32 @@ static void soundbank_parse(SS_SoundBank *bank) {
 }
 
 /* Forward declarations for the format-specific loaders */
-SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64);
-SS_SoundBank *ss_dls_load(const uint8_t *data, size_t size, bool riff64);
+SS_SoundBank *ss_soundfont_load(SS_File *file, bool riff64);
+SS_SoundBank *ss_dls_load(SS_File *file, bool riff64);
 
 /* Entry point: dispatch to SF2/DLS reader */
-SS_SoundBank *ss_soundbank_load(const uint8_t *data, size_t size) {
-	if(!data || size < 12) return NULL;
+SS_SoundBank *ss_soundbank_load(SS_File *file) {
+	if(!file) return NULL;
+	size_t size = ss_file_size(file);
+	if(size < 12) return NULL;
 	/* SF2/SF3: "RIFF" or "RIFS" + size + "sfbk"/"sfpk"/"sfen" */
 	SS_SoundBank *res = NULL;
-	if(data[0] == 'R' && data[1] == 'I' && data[2] == 'F' && (data[3] == 'F' || data[3] == 'S')) {
-		const bool riff64 = data[3] == 'S';
+	char riff_id[5];
+	ss_file_read_string(file, 0, riff_id, 4);
+	if(riff_id[0] == 'R' && riff_id[1] == 'I' && riff_id[2] == 'F' && (riff_id[3] == 'F' || riff_id[3] == 'S')) {
+		const bool riff64 = riff_id[3] == 'S';
 		const size_t size_size = riff64 ? 8 : 4;
 		if(size >= (8 + size_size)) {
-			const uint8_t *sig = &data[4 + size_size];
+			char sig[5];
+			ss_file_read_string(file, 4 + size_size, sig, 4);
 			if((sig[0] == 's' && sig[1] == 'f' && sig[2] == 'b' && sig[3] == 'k') ||
 			   (sig[0] == 's' && sig[1] == 'f' && sig[2] == 'p' && sig[3] == 'k') ||
 			   (sig[0] == 's' && sig[1] == 'f' && sig[2] == 'e' && sig[3] == 'n')) {
-				res = ss_soundfont_load(data, size, riff64);
+				res = ss_soundfont_load(file, riff64);
 			}
 			/* DLS: "RIFF" + size + "DLS " */
 			else if(sig[0] == 'D' && sig[1] == 'L' && sig[2] == 'S' && sig[3] == ' ') {
-				res = ss_dls_load(data, size, riff64);
+				res = ss_dls_load(file, riff64);
 			}
 		}
 	}

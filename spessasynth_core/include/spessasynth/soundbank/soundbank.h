@@ -6,8 +6,10 @@
 #include <stdint.h>
 #if __has_include(<spessasynth_core/spessasynth.h>)
 #include <spessasynth_core/soundbank_enums.h>
+#include <spessasynth_core/file.h>
 #else
 #include "soundbank_enums.h"
+#include "../utils/file.h"
 #endif
 
 #ifdef __cplusplus
@@ -224,7 +226,7 @@ bool try_inexact);
  * Load a SoundFont2/SF3 or DLS soundbank from a raw buffer.
  * Caller is responsible for calling ss_soundbank_free() when done.
  */
-SS_SoundBank *ss_soundbank_load(const uint8_t *data, size_t size);
+SS_SoundBank *ss_soundbank_load(SS_File *file);
 
 /* ── Default SF2 modulators list ─────────────────────────────────────────── */
 

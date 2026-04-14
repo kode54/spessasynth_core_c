@@ -10,12 +10,12 @@
 #include <stdlib.h>
 #include <string.h>
 #if __has_include(<spessasynth_core/spessasynth.h>)
-#include <spessasynth_core/indexed_byte_array.h>
+#include <spessasynth_core/file.h>
 #include <spessasynth_core/riff_chunk.h>
 #include <spessasynth_core/soundbank.h>
 #else
 #include "spessasynth/soundbank/soundbank.h"
-#include "spessasynth/utils/indexed_byte_array.h"
+#include "spessasynth/utils/file.h"
 #include "spessasynth/utils/riff_chunk.h"
 #endif
 
@@ -63,23 +63,25 @@ typedef struct {
 	uint32_t loop_length;
 } DLS_WaveSample;
 
-static bool parse_wsmp(SS_IBA *iba, DLS_WaveSample *ws, bool riff64) {
+static bool parse_wsmp(SS_File *file, DLS_WaveSample *ws, bool riff64) {
 	const size_t size_size = riff64 ? 8 : 4;
-	ws->cbSize = ss_iba_read_le(iba, size_size);
-	ws->unity_note = (uint16_t)ss_iba_read_le(iba, 2);
-	ws->fine_tune = (int16_t)ss_iba_read_le(iba, 2);
-	ws->gain = (int32_t)ss_iba_read_le(iba, 4);
-	ws->options = (uint32_t)ss_iba_read_le(iba, 4);
-	ws->loop_count = (uint32_t)ss_iba_read_le(iba, 4);
+	size_t pos = ss_file_tell(file);
+	ws->cbSize = ss_file_read_le(file, pos, size_size);
+	pos += size_size;
+	ws->unity_note = (uint16_t)ss_file_read_le(file, pos, 2);
+	ws->fine_tune = (int16_t)ss_file_read_le(file, pos + 2, 2);
+	ws->gain = (int32_t)ss_file_read_le(file, pos + 4, 4);
+	ws->options = (uint32_t)ss_file_read_le(file, pos + 8, 4);
+	ws->loop_count = (uint32_t)ss_file_read_le(file, pos + 12, 4);
 	ws->loop_size = 0;
 	ws->loop_type = 0;
 	ws->loop_start = 0;
 	ws->loop_length = 0;
 	if(ws->loop_count > 0) {
-		ws->loop_size = (uint32_t)ss_iba_read_le(iba, 4);
-		ws->loop_type = (uint32_t)ss_iba_read_le(iba, 4);
-		ws->loop_start = (uint32_t)ss_iba_read_le(iba, 4);
-		ws->loop_length = (uint32_t)ss_iba_read_le(iba, 4);
+		ws->loop_size = (uint32_t)ss_file_read_le(file, pos + 16, 4);
+		ws->loop_type = (uint32_t)ss_file_read_le(file, pos + 20, 4);
+		ws->loop_start = (uint32_t)ss_file_read_le(file, pos + 24, 4);
+		ws->loop_length = (uint32_t)ss_file_read_le(file, pos + 28, 4);
 	}
 	return true;
 }
@@ -128,18 +130,22 @@ static bool art_buf_push(DLS_ArtBuf *a, const DLS_ConnBlock *b) {
 }
 
 /* Parse the body of an art1/art2 chunk into the buffer. */
-static void parse_art_body(SS_IBA *data, DLS_ArtBuf *art, bool riff64) {
+static void parse_art_body(SS_File *file, DLS_ArtBuf *art, bool riff64) {
 	const size_t size_size = riff64 ? 8 : 4;
-	ss_iba_read_le(data, size_size); /* cbSize */
-	uint32_t n = (uint32_t)ss_iba_read_le(data, 4);
+	/*ss_iba_read_le(data, size_size); cbSize */
+	size_t pos = ss_file_tell(file);
+	pos += size_size; /* cbSize */
+	uint32_t n = (uint32_t)ss_file_read_le(file, pos, 4);
+	pos += 4;
 	for(uint32_t i = 0; i < n; i++) {
-		if(ss_iba_remaining(data) < 12) break;
+		if(ss_file_remaining(file) < 12) break;
 		DLS_ConnBlock b;
-		b.us_source = (uint16_t)ss_iba_read_le(data, 2);
-		b.us_control = (uint16_t)ss_iba_read_le(data, 2);
-		b.us_dest = (uint16_t)ss_iba_read_le(data, 2);
-		uint16_t t = (uint16_t)ss_iba_read_le(data, 2);
-		b.l_scale = (int32_t)ss_iba_read_le(data, 4);
+		b.us_source = (uint16_t)ss_file_read_le(file, pos, 2);
+		b.us_control = (uint16_t)ss_file_read_le(file, pos + 2, 2);
+		b.us_dest = (uint16_t)ss_file_read_le(file, pos + 4, 2);
+		uint16_t t = (uint16_t)ss_file_read_le(file, pos + 6, 2);
+		b.l_scale = (int32_t)ss_file_read_le(file, pos + 8, 4);
+		pos += 12;
 
 		/*
 		 * usTransform bit layout (DLS2 spec §2.10):
@@ -163,13 +169,14 @@ static void parse_art_body(SS_IBA *data, DLS_ArtBuf *art, bool riff64) {
 }
 
 /* Scan an lart/lar2 list body for art1/art2 chunks and parse them. */
-static void parse_lart_body(SS_IBA *list_data, DLS_ArtBuf *art, bool riff64) {
+static void parse_lart_body(SS_File *list_file, DLS_ArtBuf *art, bool riff64) {
 	const size_t size_size = riff64 ? 8 : 4;
-	while(ss_iba_remaining(list_data) >= 4 + size_size) {
+	while(ss_file_remaining(list_file) >= 4 + size_size) {
 		SS_RIFFChunk c;
-		if(!ss_riff_read_chunk(list_data, &c, false, riff64)) break;
+		if(!ss_riff_read_chunk(list_file, &c, false, riff64)) break;
 		if(strcmp(c.header, "art1") == 0 || strcmp(c.header, "art2") == 0)
-			parse_art_body(&c.data, art, riff64);
+			parse_art_body(c.file, art, riff64);
+		ss_riff_close_chunk(&c);
 	}
 }
 
@@ -672,7 +679,7 @@ static void apply_conn_blocks(SS_Zone *zone, const DLS_ConnBlock *blocks,
 }
 
 /* ── Wave pool parser (forward declaration) ──────────────────────────────── */
-static bool parse_wave_pool(SS_IBA *waves_iba,
+static bool parse_wave_pool(SS_File *waves_file,
                             const uint32_t *pool_offsets,
                             size_t pool_count,
                             SS_SoundBank *bank,
@@ -680,25 +687,25 @@ static bool parse_wave_pool(SS_IBA *waves_iba,
 
 /* ── Main DLS loader ─────────────────────────────────────────────────────── */
 
-SS_SoundBank *ss_dls_load(const uint8_t *data, size_t size, bool riff64) {
+SS_SoundBank *ss_dls_load(SS_File *main_file, bool riff64) {
 	const size_t size_size = riff64 ? 8 : 4;
-	SS_IBA main_iba;
-	ss_iba_wrap(&main_iba, data, size);
 
 	SS_SoundBank *bank = ss_soundbank_new();
 	if(!bank) return NULL;
 	strncpy(bank->name, "DLS Bank", sizeof(bank->name) - 1);
 
+	/* Start at the beginning */
+	ss_file_seek(main_file, 0);
+
 	/* Skip RIFF header (already verified by caller) */
-	main_iba.current_index += 4; /* "RIFF" */
-	size_t total_size = ss_iba_read_le(&main_iba, size_size);
+	/*ss_file_skip(main_file, 4); "RIFF" */
+	size_t total_size = ss_file_read_le(main_file, 4, size_size);
 	(void)total_size;
-	main_iba.current_index += 4; /* "DLS " */
+	ss_file_skip(main_file, 4); /* "DLS " */
 
 	uint32_t *pool_offsets = NULL;
 	size_t pool_count = 0;
-	SS_IBA waves_iba;
-	memset(&waves_iba, 0, sizeof(waves_iba));
+	SS_File *waves_file = NULL;
 	bool has_waves = false;
 
 	/* Temporary per-instrument storage */
@@ -717,35 +724,38 @@ SS_SoundBank *ss_dls_load(const uint8_t *data, size_t size, bool riff64) {
 	DLS_InstrEntry *instr_entries = NULL;
 	size_t instr_count = 0, instr_cap = 0;
 
-	while(ss_iba_remaining(&main_iba) >= 4 + size_size) {
+	while(ss_file_remaining(main_file) >= 4 + size_size) {
 		SS_RIFFChunk chunk;
-		if(!ss_riff_read_chunk(&main_iba, &chunk, false, riff64)) break;
+		if(!ss_riff_read_chunk(main_file, &chunk, false, riff64)) break;
 
 		if(strcmp(chunk.header, "ptbl") == 0) {
-			ss_iba_read_le(&chunk.data, size_size); /* cbSize */
-			uint32_t cCues = (uint32_t)ss_iba_read_le(&chunk.data, 4);
+			/*ss_file_skip(chunk.file, size_size); cbSize */
+			size_t pos = 4;
+			uint32_t cCues = (uint32_t)ss_file_read_le(chunk.file, pos, 4);
 			pool_count = cCues;
 			pool_offsets = (uint32_t *)malloc(cCues * sizeof(uint32_t));
 			if(!pool_offsets) goto fail;
-			for(uint32_t i = 0; i < cCues; i++)
-				pool_offsets[i] = (uint32_t)ss_iba_read_le(&chunk.data, 4);
+			pos += 4;
+			for(uint32_t i = 0; i < cCues; i++, pos += 4)
+				pool_offsets[i] = (uint32_t)ss_file_read_le(chunk.file, pos, 4);
 
 		} else if(strcmp(chunk.header, "LIST") == 0) {
 			char list_id[5];
-			ss_iba_read_string(&chunk.data, list_id, 4);
+			ss_file_read_string(chunk.file, 0, list_id, 4);
 
 			if(strcmp(list_id, "wvpl") == 0) {
-				waves_iba = chunk.data;
+				waves_file = chunk.file;
+				chunk.file = NULL;
 				has_waves = true;
 
 			} else if(strcmp(list_id, "lins") == 0) {
 				/* ── Instrument list ────────────────────────────────────── */
-				while(ss_iba_remaining(&chunk.data) >= 4 + size_size) {
+				while(ss_file_remaining(chunk.file) >= 4 + size_size) {
 					SS_RIFFChunk ins_list;
-					if(!ss_riff_read_chunk(&chunk.data, &ins_list, false, riff64)) break;
+					if(!ss_riff_read_chunk(chunk.file, &ins_list, false, riff64)) break;
 					if(strcmp(ins_list.header, "LIST") != 0) continue;
 					char ins_id[5];
-					ss_iba_read_string(&ins_list.data, ins_id, 4);
+					ss_file_read_string(ins_list.file, 0, ins_id, 4);
 					if(strcmp(ins_id, "ins ") != 0) continue;
 
 					/* Grow instr_entries */
@@ -768,14 +778,14 @@ SS_SoundBank *ss_dls_load(const uint8_t *data, size_t size, bool riff64) {
 					SS_InstrumentZone *zones = NULL;
 					size_t zone_count = 0, zone_cap = 0;
 
-					while(ss_iba_remaining(&ins_list.data) >= 4 + size_size) {
+					while(ss_file_remaining(ins_list.file) >= 4 + size_size) {
 						SS_RIFFChunk sub;
-						if(!ss_riff_read_chunk(&ins_list.data, &sub, false, riff64)) break;
+						if(!ss_riff_read_chunk(ins_list.file, &sub, false, riff64)) break;
 
 						if(strcmp(sub.header, "insh") == 0) {
-							uint32_t n_regions = (uint32_t)ss_iba_read_le(&sub.data, 4);
-							uint32_t bank_val = (uint32_t)ss_iba_read_le(&sub.data, 4);
-							uint32_t patch = (uint32_t)ss_iba_read_le(&sub.data, 4);
+							uint32_t n_regions = (uint32_t)ss_file_read_le(sub.file, 0, 4);
+							uint32_t bank_val = (uint32_t)ss_file_read_le(sub.file, 4, 4);
+							uint32_t patch = (uint32_t)ss_file_read_le(sub.file, 8, 4);
 							entry->bank_msb = (bank_val >> 8) & 0x7F;
 							entry->bank_lsb = bank_val & 0x7F;
 							entry->patch = patch & 0x7F;
@@ -784,17 +794,17 @@ SS_SoundBank *ss_dls_load(const uint8_t *data, size_t size, bool riff64) {
 
 						} else if(strcmp(sub.header, "LIST") == 0) {
 							char sub_id[5];
-							ss_iba_read_string(&sub.data, sub_id, 4);
+							ss_file_read_string(sub.file, 0, sub_id, 4);
 
 							if(strcmp(sub_id, "lrgn") == 0) {
 								/* ── Region list ──────────────────────── */
-								while(ss_iba_remaining(&sub.data) >= 4 + size_size) {
+								while(ss_file_remaining(sub.file) >= 4 + size_size) {
 									SS_RIFFChunk rgn_list;
-									if(!ss_riff_read_chunk(&sub.data, &rgn_list,
+									if(!ss_riff_read_chunk(sub.file, &rgn_list,
 									                       false, riff64)) break;
 									if(strcmp(rgn_list.header, "LIST") != 0) continue;
 									char rgn_id[5];
-									ss_iba_read_string(&rgn_list.data, rgn_id, 4);
+									ss_file_read_string(rgn_list.file, 0, rgn_id, 4);
 									if(strcmp(rgn_id, "rgn ") != 0 &&
 									   strcmp(rgn_id, "rgn2") != 0) continue;
 
@@ -807,40 +817,41 @@ SS_SoundBank *ss_dls_load(const uint8_t *data, size_t size, bool riff64) {
 									DLS_ArtBuf rgn_art;
 									art_buf_init(&rgn_art);
 
-									while(ss_iba_remaining(&rgn_list.data) >= 4 + size_size) {
+									while(ss_file_remaining(rgn_list.file) >= 4 + size_size) {
 										SS_RIFFChunk rs;
-										if(!ss_riff_read_chunk(&rgn_list.data, &rs,
+										if(!ss_riff_read_chunk(rgn_list.file, &rs,
 										                       false, riff64)) break;
 
 										if(strcmp(rs.header, "rgnh") == 0) {
-											rh.key_low = (uint16_t)ss_iba_read_le(&rs.data, 2);
-											rh.key_high = (uint16_t)ss_iba_read_le(&rs.data, 2);
-											rh.vel_low = (uint16_t)ss_iba_read_le(&rs.data, 2);
-											rh.vel_high = (uint16_t)ss_iba_read_le(&rs.data, 2);
-											rh.options = (uint16_t)ss_iba_read_le(&rs.data, 2);
-											rh.key_group = (uint16_t)ss_iba_read_le(&rs.data, 2);
+											rh.key_low = (uint16_t)ss_file_read_le(rs.file, 0, 2);
+											rh.key_high = (uint16_t)ss_file_read_le(rs.file, 2, 2);
+											rh.vel_low = (uint16_t)ss_file_read_le(rs.file, 4, 2);
+											rh.vel_high = (uint16_t)ss_file_read_le(rs.file, 6, 2);
+											rh.options = (uint16_t)ss_file_read_le(rs.file, 8, 2);
+											rh.key_group = (uint16_t)ss_file_read_le(rs.file, 10, 2);
 
 										} else if(strcmp(rs.header, "wsmp") == 0) {
-											parse_wsmp(&rs.data, &ws, riff64);
+											parse_wsmp(rs.file, &ws, riff64);
 											has_wsmp = true;
 
 										} else if(strcmp(rs.header, "wlnk") == 0) {
-											ss_iba_read_le(&rs.data, 2); /* fusOptions */
-											ss_iba_read_le(&rs.data, 2); /* phase group */
-											ss_iba_read_le(&rs.data, 4); /* channel */
-											wave_index = (uint32_t)ss_iba_read_le(&rs.data, 4);
+											/*ss_iba_read_le(&rs.data, 2); fusOptions */
+											/*ss_iba_read_le(&rs.data, 2); phase group */
+											/*ss_iba_read_le(&rs.data, 4); channel */
+											wave_index = (uint32_t)ss_file_read_le(rs.file, 8, 4);
 
 										} else if(strcmp(rs.header, "LIST") == 0) {
 											char art_id[5];
-											ss_iba_read_string(&rs.data, art_id, 4);
+											ss_file_read_string(rs.file, 0, art_id, 4);
 											if(strcmp(art_id, "lart") == 0) {
 												rgn_art.dls1 = true;
-												parse_lart_body(&rs.data, &rgn_art, riff64);
+												parse_lart_body(rs.file, &rgn_art, riff64);
 											} else if(strcmp(art_id, "lar2") == 0) {
 												rgn_art.dls1 = false;
-												parse_lart_body(&rs.data, &rgn_art, riff64);
+												parse_lart_body(rs.file, &rgn_art, riff64);
 											}
 										}
+										ss_riff_close_chunk(&rs);
 									}
 
 									/* Fix vel range: some files have 0,0 meaning full range */
@@ -916,17 +927,19 @@ SS_SoundBank *ss_dls_load(const uint8_t *data, size_t size, bool riff64) {
 								skip_region:
 									art_buf_free(&rgn_art);
 								next_region:;
+									ss_riff_close_chunk(&rgn_list);
 								}
 
 							} else if(strcmp(sub_id, "lart") == 0) {
 								/* Instrument-level (global) articulation */
 								entry->global_art.dls1 = true;
-								parse_lart_body(&sub.data, &entry->global_art, riff64);
+								parse_lart_body(sub.file, &entry->global_art, riff64);
 							} else if(strcmp(sub_id, "lar2") == 0) {
 								entry->global_art.dls1 = false;
-								parse_lart_body(&sub.data, &entry->global_art, riff64);
+								parse_lart_body(sub.file, &entry->global_art, riff64);
 							}
 						}
+						ss_riff_close_chunk(&sub);
 					}
 
 					entry->zone_extra_count = zone_count;
@@ -934,6 +947,8 @@ SS_SoundBank *ss_dls_load(const uint8_t *data, size_t size, bool riff64) {
 					inst->zone_count = zone_count;
 					snprintf(inst->name, sizeof(inst->name),
 					         "Instrument %zu", instr_count - 1);
+
+					ss_riff_close_chunk(&ins_list);
 				}
 			}
 		}
@@ -941,7 +956,7 @@ SS_SoundBank *ss_dls_load(const uint8_t *data, size_t size, bool riff64) {
 
 	/* ── Parse wave pool into samples ────────────────────────────────────── */
 	if(has_waves && pool_offsets)
-		parse_wave_pool(&waves_iba, pool_offsets, pool_count, bank, riff64);
+		parse_wave_pool(waves_file, pool_offsets, pool_count, bank, riff64);
 
 	/* ── Build presets from instrument entries ───────────────────────────── */
 	bank->instruments = (SS_BasicInstrument *)calloc(instr_count, sizeof(SS_BasicInstrument));
@@ -1138,7 +1153,7 @@ fail:
 }
 
 /* ── Wave pool parser ────────────────────────────────────────────────────── */
-static bool parse_wave_pool(SS_IBA *waves_iba,
+static bool parse_wave_pool(SS_File *waves_file,
                             const uint32_t *pool_offsets,
                             size_t pool_count,
                             SS_SoundBank *bank,
@@ -1150,19 +1165,24 @@ static bool parse_wave_pool(SS_IBA *waves_iba,
 
 	for(size_t i = 0; i < pool_count; i++) {
 		uint32_t offset = pool_offsets[i];
-		if(offset + 8 + size_size > waves_iba->length) continue;
+		if(offset + 8 + size_size > ss_file_size(waves_file)) continue;
 
-		SS_IBA wave_iba;
-		ss_iba_wrap(&wave_iba,
-		            waves_iba->data + offset + 4 /* skip past wvpl base */,
-		            waves_iba->length - offset);
+		SS_File *wave_file = ss_file_slice(waves_file, offset + 4, ss_file_size(waves_file) - offset - 4);
+		if(!wave_file) return false;
 
 		SS_RIFFChunk wave_list;
-		if(!ss_riff_read_chunk(&wave_iba, &wave_list, false, riff64)) continue;
-		if(strcmp(wave_list.header, "LIST") != 0) continue;
+		if(!ss_riff_read_chunk(wave_file, &wave_list, false, riff64)) {
+			ss_file_close(wave_file);
+			continue;
+		}
+		if(strcmp(wave_list.header, "LIST") != 0) {
+			ss_riff_close_chunk(&wave_list);
+			ss_file_close(wave_file);
+			continue;
+		}
 
 		char list_id[5];
-		ss_iba_read_string(&wave_list.data, list_id, 4);
+		ss_file_read_string(wave_list.file, 0, list_id, 4);
 		if(strcmp(list_id, "wave") != 0) continue;
 
 		SS_BasicSample *s = &bank->samples[i];
@@ -1171,28 +1191,29 @@ static bool parse_wave_pool(SS_IBA *waves_iba,
 		uint32_t sample_rate = 44100;
 		uint16_t bits_per_sample = 16;
 		uint16_t num_channels = 1;
-		uint8_t *pcm_data = NULL;
+		SS_File *pcm_data = NULL;
 		size_t pcm_len = 0;
 
-		while(ss_iba_remaining(&wave_list.data) >= 4 + size_size) {
+		while(ss_file_remaining(wave_list.file) >= 4 + size_size) {
 			SS_RIFFChunk sub;
-			if(!ss_riff_read_chunk(&wave_list.data, &sub, false, riff64)) break;
+			if(!ss_riff_read_chunk(wave_list.file, &sub, false, riff64)) break;
 
 			if(strcmp(sub.header, "fmt ") == 0) {
-				/* uint16_t fmt_tag = */ ss_iba_read_le(&sub.data, 2);
-				num_channels = (uint16_t)ss_iba_read_le(&sub.data, 2);
-				sample_rate = (uint32_t)ss_iba_read_le(&sub.data, 4);
-				ss_iba_read_le(&sub.data, 4); /* byte rate */
-				ss_iba_read_le(&sub.data, 2); /* block align */
-				bits_per_sample = (uint16_t)ss_iba_read_le(&sub.data, 2);
+				/* uint16_t fmt_tag = */ /*ss_iba_read_le(&sub.data, 2);*/
+				num_channels = (uint16_t)ss_file_read_le(sub.file, 2, 2);
+				sample_rate = (uint32_t)ss_file_read_le(sub.file, 4, 4);
+				/*ss_file_read_le(sub.file, 8, 4); byte rate */
+				/*ss_file_read_le(sub.data, 12, 2); block align */
+				bits_per_sample = (uint16_t)ss_file_read_le(sub.file, 14, 2);
 
 			} else if(strcmp(sub.header, "data") == 0) {
-				pcm_data = sub.data.data;
-				pcm_len = sub.data.length;
+				pcm_data = sub.file;
+				pcm_len = ss_file_size(sub.file);
+				sub.file = NULL;
 
 			} else if(strcmp(sub.header, "wsmp") == 0) {
 				DLS_WaveSample ws;
-				parse_wsmp(&sub.data, &ws, riff64);
+				parse_wsmp(sub.file, &ws, riff64);
 				s->original_key = (uint8_t)ws.unity_note;
 				s->pitch_correction = (int8_t)ws.fine_tune; /* fine_tune is in cents */
 				if(ws.loop_count > 0) {
@@ -1200,7 +1221,9 @@ static bool parse_wave_pool(SS_IBA *waves_iba,
 					s->loop_end = ws.loop_start + ws.loop_length;
 				}
 			}
+			ss_riff_close_chunk(&sub);
 		}
+		ss_riff_close_chunk(&wave_list);
 
 		if(!pcm_data || pcm_len == 0) continue;
 
@@ -1213,10 +1236,9 @@ static bool parse_wave_pool(SS_IBA *waves_iba,
 		if(bits_per_sample == 16) {
 			uint8_t *out = (uint8_t *)malloc(total_frames * 2);
 			if(!out) continue;
-			const int16_t *src = (const int16_t *)pcm_data;
 			int16_t *dst = (int16_t *)out;
 			for(size_t f = 0; f < total_frames; f++)
-				dst[f] = src[f * num_channels];
+				dst[f] = (int16_t)ss_file_read_le(pcm_data, f * num_channels * 2, 2);
 			s->s16le_data = out;
 			s->s16le_length = total_frames * 2;
 
@@ -1228,7 +1250,7 @@ static bool parse_wave_pool(SS_IBA *waves_iba,
 			uint8_t *out = (uint8_t *)malloc(total_frames);
 			if(!out) continue;
 			for(size_t f = 0; f < total_frames; f++)
-				out[f] = pcm_data[f * num_channels];
+				out[f] = ss_file_read_u8(pcm_data, f * num_channels);
 			s->u8_data = out;
 			s->u8_length = total_frames;
 
