@@ -712,6 +712,8 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 	for(size_t i = 0; i < bank->preset_count; i++) {
 		SS_BasicPreset *p = &bank->presets[i];
 		if(p->program != program) continue;
+		const bool is_drum_match = (is_drum_channel == p->is_gm_gs_drum);
+		if(!is_drum_match && !isXG) continue;
 		if((p->bank_lsb + bank_offset) != bank_lsb || (p->bank_msb + bank_offset) != bank_msb) continue;
 		match = p;
 		break;

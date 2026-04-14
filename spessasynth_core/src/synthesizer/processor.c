@@ -1125,9 +1125,9 @@ void ss_processor_system_reset(SS_Processor *proc) {
 		if(!ch) continue;
 		ss_channel_all_sound_off(ch);
 		ss_channel_reset_controllers(ch);
-		ch->drum_channel = (proc->master_params.midi_system != SS_SYSTEM_XG) ? (i % 16 == 9) : false;
+		ch->drum_channel = (i % 16 == 9);
 		/* Reset bank/program */
-		ch->bank_msb = (i % 16 == 9) ? (proc->master_params.midi_system == SS_SYSTEM_XG ? 127 : 0) : 0;
+		ch->bank_msb = 0;
 		ch->bank_lsb = 0;
 		ch->program = 0;
 		/* Look up the default preset */
