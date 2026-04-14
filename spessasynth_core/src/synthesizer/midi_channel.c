@@ -208,7 +208,7 @@ static void reset_drum_params(SS_MIDIChannel *ch) {
 		ch->drum_params[k].exclusive_class = 0;
 		ch->drum_params[k].pan = 64;
 		ch->drum_params[k].filter_cutoff = 64;
-		ch->drum_params[k].filter_resonance = 0.0f;
+		ch->drum_params[k].filter_resonance = 0;
 		ch->drum_params[k].reverb_gain = drum_params_reverb(k);
 		ch->drum_params[k].chorus_gain = 0.0f; /* No drums have chorus */
 		ch->drum_params[k].delay_gain = 0.0f; /* No drums have delay */
