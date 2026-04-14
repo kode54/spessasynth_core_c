@@ -25,11 +25,7 @@ SS_Mutex *ss_mutex_create(void) {
 	SS_Mutex *res = calloc(1, sizeof(*res));
 	if(!res) return NULL;
 
-	pthread_mutexattr_t attr;
-	pthread_mutexattr_init(&attr);
-	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-
-	if(pthread_mutex_init(&res->mutex, &attr) != 0) {
+	if(pthread_mutex_init(&res->mutex, NULL) != 0) {
 		free(res);
 		return NULL;
 	}

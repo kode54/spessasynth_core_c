@@ -215,8 +215,6 @@ static SS_File *ss_file_stdio_dup(SS_File *file) {
 	SS_FileStdio *res = (SS_FileStdio *)calloc(1, sizeof(*res));
 	if(!res) return NULL;
 
-	ss_mutex_enter(file->mutex);
-
 	if(!file->ref_count) {
 		file->ref_count = calloc(1, sizeof(*(file->ref_count)));
 		if(!file->ref_count) {
@@ -230,8 +228,6 @@ static SS_File *ss_file_stdio_dup(SS_File *file) {
 	/* Shallow copy */
 	memcpy(res, fs, sizeof(*res));
 	(*(file->ref_count))++;
-
-	ss_mutex_leave(file->mutex);
 
 	return &res->base;
 }
