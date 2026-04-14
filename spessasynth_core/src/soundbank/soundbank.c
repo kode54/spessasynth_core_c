@@ -804,7 +804,7 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
 		if(p->program == program && !p->is_gm_gs_drum && !p->is_xg_drum) {
 			size_t new_match_count = match_count + 1;
 			if(new_match_count > allocated_match_count) {
-				allocated_match_count += 16;
+				allocated_match_count = allocated_match_count ? allocated_match_count * 2 : 16;
 				SS_BasicPreset **new_matches = (SS_BasicPreset **)realloc(matches, allocated_match_count * sizeof(SS_BasicPreset *));
 				if(!new_matches) {
 					free(matches);
