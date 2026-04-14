@@ -34,6 +34,8 @@ bool ss_file_retrieve_memory(SS_File *file, uint8_t **out, size_t *out_size);
 
 SS_File *ss_file_open_blank_file(const char *path);
 
+SS_File *ss_file_dup(SS_File *file);
+
 SS_File *ss_file_slice(SS_File *file, size_t offset, size_t size);
 
 void ss_file_close(SS_File *file);

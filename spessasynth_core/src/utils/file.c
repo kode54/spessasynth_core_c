@@ -414,6 +414,18 @@ SS_File *ss_file_open_blank_file(const char *path)
 	return &res->base;
 }
 
+SS_File *ss_file_dup(SS_File *file) {
+	ss_mutex_enter(file->mutex);
+	SS_File *res = file->dup(file);
+	ss_mutex_leave(file->mutex);
+
+	if(!res) return NULL;
+
+	res->current_offset = res->scope_begin;
+
+	return res;
+}
+
 SS_File *ss_file_slice(SS_File *file, size_t offset, size_t size)
 {
 	ss_mutex_enter(file->mutex);

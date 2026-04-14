@@ -56,6 +56,13 @@ void ss_zone_free(SS_Zone *z);
 
 /* ── Sample ───────────────────────────────────────────────────────────────── */
 
+typedef enum SS_PCMType {
+	SS_SMPLT_8BIT = 0,
+	SS_SMPLT_16BIT = 1,
+	SS_SMPLT_FLOAT = 2,
+	SS_SMPLT_COMPRESSED = 3
+} SS_PCMType;
+
 typedef struct SS_BasicSample {
 	char name[41];
 	uint32_t sample_rate;
@@ -68,6 +75,9 @@ typedef struct SS_BasicSample {
 	/* Decoded PCM float data (mono). NULL until decoded. */
 	float *audio_data;
 	size_t audio_data_length; /* sample frames */
+
+	SS_File *audio_file; /* possibly owned range limited file, containing original sample data */
+	SS_PCMType audio_file_type;
 
 	/* Raw compressed data for SF3 (Vorbis/FLAC/WAV container). Freed after decode. */
 	uint8_t *compressed_data;

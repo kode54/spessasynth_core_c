@@ -88,18 +88,26 @@ static int stb_vorbis_decode_memory_float(const uint8 *mem, int len, int *channe
 }
 
 bool ss_vorbis_decode(SS_BasicSample *s) {
-	if(!s->compressed_data || s->compressed_data_length == 0) return false;
+	if(!s->audio_file) return false;
 
 	int channels = 0;
 	int sample_rate = 0;
 	float *pcm = NULL;
 
+	size_t size = ss_file_size(s->audio_file);
+	uint8_t *buffer = malloc(size);
+	if(!buffer) return false;
+
+	ss_file_read_bytes(s->audio_file, 0, buffer, size);
+
 	int n_samples = stb_vorbis_decode_memory_float(
-	s->compressed_data,
-	(int)s->compressed_data_length,
+	buffer,
+	(int)size,
 	&channels,
 	&sample_rate,
 	&pcm);
+
+	free(buffer);
 
 	if(n_samples < 0 || !pcm) return false;
 
@@ -111,9 +119,11 @@ bool ss_vorbis_decode(SS_BasicSample *s) {
 	/* Free compressed data now that it's decoded */
 	if(s->owns_raw_data) {
 		free(s->compressed_data);
+		ss_file_close(s->audio_file);
 	}
 	s->compressed_data = NULL;
 	s->compressed_data_length = 0;
+	s->audio_file = NULL;
 	return true;
 }
 

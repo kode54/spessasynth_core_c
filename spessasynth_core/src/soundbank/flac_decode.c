@@ -19,9 +19,7 @@
 
 typedef struct {
 	/* Input */
-	const uint8_t *compressed;
-	size_t compressed_len;
-	size_t read_pos;
+	SS_File *file;
 
 	/* Output (accumulated) */
 	float *pcm;
@@ -43,14 +41,13 @@ FLAC__byte *buf, size_t *bytes,
 void *client_data) {
 	(void)dec;
 	FlacState *st = (FlacState *)client_data;
-	size_t remaining = st->compressed_len - st->read_pos;
+	size_t remaining = ss_file_remaining(st->file);
 	if(remaining == 0) {
 		*bytes = 0;
 		return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
 	}
 	size_t to_read = *bytes < remaining ? *bytes : remaining;
-	memcpy(buf, st->compressed + st->read_pos, to_read);
-	st->read_pos += to_read;
+	ss_file_read_bytes(st->file, ss_file_tell(st->file), buf, to_read);
 	*bytes = to_read;
 	return FLAC__STREAM_DECODER_READ_STATUS_CONTINUE;
 }
@@ -135,8 +132,8 @@ bool ss_flac_decode(SS_BasicSample *s) {
 
 	FlacState st;
 	memset(&st, 0, sizeof(st));
-	st.compressed = s->compressed_data;
-	st.compressed_len = s->compressed_data_length;
+	st.file = s->audio_file;
+	ss_file_seek(st.file, 0);
 
 	FLAC__StreamDecoder *dec = FLAC__stream_decoder_new();
 	if(!dec) return false;
@@ -181,9 +178,11 @@ bool ss_flac_decode(SS_BasicSample *s) {
 	/* Free compressed data */
 	if(s->owns_raw_data) {
 		free(s->compressed_data);
+		ss_file_close(s->audio_file);
 	}
 	s->compressed_data = NULL;
 	s->compressed_data_length = 0;
+	s->audio_file = NULL;
 	return true;
 }
 

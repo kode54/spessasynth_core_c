@@ -1234,25 +1234,18 @@ static bool parse_wave_pool(SS_File *waves_file,
 		size_t total_frames = pcm_len / (bytes_per_sample * num_channels);
 
 		if(bits_per_sample == 16) {
-			uint8_t *out = (uint8_t *)malloc(total_frames * 2);
-			if(!out) continue;
-			int16_t *dst = (int16_t *)out;
-			for(size_t f = 0; f < total_frames; f++)
-				dst[f] = (int16_t)ss_file_read_le(pcm_data, f * num_channels * 2, 2);
-			s->s16le_data = out;
-			s->s16le_length = total_frames * 2;
+			s->audio_file = pcm_data;
+			s->audio_file_type = SS_SMPLT_16BIT;
+			pcm_data = NULL;
 
 			/* Clamp loop end to sample length */
 			if(s->loop_end > (uint32_t)total_frames)
 				s->loop_end = (uint32_t)total_frames;
 
 		} else if(bits_per_sample == 8) {
-			uint8_t *out = (uint8_t *)malloc(total_frames);
-			if(!out) continue;
-			for(size_t f = 0; f < total_frames; f++)
-				out[f] = ss_file_read_u8(pcm_data, f * num_channels);
-			s->u8_data = out;
-			s->u8_length = total_frames;
+			s->audio_file = pcm_data;
+			s->audio_file_type = SS_SMPLT_8BIT;
+			pcm_data = NULL;
 
 			if(s->loop_end > (uint32_t)total_frames)
 				s->loop_end = (uint32_t)total_frames;

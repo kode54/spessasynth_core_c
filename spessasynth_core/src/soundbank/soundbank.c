@@ -340,6 +340,68 @@ bool ss_flac_decode(SS_BasicSample *s);
 bool ss_sample_decode(SS_BasicSample *s) {
 	if(s->audio_data) return true; /* already decoded */
 
+	if(s->audio_file) {
+		/* Load the sample from a file object */
+		switch(s->audio_file_type) {
+			case SS_SMPLT_8BIT: {
+				size_t frame_count = ss_file_size(s->audio_file);
+				s->audio_data = (float *)malloc((frame_count + 4) * sizeof(float));
+				if(s->audio_data) {
+					for(size_t i = 0; i < frame_count; i++)
+						s->audio_data[i] = (((float)ss_file_read_u8(s->audio_file, i)) - 128.0) / 128.0;
+					memset(s->audio_data + frame_count, 0, 4 * sizeof(float));
+					s->audio_data_length = frame_count;
+				}
+				return true;
+			}
+
+			case SS_SMPLT_16BIT: {
+				size_t frame_count = ss_file_size(s->audio_file) / 2;
+				s->audio_data = (float *)malloc((frame_count + 4) * sizeof(float));
+				if(s->audio_data) {
+					for(size_t i = 0; i < frame_count; i++)
+						s->audio_data[i] = ((float)(int16_t)ss_file_read_le(s->audio_file, i * 2, 2)) / 32768.0;
+					memset(s->audio_data + frame_count, 0, 4 * sizeof(float));
+					s->audio_data_length = frame_count;
+				}
+				return true;
+			}
+
+			case SS_SMPLT_FLOAT: {
+				size_t frame_count = ss_file_size(s->audio_file) / 4;
+				s->audio_data = (float *)malloc((frame_count + 4) * sizeof(float));
+				if(s->audio_data) {
+					ss_file_read_bytes(s->audio_file, 0, (uint8_t *)s->audio_data, frame_count * sizeof(float));
+					memset(s->audio_data + frame_count, 0, 4 * sizeof(float));
+					s->audio_data_length = frame_count;
+				}
+				return true;
+			}
+
+			case SS_SMPLT_COMPRESSED: {
+				size_t size = ss_file_size(s->audio_file);
+				if(size >= 4) {
+					uint8_t hdr[4];
+					ss_file_read_bytes(s->audio_file, 0, hdr, 4);
+
+					if(hdr[0] == 'O' && hdr[1] == 'g' && hdr[2] == 'g' && hdr[3] == 'S') {
+#ifdef SS_HAVE_STB_VORBIS
+						return ss_vorbis_decode(s);
+#endif
+						return false;
+					}
+					if(hdr[0] == 'f' && hdr[1] == 'L' && hdr[2] == 'a' && hdr[3] == 'C') {
+#ifdef SS_HAVE_LIBFLAC
+						return ss_flac_decode(s);
+#endif
+						return false;
+					}
+					break;
+				}
+			}
+		}
+	}
+
 	if(s->is_compressed && s->compressed_data) {
 		/* Dispatch to vorbis/FLAC/WAV decoder based on magic bytes */
 		if(s->is_sf2pack) {

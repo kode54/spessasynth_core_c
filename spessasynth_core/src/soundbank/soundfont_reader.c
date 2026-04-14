@@ -492,21 +492,15 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 				bank->samples[i].loop_start += byte_start;
 				bank->samples[i].loop_end += byte_start;
 				if(offset < ss_file_size(smpl_data) && offset + clen <= ss_file_size(smpl_data)) {
-					bank->samples[i].compressed_data = (uint8_t *)malloc(clen);
-					if(bank->samples[i].compressed_data) {
-						ss_file_read_bytes(smpl_data, offset, bank->samples[i].compressed_data, clen);
-						bank->samples[i].compressed_data_length = clen;
-					}
+					bank->samples[i].audio_file = ss_file_slice(smpl_data, byte_start, clen);
+					bank->samples[i].audio_file_type = SS_SMPLT_COMPRESSED;
 				}
 			} else if(!smpl_is_float32) {
 				/* SF2: process raw s16le slice later */
 				if(byte_end > ss_file_size(smpl_data)) byte_end = (uint32_t)ss_file_size(smpl_data);
 				size_t slen = (byte_end > byte_start) ? (byte_end - byte_start) : 0;
-				bank->samples[i].s16le_data = (uint8_t *)malloc(slen + 1);
-				if(bank->samples[i].s16le_data) {
-					ss_file_read_bytes(smpl_data, byte_start, (uint8_t *)bank->samples[i].s16le_data, slen);
-					bank->samples[i].s16le_length = slen;
-				}
+				bank->samples[i].audio_file = ss_file_slice(smpl_data, byte_start, slen);
+				bank->samples[i].audio_file_type = SS_SMPLT_16BIT;
 			} else {
 				/* SF2Pack: globally compressed to a single chunk, decoded to float already */
 				byte_start *= 2;
@@ -515,14 +509,8 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 				bank->samples[i].loop_end += byte_start / 4;
 				if(byte_end > ss_file_size(smpl_data)) byte_end = (uint32_t)ss_file_size(smpl_data);
 				size_t slen = (byte_end > byte_start) ? (byte_end - byte_start) : 0;
-				bank->samples[i].compressed_data = (uint8_t *)malloc(slen + 4 * sizeof(float));
-				if(bank->samples[i].compressed_data) {
-					ss_file_read_bytes(smpl_data, byte_start, bank->samples[i].compressed_data, slen);
-					bank->samples[i].compressed_data_length = slen;
-					memset(bank->samples[i].compressed_data + slen, 0, 4 * sizeof(float));
-					bank->samples[i].is_compressed = true;
-					bank->samples[i].is_sf2pack = true;
-				}
+				bank->samples[i].audio_file = ss_file_slice(smpl_data, byte_start, slen);
+				bank->samples[i].audio_file_type = SS_SMPLT_FLOAT;
 			}
 		}
 	}
@@ -654,6 +642,9 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 							if(iz->sample) {
 								*iz->sample = bank->samples[sid];
 								/* Duplicate the compressed data, if necessary */
+								if(iz->sample->audio_file) {
+									iz->sample->audio_file = ss_file_dup(iz->sample->audio_file);
+								}
 								if(iz->sample->compressed_data) {
 									iz->sample->compressed_data = (uint8_t *)malloc(iz->sample->compressed_data_length);
 									if(iz->sample->compressed_data)
