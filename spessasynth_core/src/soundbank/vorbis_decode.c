@@ -15,7 +15,7 @@
 #define STB_VORBIS_HEADER_ONLY /* only if we want just the header; remove for impl */
 /* To get the implementation we must define this in exactly one .c file: */
 #undef STB_VORBIS_HEADER_ONLY
-#include <stb_vorbis.c>
+#include <stb_vorbis.h>
 
 #include <stdlib.h>
 #include <string.h>

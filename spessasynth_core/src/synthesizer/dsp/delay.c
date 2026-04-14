@@ -34,7 +34,7 @@ static const SS_DelayTimeSegment delay_time_segments[] = {
 	{ 0x5a, 0x69, 200, 20 },
 	{ 0x69, 0x74, 500, 50 }
 };
-static const int delay_time_segments_count = sizeof(delay_time_segments) / sizeof(delay_time_segments[0]);
+static const size_t delay_time_segments_count = sizeof(delay_time_segments) / sizeof(delay_time_segments[0]);
 
 static const float DELAY_GAIN = 1.66;
 

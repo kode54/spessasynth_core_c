@@ -204,6 +204,9 @@ static float get_modulator_curve_value(int transform, SS_ModulatorCurveType curv
 			}
 			return value <= 1.0 ? convex[(int)(value * (float)MODULATOR_RESOLUTION)] : 1.0;
 	}
+
+	/* Should never be reached */
+	return 0;
 }
 
 void init_modcurve_table(void) {

@@ -470,4 +470,7 @@ bool ss_volume_envelope_apply(SS_VolumeEnvelope *env,
 			return ss_volume_envelope_sustain_phase(env, buffer, count, gain_target, 0);
 		}
 	}
+
+	/* Should never be reached */
+	return false;
 }

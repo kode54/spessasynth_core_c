@@ -736,6 +736,7 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 								ss_delay_set_send_level_to_reverb(proc->delay, value);
 								break;
 						}
+						break;
 					}
 
 					/* EFX Parameter (addr2=0x03) */

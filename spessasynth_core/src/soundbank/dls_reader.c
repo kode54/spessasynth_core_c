@@ -50,7 +50,7 @@ typedef struct {
 
 /* ── Wave sample (wsmp chunk) ────────────────────────────────────────────── */
 typedef struct {
-	uint32_t cbSize;
+	size_t cbSize;
 	uint16_t unity_note;
 	int16_t fine_tune; /* cents */
 	int32_t gain; /* 32-bit: each unit = 1/655360 dB (DLS2), or millibels (DLS1) */

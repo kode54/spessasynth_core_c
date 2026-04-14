@@ -6,10 +6,11 @@
 #endif
 
 bool ss_riff_read_chunk(SS_IBA *iba, SS_RIFFChunk *out, bool skip_size, bool riff64) {
-	if(ss_iba_remaining(iba) < (8 + riff64 * 4)) return false;
+	const size_t size_size = riff64 ? 8 : 4;
+	if(ss_iba_remaining(iba) < (8 + size_size)) return false;
 
 	ss_iba_read_string(iba, out->header, 4);
-	uint64_t sz = ss_iba_read_le(iba, riff64 ? 8 : 4);
+	uint64_t sz = ss_iba_read_le(iba, size_size);
 	out->size = sz;
 
 	if(skip_size) {

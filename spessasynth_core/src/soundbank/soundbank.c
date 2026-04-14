@@ -139,8 +139,11 @@ SS_Modulator ss_modulator_copy(const SS_Modulator *src) {
 #define MODISDEFAULTRESONANT(s1, s2, dest) \
 	(s1 == DEFAULT_RESONANT_MOD_SOURCE && s2 == 0x0 && dest == SS_GEN_INITIAL_FILTER_Q)
 
+#define ISCC(srcenum) (((srcenum) & (1 << 7)) != 0)
+#define SRCIDX(srcenum) ((srcenum) & 127)
+
 #define MODISMODWHEEL(s1, s2, dest) \
-	(((((s1 & (1 << 7)) != 0) && ((s1 & 127) == SS_MIDCON_MODULATION_WHEEL)) || ((s1 & (1 << 7)) != 0) && ((s1 & 127) == SS_MIDCON_MODULATION_WHEEL)) && (dest == SS_GEN_MOD_LFO_TO_PITCH || dest == SS_GEN_VIB_LFO_TO_PITCH))
+	(((ISCC(s1) && SRCIDX(s1) == SS_MIDCON_MODULATION_WHEEL) || (ISCC(s2) && SRCIDX(s2) == SS_MIDCON_MODULATION_WHEEL)) && (dest == SS_GEN_MOD_LFO_TO_PITCH || dest == SS_GEN_VIB_LFO_TO_PITCH))
 
 #define MODULATOR(s1, s2, dest, amount, transform) { s1, s2, dest, amount, transform, 0, MODISEFFECT(s1, s2, dest), MODISDEFAULTRESONANT(s1, s2, dest), MODISMODWHEEL(s1, s2, dest) }
 
@@ -928,9 +931,10 @@ SS_SoundBank *ss_soundbank_load(const uint8_t *data, size_t size) {
 	/* SF2/SF3: "RIFF" or "RIFS" + size + "sfbk"/"sfpk"/"sfen" */
 	SS_SoundBank *res = NULL;
 	if(data[0] == 'R' && data[1] == 'I' && data[2] == 'F' && (data[3] == 'F' || data[3] == 'S')) {
-		bool riff64 = data[3] == 'S';
-		if(size >= (12 + riff64 * 4)) {
-			const uint8_t *sig = &data[8 + riff64 * 4];
+		const bool riff64 = data[3] == 'S';
+		const size_t size_size = riff64 ? 8 : 4;
+		if(size >= (8 + size_size)) {
+			const uint8_t *sig = &data[4 + size_size];
 			if((sig[0] == 's' && sig[1] == 'f' && sig[2] == 'b' && sig[3] == 'k') ||
 			   (sig[0] == 's' && sig[1] == 'f' && sig[2] == 'p' && sig[3] == 'k') ||
 			   (sig[0] == 's' && sig[1] == 'f' && sig[2] == 'e' && sig[3] == 'n')) {

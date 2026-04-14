@@ -134,6 +134,7 @@ bool ss_vorbis_decode(SS_BasicSample *s);
 bool ss_flac_decode(SS_BasicSample *s);
 
 SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
+	const size_t size_size = riff64 ? 8 : 4;
 	SS_IBA main_iba;
 	ss_iba_wrap(&main_iba, data, size);
 
@@ -168,7 +169,7 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 	memset(&xdta, 0, sizeof(SS_RIFFChunk));
 	memset(&isfe, 0, sizeof(SS_RIFFChunk));
 
-	while(ss_iba_remaining(&info_chunk.data) >= (8 + riff64 * 4)) {
+	while(ss_iba_remaining(&info_chunk.data) >= (8 + size_size)) {
 		SS_RIFFChunk sub;
 		if(!ss_riff_read_chunk(&info_chunk.data, &sub, false, riff64)) break;
 		if(strcmp(sub.header, "INAM") == 0 || strcmp(sub.header, "inam") == 0) {
@@ -224,7 +225,7 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 	SS_BasicSample sf2pack_samples;
 	memset(&sf2pack_samples, 0, sizeof(sf2pack_samples));
 
-	while(ss_iba_remaining(&sdta.data) >= (8 + riff64 * 4)) {
+	while(ss_iba_remaining(&sdta.data) >= (8 + size_size)) {
 		SS_RIFFChunk sub;
 		if(!ss_riff_read_chunk(&sdta.data, &sub, false, riff64)) break;
 		if(strcmp(sub.header, "smpl") == 0) {
@@ -292,7 +293,7 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 	memset(&igen_c, 0, sizeof(SS_RIFFChunk));
 	memset(&shdr_c, 0, sizeof(SS_RIFFChunk));
 
-	while(ss_iba_remaining(&pdta.data) >= (8 + riff64 * 4)) {
+	while(ss_iba_remaining(&pdta.data) >= (8 + size_size)) {
 		SS_RIFFChunk sub;
 		if(!ss_riff_read_chunk(&pdta.data, &sub, false, riff64)) break;
 		if(strcmp(sub.header, "phdr") == 0)
@@ -328,7 +329,7 @@ SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64) {
 	memset(&ximod_c, 0, sizeof(SS_RIFFChunk));
 	memset(&xigen_c, 0, sizeof(SS_RIFFChunk));
 	memset(&xshdr_c, 0, sizeof(SS_RIFFChunk));
-	while(ss_iba_remaining(&xdta.data) >= (8 + riff64 * 4)) {
+	while(ss_iba_remaining(&xdta.data) >= (8 + size_size)) {
 		SS_RIFFChunk sub;
 		if(!ss_riff_read_chunk(&xdta.data, &sub, false, riff64)) break;
 		if(strcmp(sub.header, "phdr") == 0)
