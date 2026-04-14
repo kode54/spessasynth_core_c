@@ -923,7 +923,7 @@ static void soundbank_parse(SS_SoundBank *bank) {
 
 /* Forward declarations for the format-specific loaders */
 SS_SoundBank *ss_soundfont_load(const uint8_t *data, size_t size, bool riff64);
-SS_SoundBank *ss_dls_load(const uint8_t *data, size_t size);
+SS_SoundBank *ss_dls_load(const uint8_t *data, size_t size, bool riff64);
 
 /* Entry point: dispatch to SF2/DLS reader */
 SS_SoundBank *ss_soundbank_load(const uint8_t *data, size_t size) {
@@ -941,8 +941,8 @@ SS_SoundBank *ss_soundbank_load(const uint8_t *data, size_t size) {
 				res = ss_soundfont_load(data, size, riff64);
 			}
 			/* DLS: "RIFF" + size + "DLS " */
-			else if(!riff64 && sig[0] == 'D' && sig[1] == 'L' && sig[2] == 'S' && sig[3] == ' ') {
-				res = ss_dls_load(data, size);
+			else if(sig[0] == 'D' && sig[1] == 'L' && sig[2] == 'S' && sig[3] == ' ') {
+				res = ss_dls_load(data, size, riff64);
 			}
 		}
 	}
