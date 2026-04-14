@@ -5,6 +5,7 @@
  */
 
 #include <math.h>
+#include <string.h>
 #if __has_include(<spessasynth_core/spessasynth.h>)
 #include <spessasynth_core/synth.h>
 #else
@@ -29,7 +30,10 @@ static bool get_sample_nearest(SS_Voice *v, float *out, int count, double step) 
 	} else {
 		for(int i = 0; i < count; i++) {
 			int floor_i = (int)cur;
-			if(floor_i >= (int)s->end) { return false; }
+			if(floor_i >= (int)s->end) {
+				memset(out + i, 0, (count - i) * sizeof(float));
+				return false;
+			}
 			out[i] = data[floor_i];
 			cur += step;
 		}
@@ -62,7 +66,10 @@ static bool get_sample_linear(SS_Voice *v, float *out, int count, double step) {
 		for(int i = 0; i < count; i++) {
 			int floor_i = (int)cur;
 			int ceil_i = floor_i + 1;
-			if(ceil_i >= (int)s->end) { return false; }
+			if(ceil_i >= (int)s->end) {
+				memset(out + i, 0, (count - i) * sizeof(float));
+				return false;
+			}
 			float frac = (float)(cur - (double)floor_i);
 			float lo = data[floor_i];
 			float hi = data[ceil_i];
@@ -109,6 +116,7 @@ static bool get_sample_hermite(SS_Voice *v, float *out, int count, double step) 
 			int y1 = y0 + 1, y2 = y0 + 2, y3 = y0 + 3;
 			float t = (float)(cur - (double)y0);
 			if(y1 >= (int)s->end || y2 >= (int)s->end || y3 >= (int)s->end) {
+				memset(out + i, 0, (count - i) * sizeof(float));
 				return false;
 			}
 			float xm1 = data[y0];
