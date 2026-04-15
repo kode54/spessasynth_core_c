@@ -20,6 +20,7 @@
 typedef struct {
 	/* Input */
 	SS_File *file;
+	size_t offset, size;
 	size_t sample_count;
 
 	/* Output (accumulated) */
@@ -48,7 +49,11 @@ void *client_data) {
 		return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
 	}
 	size_t to_read = *bytes < remaining ? *bytes : remaining;
-	ss_file_read_bytes(st->file, ss_file_tell(st->file), buf, to_read);
+	ss_file_read_bytes(st->file, st->offset, buf, to_read);
+	st->offset += to_read;
+	if(st->offset > st->size) {
+		st->offset = st->size;
+	}
 	*bytes = to_read;
 	return FLAC__STREAM_DECODER_READ_STATUS_CONTINUE;
 }
@@ -60,6 +65,10 @@ FLAC__uint64 absolute_byte_offset, void *client_data) {
 	FlacState *st = (FlacState *)client_data;
 
 	ss_file_seek(st->file, absolute_byte_offset);
+	st->offset = absolute_byte_offset;
+	if(st->offset > st->size) {
+		st->offset = st->size;
+	}
 
 	return FLAC__STREAM_DECODER_SEEK_STATUS_OK;
 }
@@ -70,7 +79,7 @@ FLAC__uint64 *absolute_byte_offset, void *client_data) {
 	(void)dec;
 	FlacState *st = (FlacState *)client_data;
 
-	*absolute_byte_offset = (FLAC__uint64)ss_file_tell(st->file);
+	*absolute_byte_offset = st->offset;
 
 	return FLAC__STREAM_DECODER_TELL_STATUS_OK;
 }
@@ -80,7 +89,7 @@ static FLAC__bool flac_eof_cb(const FLAC__StreamDecoder *dec,
 	(void)dec;
 	FlacState *st = (FlacState *)client_data;
 
-	return (FLAC__bool)!ss_file_remaining(st->file);
+	return (FLAC__bool) (st->offset == st->size);
 }
 
 static FLAC__StreamDecoderLengthStatus flac_length_cb(
@@ -89,7 +98,7 @@ FLAC__uint64 *stream_length, void *client_data) {
 	(void)dec;
 	FlacState *st = (FlacState *)client_data;
 
-	*stream_length = ss_file_size(st->file);
+	*stream_length = st->size;
 
 	return FLAC__STREAM_DECODER_LENGTH_STATUS_OK;
 }
@@ -107,7 +116,7 @@ void *client_data) {
 
 	bool aborting = false;
 	if(block_size > st->sample_count) {
-		block_size = st->sample_count;
+		block_size = (uint32_t)st->sample_count;
 		aborting = true;
 	}
 	st->sample_count -= block_size;
@@ -185,6 +194,8 @@ bool ss_flac_decode(SS_BasicSample *s) {
 	st.file = s->audio_file;
 	st.sample_count = s->audio_file_sample_count;
 	ss_file_seek(st.file, 0);
+	st.offset = 0;
+	st.size = ss_file_size(st.file);
 
 	FLAC__StreamDecoder *dec = FLAC__stream_decoder_new();
 	if(!dec) return false;

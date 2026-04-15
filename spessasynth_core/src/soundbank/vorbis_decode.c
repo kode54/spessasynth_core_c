@@ -25,43 +25,57 @@
 #include "spessasynth/soundbank/soundbank.h"
 #endif
 
+typedef struct {
+	SS_File *file;
+	size_t offset, size;
+} SS_FileVorbis;
+
 static int stb_vorbis_fgetc(void *context) {
-	SS_File *file = (SS_File *)context;
-	if(ss_file_remaining(file) < 1) {
+	SS_FileVorbis *file = (SS_FileVorbis *)context;
+	if(file->offset == file->size) {
 		return EOF;
 	}
-	return ss_file_read_u8(file, ss_file_tell(file));
+	return ss_file_read_u8(file->file, file->offset++);
 }
 
 static int stb_vorbis_fread(void *out, size_t unit, size_t count, void *context) {
-	SS_File *file = (SS_File *)context;
+	SS_FileVorbis *file = (SS_FileVorbis *)context;
 	const size_t total_bytes = unit * count;
-	const size_t offset = ss_file_tell(file);
-	ss_file_read_bytes(file, offset, (uint8_t *)out, total_bytes);
-	const size_t bytes_read = ss_file_tell(file) - offset;
+	const size_t offset = file->offset;
+	ss_file_read_bytes(file->file, offset, (uint8_t *)out, total_bytes);
+	file->offset += total_bytes;
+	if(file->offset > file->size) {
+		file->offset = file->size;
+	}
+	const size_t bytes_read = file->offset - offset;
 	return (int)(bytes_read / unit);
 }
 
 static int stb_vorbis_fseek(void *context, ssize_t offset, int mode) {
-	SS_File *file = (SS_File *)context;
+	SS_FileVorbis *file = (SS_FileVorbis *)context;
 	switch(mode) {
 		case SEEK_SET:
 			break;
 		case SEEK_CUR:
-			offset += ss_file_tell(file);
+			offset += file->offset;
 			break;
 
 		case SEEK_END:
-			offset += ss_file_size(file);
+			offset += file->size;
 			break;
 	}
-	ss_file_seek(file, offset);
-	return 0;
+	int res = 0;
+	if(file->offset > file->size) {
+		file->offset = file->size;
+		res = -1;
+	}
+	ss_file_seek(file->file, offset);
+	return res;
 }
 
 static size_t stb_vorbis_ftell(void *context) {
-	SS_File *file = (SS_File *)context;
-	return ss_file_tell(file);
+	SS_FileVorbis *file = (SS_FileVorbis *)context;
+	return file->offset;
 }
 
 bool ss_vorbis_decode(SS_BasicSample *s) {
@@ -78,11 +92,17 @@ bool ss_vorbis_decode(SS_BasicSample *s) {
 		.ftell = &stb_vorbis_ftell
 	};
 
+	SS_FileVorbis fileVorbis = {
+		.file = s->audio_file,
+		.offset = 0,
+		.size = ss_file_size(s->audio_file)
+	};
+
 	ss_file_seek(s->audio_file, 0);
 
 	int n_samples = stb_vorbis_decode_file_callbacks_float_range(
 	&file_callbacks,
-	s->audio_file,
+	&fileVorbis,
 	(unsigned int)s->audio_file_sample_offset,
 	(unsigned int)s->audio_file_sample_count,
 	&channels,
