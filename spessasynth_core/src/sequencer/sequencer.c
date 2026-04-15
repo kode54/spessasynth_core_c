@@ -56,7 +56,7 @@ static void song_rewind(SS_SequencerSong *song) {
 static int find_first_event(const SS_SequencerSong *song,
                             const SS_MIDIFile *midi) {
 	int best_track = -1;
-	size_t best_tick = SIZE_T_MAX;
+	size_t best_tick = SIZE_MAX;
 
 	for(size_t ti = 0; ti < song->track_count; ti++) {
 		size_t ei = song->event_indexes[ti];

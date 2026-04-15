@@ -12,7 +12,7 @@
 #include "spessasynth/utils/sync_primitives.h"
 #endif
 
-#if defined(__LINUX__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__)
 
 #include <pthread.h>
 #include <stdlib.h>
