@@ -277,8 +277,8 @@ SS_MIDIChannel *ss_channel_new(int channel_number, struct SS_Processor *synth) {
 	ch->poly_mode = true;
 	ch->rx_channel = channel_number;
 	ch->drum_map = 0;
-	ch->cc1 = 1;
-	ch->cc2 = 2;
+	ch->cc1 = 0x10;
+	ch->cc2 = 0x11;
 	reset_drum_params(ch);
 	reset_controllers_to_defaults(ch);
 	return ch;

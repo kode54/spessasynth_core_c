@@ -275,8 +275,18 @@ typedef struct SS_MIDIChannel {
 	uint8_t program;
 	bool is_gm_gs_drum;
 	uint8_t drum_map; /* GS drum map value (0 = none) */
-	uint8_t cc1; /* CC1 controller number (GS/XG, default 1) */
-	uint8_t cc2; /* CC2 controller number (GS/XG, default 2) */
+	/**
+	 * CC1 for GS controller matrix.
+	 * An arbitrary MIDI controller, which can be bound to any synthesis parameter.
+	 * Default is 16
+	 */
+	uint8_t cc1;
+	/**
+	 * CC2 for GS controller matrix.
+	 * An arbitrary MIDI controller, which can be bound to any synthesis parameter.
+	 *  * Default is 17
+	 */
+	uint8_t cc2;
 	int rx_channel; /* receive channel override (-1 = off), default = channel_number */
 
 	SS_SoundBank *bank; /* non-owning */
