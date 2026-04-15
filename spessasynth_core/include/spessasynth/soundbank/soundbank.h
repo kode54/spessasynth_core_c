@@ -78,6 +78,7 @@ typedef struct SS_BasicSample {
 
 	SS_File *audio_file; /* possibly owned range limited file, containing original sample data */
 	SS_PCMType audio_file_type;
+	size_t audio_file_sample_offset, audio_file_sample_count;
 
 	/* Raw compressed data for SF3 (Vorbis/FLAC/WAV container). Freed after decode. */
 	uint8_t *compressed_data;

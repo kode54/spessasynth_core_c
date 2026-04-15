@@ -20,6 +20,7 @@
 typedef struct {
 	/* Input */
 	SS_File *file;
+	size_t sample_count;
 
 	/* Output (accumulated) */
 	float *pcm;
@@ -52,6 +53,47 @@ void *client_data) {
 	return FLAC__STREAM_DECODER_READ_STATUS_CONTINUE;
 }
 
+static FLAC__StreamDecoderSeekStatus flac_seek_cb(
+const FLAC__StreamDecoder *dec,
+FLAC__uint64 absolute_byte_offset, void *client_data) {
+	(void)dec;
+	FlacState *st = (FlacState *)client_data;
+
+	ss_file_seek(st->file, absolute_byte_offset);
+
+	return FLAC__STREAM_DECODER_SEEK_STATUS_OK;
+}
+
+static FLAC__StreamDecoderTellStatus flac_tell_cb(
+const FLAC__StreamDecoder *dec,
+FLAC__uint64 *absolute_byte_offset, void *client_data) {
+	(void)dec;
+	FlacState *st = (FlacState *)client_data;
+
+	*absolute_byte_offset = (FLAC__uint64)ss_file_tell(st->file);
+
+	return FLAC__STREAM_DECODER_TELL_STATUS_OK;
+}
+
+static FLAC__bool flac_eof_cb(const FLAC__StreamDecoder *dec,
+                              void *client_data) {
+	(void)dec;
+	FlacState *st = (FlacState *)client_data;
+
+	return (FLAC__bool)!ss_file_remaining(st->file);
+}
+
+static FLAC__StreamDecoderLengthStatus flac_length_cb(
+const FLAC__StreamDecoder *dec,
+FLAC__uint64 *stream_length, void *client_data) {
+	(void)dec;
+	FlacState *st = (FlacState *)client_data;
+
+	*stream_length = ss_file_size(st->file);
+
+	return FLAC__STREAM_DECODER_LENGTH_STATUS_OK;
+}
+
 static FLAC__StreamDecoderWriteStatus flac_write_cb(
 const FLAC__StreamDecoder *dec,
 const FLAC__Frame *frame,
@@ -62,6 +104,13 @@ void *client_data) {
 	uint32_t block_size = frame->header.blocksize;
 	int channels = (int)frame->header.channels;
 	uint32_t bps = frame->header.bits_per_sample;
+
+	bool aborting = false;
+	if(block_size > st->sample_count) {
+		block_size = st->sample_count;
+		aborting = true;
+	}
+	st->sample_count -= block_size;
 
 	st->channels = channels;
 	st->sample_rate = frame->header.sample_rate;
@@ -88,7 +137,8 @@ void *client_data) {
 			sum += (float)buffer[c][i];
 		st->pcm[st->pcm_frames++] = (sum / (float)channels) * scale;
 	}
-	return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
+	return aborting ? FLAC__STREAM_DECODER_WRITE_STATUS_ABORT :
+	                  FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
 }
 
 static void flac_metadata_cb(
@@ -127,12 +177,13 @@ void *client_data) {
  * Returns true on success.
  */
 bool ss_flac_decode(SS_BasicSample *s) {
-	if(!s || !s->compressed_data || s->compressed_data_length == 0)
+	if(!s || !s->audio_file)
 		return false;
 
 	FlacState st;
 	memset(&st, 0, sizeof(st));
 	st.file = s->audio_file;
+	st.sample_count = s->audio_file_sample_count;
 	ss_file_seek(st.file, 0);
 
 	FLAC__StreamDecoder *dec = FLAC__stream_decoder_new();
@@ -142,7 +193,10 @@ bool ss_flac_decode(SS_BasicSample *s) {
 	FLAC__stream_decoder_init_stream(
 	dec,
 	flac_read_cb,
-	NULL, NULL, NULL, NULL,
+	flac_seek_cb,
+	flac_tell_cb,
+	flac_length_cb,
+	flac_eof_cb,
 	flac_write_cb,
 	flac_metadata_cb,
 	flac_error_cb,
@@ -152,6 +206,14 @@ bool ss_flac_decode(SS_BasicSample *s) {
 		FLAC__stream_decoder_delete(dec);
 		free(st.pcm);
 		return false;
+	}
+
+	if(s->audio_file_sample_offset) {
+		if(!FLAC__stream_decoder_seek_absolute(dec, s->audio_file_sample_offset)) {
+			FLAC__stream_decoder_delete(dec);
+			free(st.pcm);
+			return false;
+		}
 	}
 
 	FLAC__stream_decoder_process_until_end_of_stream(dec);

@@ -128,9 +128,6 @@ static void read_sample_header(SS_File *file, SS_BasicSample *s,
 
 /* ── Main SF2 loader ─────────────────────────────────────────────────────── */
 
-bool ss_vorbis_decode(SS_BasicSample *s);
-bool ss_flac_decode(SS_BasicSample *s);
-
 SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 	const size_t size_size = riff64 ? 8 : 4;
 	SS_SoundBank *bank = ss_soundbank_new();
@@ -256,9 +253,6 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 
 	bool smpl_is_float32 = false; /* SF2Pack decoded float */
 
-	SS_BasicSample sf2pack_samples;
-	memset(&sf2pack_samples, 0, sizeof(sf2pack_samples));
-
 	while(ss_file_remaining(sdta.file) >= (8 + size_size)) {
 		SS_RIFFChunk sub;
 		if(!ss_riff_read_chunk(sdta.file, &sub, false, riff64)) break;
@@ -268,33 +262,8 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 				/* SF2Pack: smpl is a single Ogg Vorbis stream covering all samples */
 				/* We decode it and get a Float32 array */
 				/* For now, copy raw compressed data; decode lazily */
-				size_t chunk_size = ss_file_remaining(sub.file);
-				if(chunk_size >= 4) {
-					uint8_t hdr[4];
-					ss_file_read_bytes(sub.file, 0, hdr, 4);
-					if(hdr[0] == 'O' && hdr[1] == 'g' && hdr[2] == 'g' && hdr[3] == 'S') {
-#ifdef SS_HAVE_STB_VORBIS
-						sf2pack_samples.compressed_data = malloc(chunk_size);
-						if(!sf2pack_samples.compressed_data) goto fail;
-						ss_file_read_bytes(sub.file, 0, sf2pack_samples.compressed_data, chunk_size);
-						sf2pack_samples.compressed_data_length = chunk_size;
-						if(ss_vorbis_decode(&sf2pack_samples)) {
-							smpl_data = ss_file_open_from_memory((uint8_t *)sf2pack_samples.audio_data, sf2pack_samples.audio_data_length * sizeof(float), true);
-						}
-#endif
-					}
-					if(hdr[0] == 'f' && hdr[1] == 'L' && hdr[2] == 'a' && hdr[3] == 'C') {
-#ifdef SS_HAVE_LIBFLAC
-						sf2pack_samples.compressed_data = malloc(chunk_size);
-						if(!sf2pack_samples.compressed_data) goto fail;
-						ss_file_read_bytes(sub.file, 0, sf2pack_samples.compressed_data, chunk_size);
-						sf2pack_samples.compressed_data_length = chunk_size;
-						if(ss_flac_decode(&sf2pack_samples)) {
-							smpl_data = ss_file_open_from_memory((uint8_t *)sf2pack_samples.audio_data, sf2pack_samples.audio_data_length * sizeof(float), true);
-						}
-#endif
-					}
-				}
+				smpl_data = sub.file;
+				sub.file = NULL;
 #else
 				goto fail;
 #endif
@@ -494,8 +463,10 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 				if(offset < ss_file_size(smpl_data) && offset + clen <= ss_file_size(smpl_data)) {
 					bank->samples[i].audio_file = ss_file_slice(smpl_data, byte_start, clen);
 					bank->samples[i].audio_file_type = SS_SMPLT_COMPRESSED;
+					bank->samples[i].audio_file_sample_offset = 0;
+					bank->samples[i].audio_file_sample_count = ~0ULL;
 				}
-			} else if(!smpl_is_float32) {
+			} else if(!is_sf2pack) {
 				/* SF2: process raw s16le slice later */
 				if(byte_end > ss_file_size(smpl_data)) byte_end = (uint32_t)ss_file_size(smpl_data);
 				size_t slen = (byte_end > byte_start) ? (byte_end - byte_start) : 0;
@@ -503,14 +474,14 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 				bank->samples[i].audio_file_type = SS_SMPLT_16BIT;
 			} else {
 				/* SF2Pack: globally compressed to a single chunk, decoded to float already */
-				byte_start *= 2;
-				byte_end *= 2;
-				bank->samples[i].loop_start += byte_start / 4;
-				bank->samples[i].loop_end += byte_start / 4;
-				if(byte_end > ss_file_size(smpl_data)) byte_end = (uint32_t)ss_file_size(smpl_data);
-				size_t slen = (byte_end > byte_start) ? (byte_end - byte_start) : 0;
-				bank->samples[i].audio_file = ss_file_slice(smpl_data, byte_start, slen);
-				bank->samples[i].audio_file_type = SS_SMPLT_FLOAT;
+				byte_start = sample_starts[i];
+				byte_end = sample_ends[i];
+				bank->samples[i].loop_start += byte_start;
+				bank->samples[i].loop_end += byte_start;
+				bank->samples[i].audio_file = ss_file_dup(smpl_data);
+				bank->samples[i].audio_file_type = SS_SMPLT_COMPRESSED;
+				bank->samples[i].audio_file_sample_offset = byte_start;
+				bank->samples[i].audio_file_sample_count = byte_end - byte_start;
 			}
 		}
 	}

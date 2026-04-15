@@ -748,7 +748,7 @@ void ss_file_seek(SS_File *file, size_t offset) {
 
 	ss_mutex_enter(file->mutex);
 
-	file->current_offset = file->scope_begin;
+	file->current_offset = file->scope_begin + offset;
 
 	ss_mutex_leave(file->mutex);
 }
