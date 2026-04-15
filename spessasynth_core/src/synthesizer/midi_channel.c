@@ -62,6 +62,7 @@ extern void ss_modulation_envelope_recalculate(SS_ModulationEnvelope *env,
                                                bool is_in_release,
                                                double release_start_time,
                                                double start_time);
+void ss_channel_exclusive_release(SS_MIDIChannel *ch, int note, double time);
 
 #define VOICE_GROW_BY 16
 
@@ -255,7 +256,10 @@ static void reset_controllers_to_defaults(SS_MIDIChannel *ch) {
 	reset_drum_params(ch);
 	reset_vibrato_params(ch);
 
+	ch->assign_mode = 2;
 	ch->poly_mode = true;
+	ch->rx_channel = ch->channel_number;
+	ch->random_pan = false;
 
 	reset_parameters_to_defaults(ch);
 
@@ -402,6 +406,10 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	const int tune = ch->synth->master_params.tunings ? ch->synth->master_params.tunings[program][real_key].midi_note : 0;
 	if(tune > 0) {
 		internal_midi_note = tune;
+	}
+
+	if(/*this.synthCore.masterParameters.monophonicRetriggerMode note implemented ||*/ ch->assign_mode == 0) {
+		ss_channel_exclusive_release(ch, note, time);
 	}
 
 	/* Get synthesis data for this (note, velocity) */
@@ -601,6 +609,22 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 
 /* ── Note off ────────────────────────────────────────────────────────────── */
 
+void ss_channel_exclusive_release(SS_MIDIChannel *ch, int note, double time) {
+	/* Adjust midiNote by channel key shift */
+	const int real_key =
+	note +
+	ch->channel_transpose_key_shift +
+	ch->custom_controllers[SS_CUSTOM_CTRL_KEY_SHIFT];
+
+	for(size_t i = 0; i < ch->voice_count; i++) {
+		SS_Voice *v = ch->voices[i];
+		if(v->is_active &&
+		   v->real_key == real_key) {
+			ss_voice_exclusive_release(v, time);
+		}
+	}
+}
+
 void ss_channel_note_off(SS_MIDIChannel *ch, int note, double time) {
 	const int real_key = note +
 	                     ch->channel_transpose_key_shift +
@@ -609,11 +633,7 @@ void ss_channel_note_off(SS_MIDIChannel *ch, int note, double time) {
 	/* Drum rx_note_off: if enabled, do a fast exclusive release */
 	if(ch->drum_channel && real_key >= 0 && real_key < 128) {
 		if(ch->drum_params[real_key].rx_note_off) {
-			for(size_t i = 0; i < ch->voice_count; i++) {
-				SS_Voice *v = ch->voices[i];
-				if(v->is_active && !v->is_in_release && v->midi_note == note)
-					ss_voice_exclusive_release(v, time);
-			}
+			ss_channel_exclusive_release(ch, note, time);
 			return;
 		}
 	}

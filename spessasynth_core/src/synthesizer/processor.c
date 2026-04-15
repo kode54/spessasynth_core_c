@@ -825,7 +825,8 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 						mch->poly_mode = (gs_val == 1);
 						break;
 
-					case 0x14: /* Assign mode (ignored) */
+					case 0x14: /* Assign mode */
+						mch->assign_mode = gs_val;
 						break;
 
 					case 0x15: /* Use for drum part */
