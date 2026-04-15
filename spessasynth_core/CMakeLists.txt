@@ -5,8 +5,8 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # ── Options ──────────────────────────────────────────────────────────────────
-option(SS_ENABLE_SF3_VORBIS  "Enable SF3 OGG Vorbis decoding via stb_vorbis"  OFF)
-option(SS_ENABLE_SF3_FLAC    "Enable SF3 FLAC decoding via libFLAC"           OFF)
+option(SS_ENABLE_SF3_VORBIS  "Enable SF3 OGG Vorbis decoding via stb_vorbis"  ON)
+option(SS_ENABLE_SF3_FLAC    "Enable SF3 FLAC decoding via libFLAC"           ON)
 option(SS_BUILD_SHARED       "Build as a shared library"                      OFF)
 option(SS_BUILD_EXAMPLES     "Build example tools"                            ON)
 
