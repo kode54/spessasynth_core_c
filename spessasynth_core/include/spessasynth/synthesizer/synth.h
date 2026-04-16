@@ -28,7 +28,8 @@ extern "C" {
 typedef enum {
 	SS_INTERP_LINEAR = 0,
 	SS_INTERP_NEAREST = 1,
-	SS_INTERP_HERMITE = 2
+	SS_INTERP_HERMITE = 2,
+	SS_INTERP_SINC = 3
 } SS_InterpolationType;
 
 /* ── Sample looping mode ─────────────────────────────────────────────────── */

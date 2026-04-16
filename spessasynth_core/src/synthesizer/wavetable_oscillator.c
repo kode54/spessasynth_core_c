@@ -136,6 +136,70 @@ static bool get_sample_hermite(SS_Voice *v, float *out, int count, double step) 
 	return true;
 }
 
+/* ── Sinc interpolation ──────────────────────────────────────────────────── */
+
+enum { radius = 2 };
+static inline double lanczos(double d) {
+	if(d == 0.) return 1.;
+	if(fabs(d) > (double)radius) return 0.;
+	double dr = (d * M_PI) / (double)radius;
+	return sin(d) * sin(dr) / (d * dr);
+}
+
+static float itpSinc(const float *buf, double pos, double incr, size_t loop_end, size_t loop_length) {
+	size_t offset = (size_t)(pos);
+	double frac = pos - (double)offset;
+	double scale = 1. / incr > 1. ? 1. : 1. / incr;
+	double density = 0.;
+	double sample = 0.;
+	double fpos = 3. + frac; // 3.5 is the center position
+
+	int min = (double)-radius / scale + fpos - 0.5;
+	int max = (double)radius / scale + fpos + 0.5;
+
+	if(min < 0) min = 0;
+	if(max > 8) max = 8;
+
+	for(int m = min; m < max; ++m) {
+		double factor = lanczos((m - fpos + 0.5) * scale);
+		size_t index = offset + m;
+		if(loop_length && index >= loop_end) {
+			index -= loop_length;
+		}
+		density += factor;
+		sample += buf[index] * factor;
+	}
+	if(density > 0.) sample /= density; // Normalize
+
+	return (float)sample;
+}
+
+static bool get_sample_sinc(SS_Voice *v, float *out, int count, double step) {
+	SS_AudioSample *s = &v->sample;
+	double cur = s->cursor;
+	const float *data = s->sample_data;
+
+	if(s->is_looping) {
+		int loop_len = (int)(s->loop_end - s->loop_start);
+		for(int i = 0; i < count; i++) {
+			while(cur >= (double)s->loop_end) cur -= (double)loop_len;
+			out[i] = itpSinc(data, cur, step, s->loop_end, loop_len);
+			cur += step;
+		}
+	} else {
+		for(int i = 0; i < count; i++) {
+			if(cur >= (double)s->end) {
+				memset(out + i, 0, (count - i) * sizeof(float));
+				return false;
+			}
+			out[i] = itpSinc(data, cur, step, 0, 0);
+			cur += step;
+		}
+	}
+	s->cursor = cur;
+	return true;
+}
+
 /* ── Public dispatch ─────────────────────────────────────────────────────── */
 
 bool ss_wavetable_get_sample(SS_Voice *v, float *out, int count,
@@ -146,6 +210,8 @@ bool ss_wavetable_get_sample(SS_Voice *v, float *out, int count,
 		return get_sample_nearest(v, out, count, step);
 	}
 	switch(interp) {
+		case SS_INTERP_SINC:
+			return get_sample_sinc(v, out, count, step);
 		case SS_INTERP_HERMITE:
 			return get_sample_hermite(v, out, count, step);
 		case SS_INTERP_NEAREST:
