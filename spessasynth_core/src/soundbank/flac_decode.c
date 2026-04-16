@@ -89,7 +89,7 @@ static FLAC__bool flac_eof_cb(const FLAC__StreamDecoder *dec,
 	(void)dec;
 	FlacState *st = (FlacState *)client_data;
 
-	return (FLAC__bool) (st->offset == st->size);
+	return (FLAC__bool)(st->offset == st->size);
 }
 
 static FLAC__StreamDecoderLengthStatus flac_length_cb(

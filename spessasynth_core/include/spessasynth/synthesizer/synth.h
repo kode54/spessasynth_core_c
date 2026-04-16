@@ -480,7 +480,6 @@ void ss_processor_render(SS_Processor *proc,
 void ss_processor_render_interleaved(SS_Processor *proc,
                                      float *out, uint32_t sample_count);
 
-
 void ss_processor_note_on(SS_Processor *proc, int ch, int note, int vel, double t);
 void ss_processor_note_off(SS_Processor *proc, int ch, int note, double t);
 void ss_processor_control_change(SS_Processor *proc, int ch, int cc, int val, double t);
