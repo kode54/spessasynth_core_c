@@ -1191,6 +1191,8 @@ static bool parse_wave_pool(SS_File *waves_file,
 		uint32_t sample_rate = 44100;
 		uint16_t bits_per_sample = 16;
 		uint16_t num_channels = 1;
+		uint16_t fmt_tag = 0;
+		uint16_t block_align = 0;
 		SS_File *pcm_data = NULL;
 		size_t pcm_len = 0;
 
@@ -1199,18 +1201,16 @@ static bool parse_wave_pool(SS_File *waves_file,
 			if(!ss_riff_read_chunk(wave_list.file, &sub, false, riff64)) break;
 
 			if(strcmp(sub.header, "fmt ") == 0) {
-				/* uint16_t fmt_tag = */ /*ss_iba_read_le(&sub.data, 2);*/
+				fmt_tag = ss_file_read_le(sub.file, 0, 2);
 				num_channels = (uint16_t)ss_file_read_le(sub.file, 2, 2);
 				sample_rate = (uint32_t)ss_file_read_le(sub.file, 4, 4);
 				/*ss_file_read_le(sub.file, 8, 4); byte rate */
-				/*ss_file_read_le(sub.data, 12, 2); block align */
+				block_align = ss_file_read_le(sub.file, 12, 2); /* block align */
 				bits_per_sample = (uint16_t)ss_file_read_le(sub.file, 14, 2);
-
 			} else if(strcmp(sub.header, "data") == 0) {
 				pcm_data = sub.file;
 				pcm_len = ss_file_size(sub.file);
 				sub.file = NULL;
-
 			} else if(strcmp(sub.header, "wsmp") == 0) {
 				DLS_WaveSample ws;
 				parse_wsmp(sub.file, &ws, riff64);
@@ -1229,6 +1229,7 @@ static bool parse_wave_pool(SS_File *waves_file,
 
 		s->sample_rate = sample_rate;
 		s->sample_type = SS_SAMPLE_TYPE_MONO;
+		s->audio_file_block_align = block_align;
 
 		size_t bytes_per_sample = bits_per_sample / 8;
 		size_t total_frames = pcm_len / (bytes_per_sample * num_channels);
@@ -1245,6 +1246,13 @@ static bool parse_wave_pool(SS_File *waves_file,
 		} else if(bits_per_sample == 8) {
 			s->audio_file = pcm_data;
 			s->audio_file_type = SS_SMPLT_8BIT;
+			pcm_data = NULL;
+
+			if(s->loop_end > (uint32_t)total_frames)
+				s->loop_end = (uint32_t)total_frames;
+		} else if(fmt_tag == 6 && bits_per_sample == 8) {
+			s->audio_file = pcm_data;
+			s->audio_file_type = SS_SMPLT_ALAW;
 			pcm_data = NULL;
 
 			if(s->loop_end > (uint32_t)total_frames)

@@ -485,6 +485,7 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 	}
 
 	ss_file_close(smpl_data);
+	smpl_data = NULL;
 
 	/* Fix sample loop points and link stereo pairs */
 	for(size_t i = 0; i < n_samples; i++) {
@@ -845,6 +846,8 @@ fail:
 	ss_riff_close_chunk(&ximod_c);
 	ss_riff_close_chunk(&xigen_c);
 	ss_riff_close_chunk(&xshdr_c);
+
+	ss_file_close(smpl_data);
 
 	ss_soundbank_free(bank);
 	return NULL;

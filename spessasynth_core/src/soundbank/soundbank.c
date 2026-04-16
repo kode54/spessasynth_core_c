@@ -367,6 +367,45 @@ bool ss_sample_decode(SS_BasicSample *s) {
 				return true;
 			}
 
+			case SS_SMPLT_ALAW: {
+				const size_t block_align = s->audio_file_block_align;
+				const size_t frame_count = ss_file_size(s->audio_file) / block_align;
+				s->audio_data = (float *)malloc((frame_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
+				if(s->audio_data) {
+					for(size_t i = 0; i < frame_count; i++) {
+						const uint8_t input = (int)ss_file_read_u8(s->audio_file, i * block_align);
+
+						/* https://en.wikipedia.org/wiki/G.711#A-law */
+						/* Re-toggle toggled bits */
+						uint8_t sample = input ^ 0x55;
+
+						/* Remove sign bit */
+						sample &= 0x7f;
+
+						/* Extract exponent */
+						const uint8_t exponent = sample >> 4;
+						/* Extract mantissa */
+						int16_t mantissa = sample & 0xf;
+						if(exponent > 0) {
+							mantissa += 16; /* Add leading '1', if exponent > 0 */
+						}
+
+						mantissa = (mantissa << 4) + 0x8;
+						if(exponent > 1) {
+							mantissa = mantissa << (exponent - 1);
+						}
+
+						const int16_t s16sample = input > 127 ? mantissa : -mantissa;
+
+						/* Convert to floating point */
+						s->audio_data[i] = (float)s16sample / 32768.0;
+					}
+					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
+					s->audio_data_length = frame_count;
+				}
+				return true;
+			}
+
 			case SS_SMPLT_FLOAT: {
 				size_t frame_count = ss_file_size(s->audio_file) / 4;
 				s->audio_data = (float *)malloc((frame_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
