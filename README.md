@@ -35,7 +35,7 @@ Featuring Reverb, Chorus, Delay, Insertion effects and more!
 
 **SpessaSynth Project index**
 
-- [spessasynth_core_c](https://github.com/spessasus/spessasynth_core) (you are here) - SF2/DLS/MIDI library
+- [spessasynth_core](https://github.com/spessasus/spessasynth_core) - SF2/DLS/MIDI library
 - [spessasynth_lib](https://github.com/spessasus/spessasynth_lib) - spessasynth_core wrapper optimized for browsers and
   WebAudioAPI
 - [SpessaSynth](https://github.com/spessasus/SpessaSynth) - online/local MIDI player/editor application
@@ -69,7 +69,7 @@ Featuring Reverb, Chorus, Delay, Insertion effects and more!
     - **Correct articulator support:** _Converts articulators to both modulators and generators!_
     - **Tested and working with gm.dls!**
     - **Correct volume:** _Properly translated to SoundFont volume!_
-    - **A-Law encoding support**
+    - ~~**A-Law encoding support**~~
     - **Both unsigned 8-bit and signed 16-bit sample support (24-bit could easily be supported, theoretically, if it is even in use anywhere)**
     - **Detects special articulator combinations:** _Such as vibratoLfoToPitch_
 - **Sound bank manager:** Stack multiple sound banks!
