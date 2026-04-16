@@ -103,7 +103,7 @@ target_link_libraries(spessasynth_core PUBLIC m)
 if(MSVC)
     target_compile_options(spessasynth_core PRIVATE /W3)
 else()
-    target_compile_options(spessasynth_core PRIVATE -Wall -Wextra -Wno-unused-parameter)
+    target_compile_options(spessasynth_core PRIVATE -Wall -Wextra -Wno-unused-parameter -pedantic)
 endif()
 
 # ── Examples ─────────────────────────────────────────────────────────────────
