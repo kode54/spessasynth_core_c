@@ -43,18 +43,8 @@ static SS_File *ss_file_memory_dup(SS_File *file) {
 	SS_FileMemory *res = (SS_FileMemory *)malloc(sizeof(*res));
 	if(!res) return NULL;
 
-	if(!file->ref_count) {
-		file->ref_count = calloc(1, sizeof(*(file->ref_count)));
-		if(!file->ref_count) {
-			free(res);
-			return NULL;
-		}
-		*(file->ref_count) = 1;
-	}
-
 	/* Shallow copy */
 	memcpy(res, fm, sizeof(*res));
-	(*(file->ref_count))++;
 
 	return &res->base;
 }
@@ -215,19 +205,8 @@ static SS_File *ss_file_stdio_dup(SS_File *file) {
 	SS_FileStdio *res = (SS_FileStdio *)calloc(1, sizeof(*res));
 	if(!res) return NULL;
 
-	if(!file->ref_count) {
-		file->ref_count = calloc(1, sizeof(*(file->ref_count)));
-		if(!file->ref_count) {
-			free(res);
-			ss_mutex_leave(file->mutex);
-			return NULL;
-		}
-		*(file->ref_count) = 1;
-	}
-
 	/* Shallow copy */
 	memcpy(res, fs, sizeof(*res));
-	(*(file->ref_count))++;
 
 	return &res->base;
 }
@@ -396,10 +375,27 @@ SS_File *ss_file_open_blank_file(const char *path) {
 
 SS_File *ss_file_dup(SS_File *file) {
 	ss_mutex_enter(file->mutex);
+
+	if(!file->ref_count) {
+		file->ref_count = calloc(1, sizeof(*(file->ref_count)));
+		if(!file->ref_count) {
+			ss_mutex_leave(file->mutex);
+			return NULL;
+		}
+		*(file->ref_count) = 1;
+	}
+
 	SS_File *res = file->dup(file);
+
+	if(res) {
+		(*(res->ref_count))++;
+	}
+
 	ss_mutex_leave(file->mutex);
 
-	if(!res) return NULL;
+	if(!res) {
+		return NULL;
+	}
 
 	res->current_offset = res->scope_begin;
 
@@ -407,10 +403,7 @@ SS_File *ss_file_dup(SS_File *file) {
 }
 
 SS_File *ss_file_slice(SS_File *file, size_t offset, size_t size) {
-	ss_mutex_enter(file->mutex);
-	SS_File *res = file->dup(file);
-	ss_mutex_leave(file->mutex);
-
+	SS_File *res = ss_file_dup(file);
 	if(!res) return NULL;
 
 	/* Scope the file */
