@@ -634,7 +634,7 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 									if(iz->sample->compressed_data)
 										memcpy(iz->sample->compressed_data, bank->samples[sid].compressed_data, iz->sample->compressed_data_length);
 								}
-								iz->sample->owns_raw_data = !!iz->sample->compressed_data;
+								iz->sample->owns_raw_data = !!iz->sample->compressed_data || !!iz->sample->audio_file;
 							}
 						}
 					}

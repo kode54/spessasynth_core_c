@@ -553,9 +553,11 @@ void ss_file_close(SS_File *file) {
 	if(!file->ref_count || (--(*(file->ref_count))) == 0) {
 		file->close(file);
 		free(file->ref_count);
-		free(file);
 		freed = true;
 	}
+
+	/* Files are duped to new memory, so each one must be freed */
+	free(file);
 
 	ss_mutex_leave(mutex);
 
