@@ -344,11 +344,12 @@ bool ss_sample_decode(SS_BasicSample *s) {
 		/* Load the sample from a file object */
 		switch(s->audio_file_type) {
 			case SS_SMPLT_8BIT: {
-				size_t frame_count = ss_file_size(s->audio_file);
+				const size_t block_align = s->audio_file_block_align;
+				const size_t frame_count = ss_file_size(s->audio_file) / block_align;
 				s->audio_data = (float *)malloc((frame_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
 				if(s->audio_data) {
 					for(size_t i = 0; i < frame_count; i++)
-						s->audio_data[i] = (((float)ss_file_read_u8(s->audio_file, i)) - 128.0) / 128.0;
+						s->audio_data[i] = (((float)ss_file_read_u8(s->audio_file, i * block_align)) - 128.0) / 128.0;
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
 				}
@@ -356,7 +357,7 @@ bool ss_sample_decode(SS_BasicSample *s) {
 			}
 
 			case SS_SMPLT_16BIT: {
-				size_t frame_count = ss_file_size(s->audio_file) / 2;
+				const size_t frame_count = ss_file_size(s->audio_file) / 2;
 				s->audio_data = (float *)malloc((frame_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
 				if(s->audio_data) {
 					for(size_t i = 0; i < frame_count; i++)
@@ -424,7 +425,8 @@ bool ss_sample_decode(SS_BasicSample *s) {
 			}
 
 			case SS_SMPLT_FLOAT: {
-				size_t frame_count = ss_file_size(s->audio_file) / 4;
+				const size_t block_align = s->audio_file_block_align;
+				const size_t frame_count = ss_file_size(s->audio_file) / block_align;
 				s->audio_data = (float *)malloc((frame_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
 				if(s->audio_data) {
 					ss_file_read_bytes(s->audio_file, 0, (uint8_t *)s->audio_data, frame_count * sizeof(float));
