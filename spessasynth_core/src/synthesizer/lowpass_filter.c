@@ -37,15 +37,17 @@ typedef struct {
 
 /* Lazily allocated.  NULL = not yet allocated. */
 static CachedCoeff *coeff_cache = NULL;
+static SS_Mutex *coeff_mutex = NULL;
 
-static void ensure_cache(void) {
+/* These won't be freed until process termination */
+void ss_lowpass_ensure_cache(void) {
 	if(coeff_cache) return;
 	size_t total = (size_t)CACHE_RES_MAX * (size_t)CACHE_CENTS_SIZE;
 	coeff_cache = (CachedCoeff *)calloc(total, sizeof(CachedCoeff));
+	coeff_mutex = ss_mutex_create();
 }
 
 static CachedCoeff *get_cached(int resonance_cb, int cutoff_cents) {
-	ensure_cache();
 	if(!coeff_cache) return NULL;
 	if(resonance_cb < 0 || resonance_cb >= CACHE_RES_MAX) return NULL;
 	if(cutoff_cents < CACHE_CENTS_MIN || cutoff_cents > CACHE_CENTS_MAX) return NULL;
@@ -57,6 +59,8 @@ static CachedCoeff *get_cached(int resonance_cb, int cutoff_cents) {
 
 static void calculate_coefficients(SS_LowpassFilter *f, float cutoff_cents) {
 	int ci = (int)cutoff_cents; /* floor */
+	ss_lowpass_ensure_cache();
+	ss_mutex_enter(coeff_mutex);
 	CachedCoeff *cached = get_cached(f->resonance_cb, ci);
 	if(cached && cached->valid) {
 		f->a0 = cached->a0;
@@ -64,8 +68,10 @@ static void calculate_coefficients(SS_LowpassFilter *f, float cutoff_cents) {
 		f->a2 = cached->a2;
 		f->a3 = cached->a3;
 		f->a4 = cached->a4;
+		ss_mutex_leave(coeff_mutex);
 		return;
 	}
+	ss_mutex_leave(coeff_mutex);
 
 	float cutoff_hz = ss_abs_cents_to_hz(ci);
 	if(cutoff_hz > f->max_cutoff) cutoff_hz = f->max_cutoff;
@@ -98,12 +104,14 @@ static void calculate_coefficients(SS_LowpassFilter *f, float cutoff_cents) {
 	f->a4 = ra4;
 
 	if(cached) {
+		ss_mutex_enter(coeff_mutex);
 		cached->a0 = ra0;
 		cached->a1 = ra1;
 		cached->a2 = ra2;
 		cached->a3 = ra3;
 		cached->a4 = ra4;
 		cached->valid = true;
+		ss_mutex_leave(coeff_mutex);
 	}
 }
 

@@ -238,10 +238,13 @@ float ss_modcurve_get_value(int transform_type, SS_ModulatorCurveType curve_type
 
 /* ── One-time initializer for all lookup tables ─────────────────────────── */
 
+extern void ss_lowpass_ensure_cache(void);
+
 void ss_unit_converter_init(void) {
 	init_timecent_table();
 	init_abscent_table();
 	init_centibel_table();
 	init_convex_table();
 	init_modcurve_table();
+	ss_lowpass_ensure_cache();
 }
