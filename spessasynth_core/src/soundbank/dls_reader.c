@@ -1234,7 +1234,7 @@ static bool parse_wave_pool(SS_File *waves_file,
 		size_t bytes_per_sample = bits_per_sample / 8;
 		size_t total_frames = pcm_len / (bytes_per_sample * num_channels);
 
-		if(bits_per_sample == 16) {
+		if(fmt_tag == 1 && bits_per_sample == 16) {
 			s->audio_file = pcm_data;
 			s->audio_file_type = SS_SMPLT_16BIT;
 			pcm_data = NULL;
@@ -1242,8 +1242,7 @@ static bool parse_wave_pool(SS_File *waves_file,
 			/* Clamp loop end to sample length */
 			if(s->loop_end > (uint32_t)total_frames)
 				s->loop_end = (uint32_t)total_frames;
-
-		} else if(bits_per_sample == 8) {
+		} else if(fmt_tag == 1 && bits_per_sample == 8) {
 			s->audio_file = pcm_data;
 			s->audio_file_type = SS_SMPLT_8BIT;
 			pcm_data = NULL;
