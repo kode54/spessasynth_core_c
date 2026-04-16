@@ -367,6 +367,23 @@ bool ss_sample_decode(SS_BasicSample *s) {
 				return true;
 			}
 
+			case SS_SMPLT_SPLIT_24BIT: {
+				if(!s->audio_file_sm24) return false;
+				const size_t frame_count = ss_file_size(s->audio_file) / 2;
+				if(ss_file_size(s->audio_file_sm24) != frame_count) return false;
+				s->audio_data = (float *)malloc((frame_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
+				if(s->audio_data) {
+					for(size_t i = 0; i < frame_count; i++) {
+						int32_t sample = (int32_t)(ss_file_read_le(s->audio_file, i * 2, 2) << 16) + (int32_t)(ss_file_read_u8(s->audio_file_sm24, i) << 8);
+						sample >>= 8;
+						s->audio_data[i] = (float)sample / 16777216.0;
+					}
+					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
+					s->audio_data_length = frame_count;
+				}
+				return true;
+			}
+
 			case SS_SMPLT_ALAW: {
 				const size_t block_align = s->audio_file_block_align;
 				const size_t frame_count = ss_file_size(s->audio_file) / block_align;

@@ -134,6 +134,7 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 	if(!bank) return NULL;
 
 	SS_File *smpl_data = NULL;
+	SS_File *sm24_data = NULL;
 
 	SS_RIFFChunk riff;
 	SS_RIFFChunk info_chunk;
@@ -269,8 +270,10 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 				smpl_data = sub.file;
 				sub.file = NULL;
 			}
+		} else if(strcmp(sub.header, "sm24") == 0) {
+			sm24_data = sub.file;
+			sub.file = NULL;
 		}
-		/* sm24 (24-bit extension) is ignored — we only handle 16-bit */
 		ss_riff_close_chunk(&sub);
 	}
 
@@ -469,7 +472,16 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 				if(byte_end > ss_file_size(smpl_data)) byte_end = (uint32_t)ss_file_size(smpl_data);
 				size_t slen = (byte_end > byte_start) ? (byte_end - byte_start) : 0;
 				bank->samples[i].audio_file = ss_file_slice(smpl_data, byte_start, slen);
-				bank->samples[i].audio_file_type = SS_SMPLT_16BIT;
+				if(ss_file_size(sm24_data) > 0) {
+					/* 24-bit extension */
+					byte_start /= 2;
+					slen /= 2;
+					bank->samples[i].audio_file_sm24 = ss_file_slice(sm24_data, byte_start, slen);
+					bank->samples[i].audio_file_type = SS_SMPLT_SPLIT_24BIT;
+				} else {
+					bank->samples[i].audio_file_type = SS_SMPLT_16BIT;
+					bank->samples[i].audio_file_block_align = 2;
+				}
 			} else {
 				/* SF2Pack: globally compressed to a single chunk, decoded to float already */
 				byte_start = sample_starts[i];
@@ -485,7 +497,9 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 	}
 
 	ss_file_close(smpl_data);
+	ss_file_close(sm24_data);
 	smpl_data = NULL;
+	sm24_data = NULL;
 
 	/* Fix sample loop points and link stereo pairs */
 	for(size_t i = 0; i < n_samples; i++) {
@@ -848,6 +862,7 @@ fail:
 	ss_riff_close_chunk(&xshdr_c);
 
 	ss_file_close(smpl_data);
+	ss_file_close(sm24_data);
 
 	ss_soundbank_free(bank);
 	return NULL;
