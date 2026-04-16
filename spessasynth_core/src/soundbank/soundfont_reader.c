@@ -251,8 +251,6 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 	ss_file_read_string(sdta.file, 0, sdta_id, 4);
 	if(strcmp(sdta_id, "sdta") != 0) goto fail;
 
-	bool smpl_is_float32 = false; /* SF2Pack decoded float */
-
 	while(ss_file_remaining(sdta.file) >= (8 + size_size)) {
 		SS_RIFFChunk sub;
 		if(!ss_riff_read_chunk(sdta.file, &sub, false, riff64)) break;

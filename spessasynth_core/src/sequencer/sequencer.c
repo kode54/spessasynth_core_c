@@ -41,7 +41,7 @@ static bool decode_voice(uint8_t status_byte, uint8_t *type_out, int *ch_out)
 static SS_SequencerSong *current_song(const SS_Sequencer *seq) {
 	if(seq->song_count == 0) return NULL;
 	size_t idx = seq->current_song_index;
-	if(idx < 0 || (size_t)idx >= seq->song_count) return NULL;
+	if(idx >= seq->song_count) return NULL;
 	return &seq->songs[idx];
 }
 
