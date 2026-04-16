@@ -16,6 +16,9 @@
 extern "C" {
 #endif
 
+/* Bump the allocated sample buffers for interpolators, just in case */
+#define SS_SAMPLE_COUNT_BUMP (8)
+
 /* ── Modulator ────────────────────────────────────────────────────────────── */
 
 typedef struct {

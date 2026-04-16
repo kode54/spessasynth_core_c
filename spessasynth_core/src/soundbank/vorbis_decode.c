@@ -111,6 +111,15 @@ bool ss_vorbis_decode(SS_BasicSample *s) {
 
 	if(n_samples < 0 || !pcm) return false;
 
+	/* Bump the PCM size, for interpolators */
+	float *bumped_pcm = realloc(pcm, (n_samples + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
+	if(!bumped_pcm) {
+		free(pcm);
+		return false;
+	}
+	pcm = bumped_pcm;
+	memset(pcm + n_samples, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
+
 	/* Convert int16 -> float, mixdown to mono if stereo */
 	s->audio_data = pcm;
 	s->audio_data_length = (size_t)n_samples;

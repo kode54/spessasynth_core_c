@@ -242,10 +242,10 @@ bool ss_flac_decode(SS_BasicSample *s) {
 	s->sample_rate = st.sample_rate;
 
 	/* Resize to possibly shrink, and add a bit for interpolators */
-	float *audio_data = (float *)realloc(s->audio_data, (s->audio_data_length + 4) * sizeof(float));
+	float *audio_data = (float *)realloc(s->audio_data, (s->audio_data_length + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
 	if(audio_data) {
 		s->audio_data = audio_data;
-		memset(audio_data + s->audio_data_length, 0, 4 * sizeof(float));
+		memset(audio_data + s->audio_data_length, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 	}
 
 	/* Free compressed data */

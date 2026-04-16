@@ -345,11 +345,11 @@ bool ss_sample_decode(SS_BasicSample *s) {
 		switch(s->audio_file_type) {
 			case SS_SMPLT_8BIT: {
 				size_t frame_count = ss_file_size(s->audio_file);
-				s->audio_data = (float *)malloc((frame_count + 4) * sizeof(float));
+				s->audio_data = (float *)malloc((frame_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
 				if(s->audio_data) {
 					for(size_t i = 0; i < frame_count; i++)
 						s->audio_data[i] = (((float)ss_file_read_u8(s->audio_file, i)) - 128.0) / 128.0;
-					memset(s->audio_data + frame_count, 0, 4 * sizeof(float));
+					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
 				}
 				return true;
@@ -357,11 +357,11 @@ bool ss_sample_decode(SS_BasicSample *s) {
 
 			case SS_SMPLT_16BIT: {
 				size_t frame_count = ss_file_size(s->audio_file) / 2;
-				s->audio_data = (float *)malloc((frame_count + 4) * sizeof(float));
+				s->audio_data = (float *)malloc((frame_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
 				if(s->audio_data) {
 					for(size_t i = 0; i < frame_count; i++)
 						s->audio_data[i] = ((float)(int16_t)ss_file_read_le(s->audio_file, i * 2, 2)) / 32768.0;
-					memset(s->audio_data + frame_count, 0, 4 * sizeof(float));
+					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
 				}
 				return true;
@@ -369,10 +369,10 @@ bool ss_sample_decode(SS_BasicSample *s) {
 
 			case SS_SMPLT_FLOAT: {
 				size_t frame_count = ss_file_size(s->audio_file) / 4;
-				s->audio_data = (float *)malloc((frame_count + 4) * sizeof(float));
+				s->audio_data = (float *)malloc((frame_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
 				if(s->audio_data) {
 					ss_file_read_bytes(s->audio_file, 0, (uint8_t *)s->audio_data, frame_count * sizeof(float));
-					memset(s->audio_data + frame_count, 0, 4 * sizeof(float));
+					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
 				}
 				return true;
@@ -405,11 +405,11 @@ bool ss_sample_decode(SS_BasicSample *s) {
 	if(s->is_compressed && s->compressed_data) {
 		/* Dispatch to vorbis/FLAC/WAV decoder based on magic bytes */
 		if(s->is_sf2pack) {
-			s->audio_data = (float *)malloc(s->compressed_data_length + 4 * sizeof(float));
+			s->audio_data = (float *)malloc(s->compressed_data_length + SS_SAMPLE_COUNT_BUMP * sizeof(float));
 			if(s->audio_data) {
 				memcpy(s->audio_data, s->compressed_data, s->compressed_data_length);
 				s->audio_data_length = s->compressed_data_length / sizeof(float);
-				memset(s->audio_data + s->audio_data_length, 0, 4 * sizeof(float));
+				memset(s->audio_data + s->audio_data_length, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 				return true;
 			}
 			return false;
@@ -434,9 +434,9 @@ bool ss_sample_decode(SS_BasicSample *s) {
 
 	if(s->s16le_data && s->s16le_length >= 2) {
 		size_t sample_count = s->s16le_length / 2;
-		s->audio_data = (float *)malloc((sample_count + 4) * sizeof(float)); /* Allocate a little more for interpolators */
+		s->audio_data = (float *)malloc((sample_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float)); /* Allocate a little more for interpolators */
 		if(!s->audio_data) return false;
-		memset(s->audio_data + sample_count, 0, 4 * sizeof(float));
+		memset(s->audio_data + sample_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 		s->audio_data_length = sample_count;
 
 		const int16_t *src = (const int16_t *)s->s16le_data;
@@ -448,9 +448,9 @@ bool ss_sample_decode(SS_BasicSample *s) {
 
 	if(s->u8_data && s->u8_length >= 1) {
 		size_t sample_count = s->u8_length;
-		s->audio_data = (float *)malloc((sample_count + 4) * sizeof(float)); /* Allocate a little more for interpolators */
+		s->audio_data = (float *)malloc((sample_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float)); /* Allocate a little more for interpolators */
 		if(!s->audio_data) return false;
-		memset(s->audio_data + sample_count, 0, 4 * sizeof(float));
+		memset(s->audio_data + sample_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 		s->audio_data_length = sample_count;
 
 		const uint8_t *src = s->u8_data;
@@ -461,7 +461,7 @@ bool ss_sample_decode(SS_BasicSample *s) {
 	}
 
 	/* Zero-length sample: create minimal silent buffer */
-	s->audio_data = (float *)calloc(1, sizeof(float));
+	s->audio_data = (float *)calloc(1 + SS_SAMPLE_COUNT_BUMP, sizeof(float));
 	s->audio_data_length = 1;
 	return true;
 }
