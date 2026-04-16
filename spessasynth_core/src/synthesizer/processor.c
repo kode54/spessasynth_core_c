@@ -349,6 +349,26 @@ void ss_processor_render(SS_Processor *proc,
 	}
 }
 
+void ss_processor_render_interleaved(SS_Processor *proc,
+                                     float *out, uint32_t sample_count) {
+	if(!proc || !out) return;
+
+	float *interleave_left = proc->interleave_left;
+	float *interleave_right = proc->interleave_right;
+
+	while(sample_count) {
+		uint32_t block_count = sample_count > SS_MAX_SOUND_CHUNK ? SS_MAX_SOUND_CHUNK : sample_count;
+		sample_count -= block_count;
+
+		ss_processor_render(proc, interleave_left, interleave_right, block_count);
+
+		for(uint32_t i = 0; i < block_count; i++) {
+			*out++ = interleave_left[i];
+			*out++ = interleave_right[i];
+		}
+	}
+}
+
 /* ── MIDI event dispatch ─────────────────────────────────────────────────── */
 
 void ss_processor_note_on(SS_Processor *proc, int ch, int note, int vel, double t) {

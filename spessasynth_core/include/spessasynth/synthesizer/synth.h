@@ -442,6 +442,9 @@ typedef struct SS_Processor {
 
 	float mix_buffer[SS_MAX_SOUND_CHUNK];
 
+	float interleave_left[SS_MAX_SOUND_CHUNK];
+	float interleave_right[SS_MAX_SOUND_CHUNK];
+
 	SS_MasterParameters master_params;
 	float volume_envelope_smoothing_factor;
 	float filter_smoothing_factor;
@@ -473,6 +476,10 @@ bool ss_processor_remove_soundbank(SS_Processor *proc, const char *id, bool dont
 void ss_processor_render(SS_Processor *proc,
                          float *out_left, float *out_right,
                          uint32_t sample_count);
+
+void ss_processor_render_interleaved(SS_Processor *proc,
+                                     float *out, uint32_t sample_count);
+
 
 void ss_processor_note_on(SS_Processor *proc, int ch, int note, int vel, double t);
 void ss_processor_note_off(SS_Processor *proc, int ch, int note, double t);

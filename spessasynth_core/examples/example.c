@@ -13,9 +13,6 @@ SS_Sequencer *g_sequencer;
 SS_Processor *g_processor;
 SS_SoundBank *g_soundBank;
 
-// Temporary buffers
-float sampleLeft[128], sampleRight[128];
-
 // Callback function called by the audio thread
 static void AudioCallback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount) {
 	float *stream = (float *)pOutput;
@@ -28,11 +25,7 @@ static void AudioCallback(ma_device *pDevice, void *pOutput, const void *pInput,
 		ss_sequencer_tick(g_sequencer, SampleBlock);
 
 		// Render the block of audio samples in float format
-		ss_processor_render(g_processor, sampleLeft, sampleRight, SampleBlock);
-		for(ma_uint32 i = 0; i < SampleBlock; i++) {
-			stream[i * 2] = sampleLeft[i];
-			stream[i * 2 + 1] = sampleRight[i];
-		}
+		ss_processor_render_interleaved(g_processor, stream, SampleBlock);
 	}
 }
 
