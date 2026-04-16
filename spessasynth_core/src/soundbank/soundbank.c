@@ -529,10 +529,12 @@ void ss_sample_free_data(SS_BasicSample *s) {
 	free(s->audio_data);
 	/* compressed_data / s16le_data / u8_data are owned only by bank samples. */
 	if(s->owns_raw_data) {
+		ss_file_close(s->audio_file);
 		free(s->compressed_data);
 		free(s->s16le_data);
 		free(s->u8_data);
 	}
+	s->audio_file = NULL;
 	s->audio_data = NULL;
 	s->compressed_data = NULL;
 	s->s16le_data = NULL;
