@@ -471,7 +471,6 @@ bool ss_processor_remove_soundbank(SS_Processor *proc, const char *id, bool dont
 
 /**
  * Main render call. Mixes into the provided float buffers.
- * Pass NULL for reverb/chorus buffers to skip those outputs.
  */
 void ss_processor_render(SS_Processor *proc,
                          float *out_left, float *out_right,
