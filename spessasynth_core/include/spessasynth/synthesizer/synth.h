@@ -415,7 +415,7 @@ typedef struct {
 
 typedef struct SS_Processor {
 	uint32_t sample_rate;
-	SS_MIDIChannel *midi_channels[SS_CHANNEL_COUNT * 3]; /* up to 3 ports */
+	SS_MIDIChannel *midi_channels[SS_CHANNEL_COUNT * 4]; /* up to 4 ports */
 	int channel_count;
 
 	SS_SoundBank *soundbanks[SS_MAX_SOUNDBANKS];
