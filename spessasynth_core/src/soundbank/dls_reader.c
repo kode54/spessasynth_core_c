@@ -1258,6 +1258,7 @@ static bool parse_wave_pool(SS_File *waves_file,
 				s->loop_end = (uint32_t)total_frames;
 		}
 
+		s->mutex = ss_mutex_create();
 		s->owns_raw_data = true;
 	}
 	return true;

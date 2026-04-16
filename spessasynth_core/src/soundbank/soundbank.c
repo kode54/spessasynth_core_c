@@ -338,7 +338,11 @@ bool ss_vorbis_decode(SS_BasicSample *s);
 bool ss_flac_decode(SS_BasicSample *s);
 
 bool ss_sample_decode(SS_BasicSample *s) {
-	if(s->audio_data) return true; /* already decoded */
+	ss_mutex_enter(s->mutex);
+	if(s->audio_data) {
+		ss_mutex_leave(s->mutex);
+		return true; /* already decoded */
+	}
 
 	if(s->audio_file) {
 		/* Load the sample from a file object */
@@ -353,6 +357,7 @@ bool ss_sample_decode(SS_BasicSample *s) {
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
 				}
+				ss_mutex_leave(s->mutex);
 				return true;
 			}
 
@@ -365,13 +370,20 @@ bool ss_sample_decode(SS_BasicSample *s) {
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
 				}
+				ss_mutex_leave(s->mutex);
 				return true;
 			}
 
 			case SS_SMPLT_SPLIT_24BIT: {
-				if(!s->audio_file_sm24) return false;
+				if(!s->audio_file_sm24) {
+					ss_mutex_leave(s->mutex);
+					return false;
+				}
 				const size_t frame_count = ss_file_size(s->audio_file) / 2;
-				if(ss_file_size(s->audio_file_sm24) != frame_count) return false;
+				if(ss_file_size(s->audio_file_sm24) != frame_count) {
+					ss_mutex_leave(s->mutex);
+					return false;
+				}
 				s->audio_data = (float *)malloc((frame_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
 				if(s->audio_data) {
 					for(size_t i = 0; i < frame_count; i++) {
@@ -382,6 +394,7 @@ bool ss_sample_decode(SS_BasicSample *s) {
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
 				}
+				ss_mutex_leave(s->mutex);
 				return true;
 			}
 
@@ -421,6 +434,7 @@ bool ss_sample_decode(SS_BasicSample *s) {
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
 				}
+				ss_mutex_leave(s->mutex);
 				return true;
 			}
 
@@ -433,6 +447,7 @@ bool ss_sample_decode(SS_BasicSample *s) {
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
 				}
+				ss_mutex_leave(s->mutex);
 				return true;
 			}
 
@@ -444,15 +459,20 @@ bool ss_sample_decode(SS_BasicSample *s) {
 
 					if(hdr[0] == 'O' && hdr[1] == 'g' && hdr[2] == 'g' && hdr[3] == 'S') {
 #ifdef SS_HAVE_STB_VORBIS
+						ss_mutex_leave(s->mutex);
 						return ss_vorbis_decode(s);
-#endif
+#else
+						ss_mutex_leave(s->mutex);
 						return false;
+#endif
 					}
 					if(hdr[0] == 'f' && hdr[1] == 'L' && hdr[2] == 'a' && hdr[3] == 'C') {
 #ifdef SS_HAVE_LIBFLAC
+						ss_mutex_leave(s->mutex);
 						return ss_flac_decode(s);
-#endif
+#else
 						return false;
+#endif
 					}
 					break;
 				}
@@ -468,32 +488,44 @@ bool ss_sample_decode(SS_BasicSample *s) {
 				memcpy(s->audio_data, s->compressed_data, s->compressed_data_length);
 				s->audio_data_length = s->compressed_data_length / sizeof(float);
 				memset(s->audio_data + s->audio_data_length, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
+				ss_mutex_leave(s->mutex);
 				return true;
 			}
+			ss_mutex_leave(s->mutex);
 			return false;
 		}
 		if(s->compressed_data_length >= 4) {
 			const uint8_t *hdr = s->compressed_data;
 			if(hdr[0] == 'O' && hdr[1] == 'g' && hdr[2] == 'g' && hdr[3] == 'S') {
 #ifdef SS_HAVE_STB_VORBIS
+				ss_mutex_leave(s->mutex);
 				return ss_vorbis_decode(s);
-#endif
+#else
+				ss_mutex_leave(s->mutex);
 				return false;
+#endif
 			}
 			if(hdr[0] == 'f' && hdr[1] == 'L' && hdr[2] == 'a' && hdr[3] == 'C') {
 #ifdef SS_HAVE_LIBFLAC
+				ss_mutex_leave(s->mutex);
 				return ss_flac_decode(s);
-#endif
+#else
+				ss_mutex_leave(s->mutex);
 				return false;
+#endif
 			}
 		}
+		ss_mutex_leave(s->mutex);
 		return false;
 	}
 
 	if(s->s16le_data && s->s16le_length >= 2) {
 		size_t sample_count = s->s16le_length / 2;
 		s->audio_data = (float *)malloc((sample_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float)); /* Allocate a little more for interpolators */
-		if(!s->audio_data) return false;
+		if(!s->audio_data) {
+			ss_mutex_leave(s->mutex);
+			return false;
+		}
 		memset(s->audio_data + sample_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 		s->audio_data_length = sample_count;
 
@@ -501,13 +533,17 @@ bool ss_sample_decode(SS_BasicSample *s) {
 		for(size_t i = 0; i < sample_count; i++) {
 			s->audio_data[i] = (float)src[i] / 32768.0f;
 		}
+		ss_mutex_leave(s->mutex);
 		return true;
 	}
 
 	if(s->u8_data && s->u8_length >= 1) {
 		size_t sample_count = s->u8_length;
 		s->audio_data = (float *)malloc((sample_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float)); /* Allocate a little more for interpolators */
-		if(!s->audio_data) return false;
+		if(!s->audio_data) {
+			ss_mutex_leave(s->mutex);
+			return false;
+		}
 		memset(s->audio_data + sample_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 		s->audio_data_length = sample_count;
 
@@ -515,12 +551,14 @@ bool ss_sample_decode(SS_BasicSample *s) {
 		for(size_t i = 0; i < sample_count; i++) {
 			s->audio_data[i] = ((float)src[i] - 128.0) / 128.0;
 		}
+		ss_mutex_leave(s->mutex);
 		return true;
 	}
 
 	/* Zero-length sample: create minimal silent buffer */
 	s->audio_data = (float *)calloc(1 + SS_SAMPLE_COUNT_BUMP, sizeof(float));
 	s->audio_data_length = 1;
+	ss_mutex_leave(s->mutex);
 	return true;
 }
 
@@ -529,11 +567,13 @@ void ss_sample_free_data(SS_BasicSample *s) {
 	free(s->audio_data);
 	/* compressed_data / s16le_data / u8_data are owned only by bank samples. */
 	if(s->owns_raw_data) {
+		ss_mutex_free(s->mutex);
 		ss_file_close(s->audio_file);
 		free(s->compressed_data);
 		free(s->s16le_data);
 		free(s->u8_data);
 	}
+	s->mutex = NULL;
 	s->audio_file = NULL;
 	s->audio_data = NULL;
 	s->compressed_data = NULL;

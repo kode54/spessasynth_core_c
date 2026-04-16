@@ -445,6 +445,7 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 		bank->samples[i].is_compressed = compressed;
 		bank->samples[i].owns_raw_data = true;
 		bank->samples[i].is_sf2pack = false;
+		bank->samples[i].mutex = ss_mutex_create();
 
 		if(ss_file_size(smpl_data) > 0) {
 			uint32_t byte_start = sample_starts[i] * 2;
@@ -634,7 +635,11 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 									if(iz->sample->compressed_data)
 										memcpy(iz->sample->compressed_data, bank->samples[sid].compressed_data, iz->sample->compressed_data_length);
 								}
-								iz->sample->owns_raw_data = !!iz->sample->compressed_data || !!iz->sample->audio_file;
+								if(iz->sample->mutex) {
+									/* It can have its own mutex */
+									iz->sample->mutex = ss_mutex_create();
+								}
+								iz->sample->owns_raw_data = !!iz->sample->compressed_data || !!iz->sample->audio_file || !!iz->sample->mutex;
 							}
 						}
 					}

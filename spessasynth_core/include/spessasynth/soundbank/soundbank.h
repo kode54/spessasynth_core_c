@@ -77,6 +77,9 @@ typedef struct SS_BasicSample {
 	uint32_t loop_start; /* sample-points from sample start */
 	uint32_t loop_end;
 
+	/* Lock protecting the decode function. */
+	SS_Mutex *mutex;
+
 	/* Decoded PCM float data (mono). NULL until decoded. */
 	float *audio_data;
 	size_t audio_data_length; /* sample frames */
