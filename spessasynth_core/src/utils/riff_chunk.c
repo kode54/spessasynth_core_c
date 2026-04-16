@@ -16,7 +16,7 @@ bool ss_riff_read_chunk(SS_File *file, SS_RIFFChunk *out, bool skip_size, bool r
 
 	if(skip_size) {
 		/* The data slice covers everything from current_index to end */
-		out->file = ss_file_slice(file, pos + 8, ss_file_remaining(file) - (pos + 8));
+		out->file = ss_file_slice(file, pos + 4 + size_size, ss_file_remaining(file) - (pos + 4 + size_size));
 	} else {
 		/* Non-owning slice of exactly sz bytes */
 		size_t start = ss_file_tell(file);
