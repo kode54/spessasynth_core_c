@@ -373,6 +373,126 @@ SS_File *ss_file_open_blank_file(const char *path) {
 	return &res->base;
 }
 
+typedef struct SS_FileCallbacks_Reader {
+	SS_File base;
+
+	size_t *last_offset;
+	SS_File_ReaderCallbacks callbacks;
+	void *context;
+} SS_FileCallbacks_Reader;
+
+static SS_File *ss_file_callbacks_reader_dup(SS_File *file) {
+	SS_FileCallbacks_Reader *fc = (SS_FileCallbacks_Reader *)file;
+	SS_FileCallbacks_Reader *res = (SS_FileCallbacks_Reader *)calloc(1, sizeof(*res));
+	if(!res) return NULL;
+
+	/* Shallow copy */
+	memcpy(res, fc, sizeof(*res));
+
+	return &res->base;
+}
+
+static void ss_file_callbacks_reader_close(SS_File *file) {
+	SS_FileCallbacks_Reader *fc = (SS_FileCallbacks_Reader *)file;
+	fc->callbacks.close(fc->context);
+	free(fc->last_offset);
+}
+
+static uint8_t ss_file_callbacks_reader_read_u8(SS_File *file) {
+	SS_FileCallbacks_Reader *fc = (SS_FileCallbacks_Reader *)file;
+
+	if(file->current_offset != *(fc->last_offset)) {
+		if(!fc->callbacks.seek(fc->context, file->current_offset)) {
+			return 0;
+		}
+		*(fc->last_offset) = file->current_offset;
+	}
+
+	const size_t max_bytes_to_read = file->scope_end - file->current_offset;
+	const size_t to_read = max_bytes_to_read > 0 ? 1 : 0;
+
+	uint8_t v = 0;
+
+	if(to_read) {
+		size_t bytes_read = fc->callbacks.read_bytes(fc->context, &v, 1);
+
+		file->current_offset += bytes_read;
+		*(fc->last_offset) += bytes_read;
+	}
+
+	return v;
+}
+
+static void ss_file_callbacks_reader_read_bytes(SS_File *file, uint8_t *out, size_t count) {
+	SS_FileCallbacks_Reader *fc = (SS_FileCallbacks_Reader *)file;
+
+	if(file->current_offset != *(fc->last_offset)) {
+		if(!fc->callbacks.seek(fc->context, file->current_offset)) {
+			memset(out, 0, count);
+			return;
+		}
+		*(fc->last_offset) = file->current_offset;
+	}
+
+	const size_t max_bytes_to_read = file->scope_end - file->current_offset;
+	const size_t to_read = count > max_bytes_to_read ? max_bytes_to_read : count;
+	size_t bytes_read = 0;
+
+	if(to_read) {
+		bytes_read = fc->callbacks.read_bytes(fc->context, out, to_read);
+
+		file->current_offset += bytes_read;
+		*(fc->last_offset) += bytes_read;
+	}
+
+	if(bytes_read < count) {
+		memset(out + bytes_read, 0, count - bytes_read);
+	}
+}
+
+SS_File *ss_file_open_from_callbacks(SS_File_ReaderCallbacks *callbacks, void *context) {
+	if(!callbacks || !callbacks->close || !callbacks->seek || !callbacks->size || !callbacks->read_bytes) {
+		return NULL;
+	}
+
+	if(!callbacks->seek(context, 0)) {
+		return NULL;
+	}
+
+	SS_FileCallbacks_Reader *res = (SS_FileCallbacks_Reader *)calloc(1, sizeof(*res));
+	if(!res) return NULL;
+
+	res->base.mutex = ss_mutex_create();
+	if(!res->base.mutex) {
+		free(res);
+		return NULL;
+	}
+
+	res->last_offset = calloc(1, sizeof(*(res->last_offset)));
+	if(!res->last_offset) {
+		ss_mutex_free(res->base.mutex);
+		free(res);
+		return NULL;
+	}
+
+	res->callbacks = *callbacks;
+	res->context = context;
+
+	res->base.scope_begin = 0;
+	res->base.current_offset = 0;
+	res->base.owns_file = true;
+
+	res->base.scope_end = callbacks->size(context);
+	*(res->last_offset) = 0;
+
+	res->base.dup = &ss_file_callbacks_reader_dup;
+	res->base.close = &ss_file_callbacks_reader_close;
+	res->base.read_u8 = &ss_file_callbacks_reader_read_u8;
+	res->base.read_bytes = &ss_file_callbacks_reader_read_bytes;
+
+	return &res->base;
+}
+
 SS_File *ss_file_dup(SS_File *file) {
 	ss_mutex_enter(file->mutex);
 

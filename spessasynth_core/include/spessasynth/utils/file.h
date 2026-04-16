@@ -26,8 +26,47 @@ extern "C" {
 
 typedef struct SS_File SS_File;
 
+/*
+ The file primitive is fully reference counted, and will be freely duplicated or
+ sliced by the file loaders. Since any SS_SoundBank will keep handles to a file
+ after it is opened, it is safe to close the handle yourself immediately after
+ opening the bank, whether or not it successfully loads a bank. If the memory
+ reader was called without handing over ownership of the memory buffer, then it
+ is essential to keep that buffer somewhere for the lifetime of the file, so it
+ will be necessary to release it only after freeing any SS_SoundBanks which own it.
+ */
+
 SS_File *ss_file_open_from_memory(const uint8_t *buffer, size_t size, bool owned);
 SS_File *ss_file_open_from_file(const char *path);
+
+/*
+ The following callbacks will be guaranteed to be synchronized to only happen
+ on one thread at a time.
+
+ size() will only be called on startup, in the same thread as the opener.
+
+ seek() will be called if the file offset needs to be changed within the
+ current thread, and will be hopped around if other threads are also calling
+ the file object. Note that due to the synchronization, seek()/read_bytes()
+ will be serialized together, or not at all, if the offset hasn't changed.
+
+ read_bytes() will always read from the last offset, and return the number
+ of bytes read, or otherwise zero if nothing was read. The caller will take
+ care of filling the rest of the requested buffer, or the whole buffer on
+ error.
+
+ close() will be called when every reference counted instance of the main
+ file is closed. So, it will be safe to leave your objects to be owned by
+ your context data, and deleted or freed by the close callback.
+ */
+typedef struct SS_File_ReaderCallbacks {
+	void (*close)(void *context);
+	bool (*seek)(void *context, size_t offset);
+	size_t (*size)(void *context);
+	size_t (*read_bytes)(void *context, uint8_t *out, size_t count);
+} SS_File_ReaderCallbacks;
+
+SS_File *ss_file_open_from_callbacks(SS_File_ReaderCallbacks *callbacks, void *context);
 
 SS_File *ss_file_open_blank_memory(void);
 bool ss_file_retrieve_memory(SS_File *file, uint8_t **out, size_t *out_size);
