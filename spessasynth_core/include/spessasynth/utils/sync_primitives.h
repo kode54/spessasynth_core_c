@@ -12,6 +12,14 @@
 extern "C" {
 #endif
 
+/**
+ * Opaque structure, depends on the implementation.
+ *
+ * Does not need to be recursive, as it will never be used recursively by the player.
+ *
+ * May actually be recursive in the Windows implementation.
+ */
+
 typedef struct SS_Mutex SS_Mutex;
 
 SS_Mutex *ss_mutex_create(void);

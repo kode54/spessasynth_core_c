@@ -14,6 +14,14 @@
 
 #if defined(__linux__) || defined(__APPLE__)
 
+/**
+ * pthread based mutex implementation.
+ *
+ * Intentionally the default mutex, non-recursive.
+ *
+ * Feel free to contribute other platform detection macros where pthread is supplied!
+ */
+
 #include <pthread.h>
 #include <stdlib.h>
 
@@ -55,6 +63,12 @@ void ss_mutex_leave(SS_Mutex *mutex) {
 
 #elif defined(_WIN32)
 
+/**
+ * The basest Windows implementation.
+ *
+ * Possibly recursive. Not by intention. Doesn't need to be for our uses.
+ */
+
 #include <stdlib.h>
 #include <windows.h>
 
@@ -91,4 +105,12 @@ void ss_mutex_leave(SS_Mutex *mutex) {
 	LeaveCriticalSection(&mutex->mutex);
 }
 
+#else
+/**
+ * No detected implementation found.
+ *
+ * Feel free to help out by contributing your own, or by contributing to the
+ * macros used to detect the pthread implementation.
+ */
+#error No Mutex implementation! Please feel free to contribute one!
 #endif

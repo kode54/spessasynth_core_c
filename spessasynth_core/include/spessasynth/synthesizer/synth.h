@@ -461,6 +461,17 @@ typedef struct SS_Processor {
 	SS_ProcessorOptions options;
 } SS_Processor;
 
+/**
+ * The processor is not really thread safe. Either the event functions, or the render
+ * functions may be used from exactly one thread at a time, but not both simultaneously.
+ * It is suggested to use the provided mutex object to guard calls to the event posting
+ * functions to separate them from calls to the render functions. Also, rendering may
+ * not be called multiple times from different threads, either.
+ *
+ * Actually, there is no guarantee what will happen if you do either of the above things
+ * in practice, calling functions simultaneously. Undefined behavior! It's not designed
+ * to expect the functions to overlap with each other. It may just explode spectacularly!
+ */
 SS_Processor *ss_processor_create(uint32_t sample_rate,
                                   const SS_ProcessorOptions *opts);
 void ss_processor_free(SS_Processor *proc);
@@ -472,6 +483,13 @@ bool ss_processor_remove_soundbank(SS_Processor *proc, const char *id, bool dont
 
 /**
  * Main render call. Mixes into the provided float buffers.
+ *
+ * Due to how the timing of LFOs, Vibrato/Tremolo, etc. work, it is best to always
+ * render in increments of the SS_MAX_SOUND_CHUNK unit declared elsewhere in this
+ * file. It will always mix in increments of that, but will mix less if requested.
+ *
+ * Instead, render in increments of that sample count, and use finer offsets to the
+ * timestamp parameter to the event functions.
  */
 void ss_processor_render(SS_Processor *proc,
                          float *out_left, float *out_right,
@@ -479,7 +497,10 @@ void ss_processor_render(SS_Processor *proc,
 
 void ss_processor_render_interleaved(SS_Processor *proc,
                                      float *out, uint32_t sample_count);
-
+/**
+ * These event functions all accept an absolute timestamp, `t`, which is in seconds
+ * elapsed since the creation of the SS_Processor.
+ */
 void ss_processor_note_on(SS_Processor *proc, int ch, int note, int vel, double t);
 void ss_processor_note_off(SS_Processor *proc, int ch, int note, double t);
 void ss_processor_control_change(SS_Processor *proc, int ch, int cc, int val, double t);
@@ -488,12 +509,26 @@ void ss_processor_pitch_wheel(SS_Processor *proc, int ch, int value, int midi_no
 void ss_processor_channel_pressure(SS_Processor *proc, int ch, int pressure, double t);
 void ss_processor_poly_pressure(SS_Processor *proc, int ch, int note, int pressure, double t);
 void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, double t);
+
+/**
+ * This reset takes place immediately, but does not reset the internal absolute
+ * time position of the synthesizer, which counts up monotonically every time
+ * samples are rendered.
+ */
 void ss_processor_system_reset(SS_Processor *proc);
 
+/**
+ * This optional callback will receive events every time either the above event
+ * functions are used, or every time a SysEx or N/RPN message triggers one of
+ * the above events.
+ */
 void ss_processor_set_event_callback(SS_Processor *proc,
                                      SS_EventCallback cb, void *userdata);
 
-/* One time initialization */
+/**
+ * One time initialization. It is best if this is called manually, especially
+ * if multiple instances of the Processor are ever used in different threads.
+ */
 void ss_unit_converter_init(void);
 
 #ifdef __cplusplus
