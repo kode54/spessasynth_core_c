@@ -74,7 +74,8 @@ void ss_lowpass_filter_init(SS_LowpassFilter *f, uint32_t sample_rate);
 void ss_lowpass_filter_apply(SS_LowpassFilter *f,
                              const int16_t *modulated_generators,
                              float *buffer, int count,
-                             float fc_excursion, float smoothing);
+                             float fc_excursion, float smoothing,
+							 float gain, float gain_inc);
 
 /* ── Volume envelope ─────────────────────────────────────────────────────── */
 
@@ -88,6 +89,7 @@ typedef enum {
 
 typedef struct {
 	uint32_t sample_rate;
+	float output_gain;
 	double attenuation_cb;
 	SS_VolumeEnvelopeState state;
 	uint64_t sample_time;
@@ -103,8 +105,7 @@ typedef struct {
 	uint64_t decay_end;
 	bool entered_release;
 	bool can_end_on_silent_sustain;
-	float gain_smoothing;
-	float current_gain;
+	float peak_gain;
 } SS_VolumeEnvelope;
 
 /* ── Modulation envelope ─────────────────────────────────────────────────── */
@@ -447,6 +448,7 @@ typedef struct SS_Processor {
 	float interleave_right[SS_MAX_SOUND_CHUNK];
 
 	SS_MasterParameters master_params;
+	float midi_volume, pan_left, pan_right;
 	float volume_envelope_smoothing_factor;
 	float filter_smoothing_factor;
 	float pan_smoothing_factor;

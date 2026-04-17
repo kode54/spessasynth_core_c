@@ -94,6 +94,10 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 	proc->master_params.chorus_enabled = true;
 	proc->master_params.delay_enabled = true;
 
+	/* MIDI volume */
+	proc->midi_volume = 1.0f;
+	proc->pan_left = proc->pan_right = cos(M_PI / 4.0); /* Center */
+
 	/* Smoothing factors — scale relative to 44 100 Hz reference */
 	float sr_scale = 44100.0f / (float)sample_rate;
 	proc->volume_envelope_smoothing_factor = VOLENV_SMOOTHING_44K * sr_scale;
@@ -337,15 +341,6 @@ void ss_processor_render(SS_Processor *proc,
 
 		out_left += block_count;
 		out_right += block_count;
-	}
-
-	/* Apply master volume */
-	const float mv = proc->master_params.master_volume;
-	if(mv != 1.0f) {
-		for(uint32_t i = 0; i < sample_count; i++) {
-			out_left[i] *= mv;
-			out_right[i] *= mv;
-		}
 	}
 }
 

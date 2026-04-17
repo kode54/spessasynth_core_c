@@ -139,7 +139,8 @@ void ss_lowpass_filter_prewarm(uint32_t sample_rate) {
 void ss_lowpass_filter_apply(SS_LowpassFilter *f,
                              const int16_t *mod_gens,
                              float *buffer, int count,
-                             float fc_excursion, float smoothing) {
+                             float fc_excursion, float smoothing,
+                             float gain, float gain_inc) {
 	int initial_fc = mod_gens[SS_GEN_INITIAL_FILTER_FC];
 
 	if(f->initialized) {
@@ -166,7 +167,11 @@ void ss_lowpass_filter_apply(SS_LowpassFilter *f,
 	 */
 	if(f->current_initial_fc > 13499.0f && target_cutoff > 13499.0f && mod_resonance == 0) {
 		f->current_initial_fc = 13500.0f;
-		/* Filter is open */
+		/* Filter is open, apply gain */
+		for(int i = 0; i < count; i++) {
+			buffer[i] *= gain;
+			gain += gain_inc;
+		}
 		return;
 	}
 
@@ -189,7 +194,12 @@ void ss_lowpass_filter_apply(SS_LowpassFilter *f,
 		x1 = input;
 		y2 = y1;
 		y1 = filtered;
-		buffer[i] = (float)filtered;
+
+		/* Apply filter and THEN gain */
+		/* Per SF2 spec apply order, also see */
+		/* https://github.com/FluidSynth/fluidsynth/issues/1427 */
+		buffer[i] = filtered * gain;
+		gain += gain_inc;
 	}
 
 	f->x1 = x1;

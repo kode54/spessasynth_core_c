@@ -47,14 +47,6 @@ void ss_volume_envelope_init(SS_VolumeEnvelope *env,
 	/* Constructor parameters */
 	memset(env, 0, sizeof(*env));
 	env->sample_rate = sample_rate;
-	env->gain_smoothing = GAIN_SMOOTHING_FACTOR * (44100.0 / (float)sample_rate);
-
-	/* init parameters */
-	/*env->entered_release    = false;*/
-	/*env->state              = SS_VOLENV_DELAY;*/
-	/*env->current_sample_time = 0;*/
-	env->attenuation_cb = CB_SILENCE;
-	env->can_end_on_silent_sustain = ((float)initial_decay_cb >= PERCEIVED_CB_SILENCE);
 }
 
 /* ── ss_volume_envelope_recalculate ──────────────────────────────────────── */
@@ -74,7 +66,8 @@ void ss_volume_envelope_recalculate(SS_Voice *v,
 	env->can_end_on_silent_sustain = mod_gens[SS_GEN_SUSTAIN_VOL_ENV] >= PERCEIVED_CB_SILENCE;
 
 	/* Attenuation target (dB) */
-	env->current_gain = ss_centibel_attenuation_to_gain(mod_gens[SS_GEN_INITIAL_ATTENUATION]);
+	env->peak_gain = ss_centibel_attenuation_to_gain(mod_gens[SS_GEN_INITIAL_ATTENUATION]);
+	env->output_gain = env->peak_gain;
 
 	/* Sustain */
 	int sustain_raw = mod_gens[SS_GEN_SUSTAIN_VOL_ENV];
@@ -211,266 +204,99 @@ void ss_volume_envelope_start_release(SS_Voice *v,
 	}
 }
 
-static bool ss_volume_envelope_sustain_phase(SS_VolumeEnvelope *env,
-                                             float *buffer, int count,
-                                             float gain_target, int filled_buffer) {
-	const double sustain_cb = env->sustain_cb;
-	const float gain_smoothing = env->gain_smoothing;
+/* ── ss_volume_envelope_process ─────────────────────────────────────────── */
 
-	if(env->can_end_on_silent_sustain && sustain_cb >= PERCEIVED_CB_SILENCE) {
-		/* Make sure to fill with silence
-		 * https://github.com/spessasus/spessasynth_core/issues/57
-		 */
-		memset(buffer + filled_buffer, 0, (count - filled_buffer) * sizeof(float));
-		return false;
-	}
-
-	uint64_t sample_time = env->sample_time;
-	float current_gain = env->current_gain;
-	const bool smooth = current_gain != gain_target;
-
-	/* Sustain phase: stay at sustain */
-	if(filled_buffer < count) {
-		/* Stay at sustain */
-		env->attenuation_cb = sustain_cb;
-
-		while(filled_buffer < count) {
-			if(smooth) {
-				current_gain += (gain_target - current_gain) * gain_smoothing;
-			}
-
-			/* Apply gain to buffer */
-			buffer[filled_buffer] *= current_gain * ss_centibel_attenuation_to_gain(sustain_cb);
-
-			sample_time++;
-			filled_buffer++;
-		}
-	}
-
-	env->sample_time = sample_time;
-	env->current_gain = current_gain;
-
-	return true;
-}
-
-static bool ss_volume_envelope_decay_phase(SS_VolumeEnvelope *env,
-                                           float *buffer, int count,
-                                           float gain_target, int filled_buffer) {
-	const uint64_t decay_duration = env->decay_duration;
-	const uint64_t decay_end = env->decay_end;
-	const float gain_smoothing = env->gain_smoothing;
-	const double sustain_cb = env->sustain_cb;
-
-	uint64_t sample_time = env->sample_time;
-	float current_gain = env->current_gain;
-	double attenuation_cb = env->attenuation_cb;
-	const bool smooth = current_gain != gain_target;
-
-	if(sample_time < decay_end) {
-		while(sample_time < decay_end) {
-			if(smooth) {
-				current_gain += (gain_target - current_gain) * gain_smoothing;
-			}
-
-			/* Linear ramp down to sustain */
-			attenuation_cb = (1.0 - (double)(decay_end - sample_time) / (double)decay_duration) * sustain_cb;
-
-			/* Apply gain to buffer */
-			buffer[filled_buffer] *= current_gain * ss_centibel_attenuation_to_gain(attenuation_cb);
-
-			sample_time++;
-			if(++filled_buffer >= count) {
-				env->sample_time = sample_time;
-				env->current_gain = current_gain;
-				env->attenuation_cb = attenuation_cb;
-				return true;
-			}
-		}
-	}
-
-	env->sample_time = sample_time;
-	env->current_gain = current_gain;
-	env->attenuation_cb = attenuation_cb;
-	env->state++;
-
-	return ss_volume_envelope_sustain_phase(env, buffer, count, gain_target, filled_buffer);
-}
-
-static bool ss_volume_envelope_hold_phase(SS_VolumeEnvelope *env,
-                                          float *buffer, int count,
-                                          float gain_target, int filled_buffer) {
-	const uint64_t hold_end = env->hold_end;
-	const float gain_smoothing = env->gain_smoothing;
-
-	uint64_t sample_time = env->sample_time;
-	float current_gain = env->current_gain;
-	const bool smooth = current_gain != gain_target;
-
-	/* Hold/peak phase: stay at max volume */
-	if(sample_time < hold_end) {
-		/* Peak, no attenuation */
-		env->attenuation_cb = 0;
-
-		while(sample_time < hold_end) {
-			if(smooth) {
-				current_gain += (gain_target - current_gain) * gain_smoothing;
-			}
-
-			/* Apply gain to buffer */
-			buffer[filled_buffer] *= current_gain;
-
-			sample_time++;
-			if(++filled_buffer >= count) {
-				env->sample_time = sample_time;
-				env->current_gain = current_gain;
-				return true;
-			}
-		}
-	}
-
-	env->sample_time = sample_time;
-	env->current_gain = current_gain;
-	env->state++;
-
-	return ss_volume_envelope_decay_phase(env, buffer, count, gain_target, filled_buffer);
-}
-
-static bool ss_volume_envelope_attack_phase(SS_VolumeEnvelope *env,
-                                            float *buffer, int count,
-                                            float gain_target, int filled_buffer) {
-	const uint64_t attack_end = env->attack_end;
-	const uint64_t attack_duration = env->attack_duration;
-	const float gain_smoothing = env->gain_smoothing;
-
-	uint64_t sample_time = env->sample_time;
-	float current_gain = env->current_gain;
-	const bool smooth = current_gain != gain_target;
-
-	if(sample_time < attack_end) {
-		/* Set current attenuation to peak as its invalid during this phase */
-		env->attenuation_cb = 0;
-
-		/* Attack phase: ramp from 0 to attenuation */
-		while(sample_time < attack_end) {
-			if(smooth) {
-				current_gain += (gain_target - current_gain) * gain_smoothing;
-			}
-
-			/* Special case: linear gain ramp instead of linear db ramp */
-			const float linear_gain = 1.0 - (double)(attack_end - sample_time) / (double)attack_duration; /* 0 to 1 */
-
-			buffer[filled_buffer] *= linear_gain * current_gain;
-
-			sample_time++;
-			if(++filled_buffer >= count) {
-				env->sample_time = sample_time;
-				env->current_gain = current_gain;
-				return true;
-			}
-		}
-	}
-
-	env->sample_time = sample_time;
-	env->current_gain = current_gain;
-	env->state++;
-
-	return ss_volume_envelope_hold_phase(env, buffer, count, gain_target, filled_buffer);
-}
-
-static bool ss_volume_envelope_delay_phase(SS_VolumeEnvelope *env,
-                                           float *buffer, int count,
-                                           float gain_target, int filled_buffer) {
-	const uint64_t delay_end = env->delay_end;
-	uint64_t sample_time = env->sample_time;
-
-	/* Delay phase: no sound is produced */
-	if(sample_time < delay_end) {
-		/* Silence */
-		env->attenuation_cb = CB_SILENCE;
-
-		uint64_t delay_samples = delay_end - sample_time;
-		if(delay_samples > (uint64_t)count) delay_samples = count;
-		memset(buffer + filled_buffer, 0, delay_samples * sizeof(float));
-		filled_buffer += delay_samples;
-		sample_time += delay_samples;
-
-		if(filled_buffer >= count) {
-			env->sample_time = sample_time;
-			return true;
-		}
-	}
-
-	env->sample_time = sample_time;
-	env->state++;
-
-	return ss_volume_envelope_attack_phase(env, buffer, count, gain_target, filled_buffer);
-}
-
-static bool ss_volume_envelope_release_phase(SS_VolumeEnvelope *env,
-                                             float *buffer, int count,
-                                             float gain_target) {
-	uint64_t sample_time = env->sample_time;
-	float current_gain = env->current_gain;
-	double attenuation_cb = env->attenuation_cb;
-
+bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
+                                int sample_count, float gain_target) {
 	const uint64_t release_start_time_samples = env->release_start_time_samples;
 	const double release_start_cb = env->release_start_cb;
 	const uint64_t release_duration = env->release_duration;
-	const float gain_smoothing = env->gain_smoothing;
+	const uint64_t delay_end = env->delay_end;
+	const uint64_t attack_end = env->attack_end;
+	const uint64_t attack_duration = env->attack_duration;
+	const uint64_t hold_end = env->hold_end;
+	const uint64_t decay_end = env->decay_end;
+	const uint64_t decay_duration = env->decay_duration;
+	const double sustain_cb = env->sustain_cb;
 
-	/* How much time has passed since release was started? */
-	uint64_t elapsed_release = sample_time - release_start_time_samples;
-	const double cb_difference = CB_SILENCE - release_start_cb;
+	// Advance time by the entire block to calculate the last sample's gain
+	const uint64_t sample_time = (env->sample_time += sample_count);
 
-	const bool smooth = current_gain != gain_target;
-
-	for(int i = 0; i < count; i++) {
-		if(smooth) {
-			current_gain += (gain_target - current_gain) * gain_smoothing;
-		}
-
-		attenuation_cb = ((double)elapsed_release / (double)release_duration) * cb_difference + release_start_cb;
-
-		buffer[i] *= ss_centibel_attenuation_to_gain(attenuation_cb) * current_gain;
-
-		sample_time++;
-		elapsed_release++;
-	}
-
-	env->sample_time = sample_time;
-	env->current_gain = current_gain;
-	env->attenuation_cb = attenuation_cb;
-
-	return attenuation_cb < PERCEIVED_CB_SILENCE;
-}
-
-/* ── ss_volume_envelope_apply ────────────────────────────────────────────── */
-
-bool ss_volume_envelope_apply(SS_VolumeEnvelope *env,
-                              float *buffer, int count,
-                              float gain_target) {
 	if(env->entered_release) {
-		return ss_volume_envelope_release_phase(env, buffer, count, gain_target);
+		/* How much time has passed since release was started? */
+		const uint64_t elapsed_release = sample_time - release_start_time_samples;
+		const double cb_difference = CB_SILENCE - release_start_cb;
+
+		/* Linearly ramp down decibels */
+		env->attenuation_cb = ((double)elapsed_release / (double)release_duration) * cb_difference + release_start_cb;
+		env->output_gain = ss_centibel_attenuation_to_gain(env->attenuation_cb) * gain_target;
+		return env->attenuation_cb < PERCEIVED_CB_SILENCE;
 	}
 
-	switch(env->state) {
-		case SS_VOLENV_DELAY: {
-			return ss_volume_envelope_delay_phase(env, buffer, count, gain_target, 0);
-		}
-		case SS_VOLENV_ATTACK: {
-			return ss_volume_envelope_attack_phase(env, buffer, count, gain_target, 0);
-		}
-		case SS_VOLENV_HOLD: {
-			return ss_volume_envelope_hold_phase(env, buffer, count, gain_target, 0);
-		}
-		case SS_VOLENV_DECAY: {
-			return ss_volume_envelope_decay_phase(env, buffer, count, gain_target, 0);
-		}
-		case SS_VOLENV_SUSTAIN: {
-			return ss_volume_envelope_sustain_phase(env, buffer, count, gain_target, 0);
+	for(;;) {
+		switch(env->state) {
+			case SS_VOLENV_DELAY: {
+				/* Delay phase: no sound is produced */
+				if(sample_time < delay_end) {
+					/* Silence */
+					env->attenuation_cb = CB_SILENCE;
+					env->output_gain = 0;
+					return true;
+				}
+				env->state++;
+				break;
+			}
+
+			case SS_VOLENV_ATTACK: {
+				/* Attack phase: ramp from 0 to attenuation */
+				if(sample_time < attack_end) {
+					/* Set current attenuation to peak as its invalid during this phase */
+					env->attenuation_cb = 0;
+					/* Special case: linear gain ramp instead of linear db ramp */
+					const float linear_gain = 1.0 - (double)(attack_end - sample_time) / (double)attack_duration;
+					env->output_gain = linear_gain * gain_target;
+					return true;
+				}
+				env->state++;
+				break;
+			}
+
+			case SS_VOLENV_HOLD: {
+				/* Hold/peak phase: stay at max volume */
+				if(sample_time < hold_end) {
+					/* Peak, no attenuation */
+					env->attenuation_cb = 0;
+					env->output_gain = gain_target;
+					return true;
+				}
+				env->state++;
+				break;
+			}
+			case SS_VOLENV_DECAY: {
+				if(sample_time < decay_end) {
+					/* Linear centibel ramp down to sustain */
+					env->attenuation_cb = (1.0 - (double)(decay_end - sample_time) / (double)decay_duration) * sustain_cb;
+					env->output_gain = gain_target * ss_centibel_attenuation_to_gain(env->attenuation_cb);
+					return true;
+				}
+				env->state++;
+				break;
+			}
+
+			case SS_VOLENV_SUSTAIN: {
+				if(env->can_end_on_silent_sustain && sustain_cb >= PERCEIVED_CB_SILENCE) {
+					/* Make sure to fill with silence */
+					/* https://github.com/spessasus/spessasynth_core/issues/57 */
+					env->attenuation_cb = 0;
+					env->output_gain = 0;
+					return false;
+				}
+
+				/* Sustain phase: stay at sustain */
+				env->attenuation_cb = sustain_cb;
+				env->output_gain = gain_target * ss_centibel_attenuation_to_gain(sustain_cb);
+				return true;
+			}
 		}
 	}
-
-	/* Should never be reached */
-	return false;
 }

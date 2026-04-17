@@ -22,13 +22,8 @@ extern void ss_volume_envelope_init(SS_VolumeEnvelope *env,
 extern void ss_lowpass_filter_init(SS_LowpassFilter *f, uint32_t sr);
 extern bool ss_wavetable_get_sample(SS_Voice *v, float *out, int count,
                                     SS_InterpolationType interp);
-extern void ss_lowpass_filter_apply(SS_LowpassFilter *f,
-                                    const int16_t *mod_gens,
-                                    float *buf, int count,
-                                    float fc_excursion, float smoothing);
-extern bool ss_volume_envelope_apply(SS_VolumeEnvelope *env,
-                                     float *buf, int count,
-                                     float gain_target);
+extern bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
+                                       int count, float gain_target);
 /*extern void ss_volume_envelope_recalculate(SS_Voice *v,
                                            SS_VolumeEnvelope *env,
                                            const int16_t *mod_gens,
@@ -333,6 +328,14 @@ void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch,
 
 /* ── Render voice ────────────────────────────────────────────────────────── */
 
+enum { MIN_PAN = -500 };
+enum { MAX_PAN = 500 };
+enum { PAN_RESOLUTION = MAX_PAN - MIN_PAN };
+
+extern void ss_init_pan_table(void);
+extern float ss_panTableLeft[PAN_RESOLUTION + 1];
+extern float ss_panTableRight[PAN_RESOLUTION + 1];
+
 bool ss_voice_render(SS_Voice *v,
                      const SS_MIDIChannel *ch,
                      double time_now,
@@ -485,8 +488,8 @@ bool ss_voice_render(SS_Voice *v,
 
 	/* Looping mode 2 (start-on-release): no oscillator, only envelope */
 	if(v->sample.looping_mode == SS_LOOP_START_RELEASE && !v->is_in_release) {
-		bool active = ss_volume_envelope_apply(&v->volume_env, buf, sample_count,
-		                                       gain_target);
+		bool active = ss_volume_envelope_process(&v->volume_env, sample_count,
+		                                         gain_target);
 		if(!active) v->is_active = false;
 		if(owned_buf) free(buf);
 		return v->is_active;
@@ -495,12 +498,17 @@ bool ss_voice_render(SS_Voice *v,
 	/* Wavetable oscillator */
 	v->is_active = ss_wavetable_get_sample(v, buf, sample_count, interp);
 
+	/* Volume envelope */
+	/* Get the previous value */
+	float gain = v->volume_env.output_gain;
+	/* Compute the new value */
+	const bool env_active = ss_volume_envelope_process(&v->volume_env, sample_count, gain_target);
+	/* Calculate increase */
+	const float gain_inc = (v->volume_env.output_gain - gain) / (float)sample_count;
+
 	/* Low pass filter */
 	ss_lowpass_filter_apply(&v->filter, v->modulated_generators, buf, sample_count,
-	                        lowpass_excursion, filter_smoothing);
-
-	/* Volume envelope */
-	bool env_active = ss_volume_envelope_apply(&v->volume_env, buf, sample_count, gain_target);
+	                        lowpass_excursion, filter_smoothing, gain, gain_inc);
 
 	/* Note, we do not use &&= as it short-circuits!
 	 * And we don't do = either as wavetable might've marked it as inactive (end of sample)
@@ -511,6 +519,8 @@ bool ss_voice_render(SS_Voice *v,
 	float pan_val;
 	if(v->override_pan != 0.0f) {
 		pan_val = v->override_pan / 500.0f;
+		if(pan_val < -1.0f) pan_val = -1.0f;
+		if(pan_val > 1.0f) pan_val = 1.0f;
 	} else {
 		/* Smooth only the generator pan (matches TS: currentPan tracks modulated[pan] only).
 		 * v->current_pan is stored in the -500..500 generator range.
@@ -522,13 +532,18 @@ bool ss_voice_render(SS_Voice *v,
 		if(pan_val > 1.0f) pan_val = 1.0f;
 	}
 
-	/* Equal-power panning */
-	float pan_left = cosf((pan_val + 1.0f) * (float)M_PI * 0.25f);
-	float pan_right = sinf((pan_val + 1.0f) * (float)M_PI * 0.25f);
+	/* Master volume applied here */
+	const float output_gain = ch->synth ? ch->synth->master_params.master_volume * ch->synth->midi_volume * voice_gain : voice_gain;
+	const float reverb_amt = (float)v->modulated_generators[SS_GEN_REVERB_EFFECTS_SEND] / 1000.0f * v->reverb_send;
+	const float chorus_amt = (float)v->modulated_generators[SS_GEN_CHORUS_EFFECTS_SEND] / 1000.0f * v->chorus_send;
 
-	float gain = voice_gain;
-	float reverb_amt = (float)v->modulated_generators[SS_GEN_REVERB_EFFECTS_SEND] / 1000.0f * v->reverb_send;
-	float chorus_amt = (float)v->modulated_generators[SS_GEN_CHORUS_EFFECTS_SEND] / 1000.0f * v->chorus_send;
+	/* Equal-power panning */
+	ss_init_pan_table(); /* just in case */
+	const int pan_index = (int)((pan_val + 1.0f) * 500.0f);
+	const float pan_left = ss_panTableLeft[pan_index];
+	const float pan_right = ss_panTableRight[pan_index];
+	float gain_left = pan_left * output_gain;
+	float gain_right = pan_right * output_gain;
 
 	if(ch->synth && ch->synth->delay_active && delay_left && delay_right) {
 		const int delaySend = ch->midi_controllers[SS_MIDCON_VARIATION_DEPTH] * v->delay_send;
@@ -546,16 +561,28 @@ bool ss_voice_render(SS_Voice *v,
 	}
 
 	for(int i = 0; i < sample_count; i++) {
-		float s = buf[i] * gain;
-		out_left[i] += s * pan_left;
-		out_right[i] += s * pan_right;
-		if(reverb_left && reverb_right) {
-			reverb_left[i] += s * pan_left * reverb_amt;
-			reverb_right[i] += s * pan_right * reverb_amt;
+		float s = buf[i];
+		out_left[i] += s * gain_left;
+		out_right[i] += s * gain_right;
+	}
+
+	if(reverb_left && reverb_right) {
+		gain_left = pan_left * reverb_amt;
+		gain_right = pan_right * reverb_amt;
+		for(int i = 0; i < sample_count; i++) {
+			float s = buf[i];
+			reverb_left[i] += s * gain_left;
+			reverb_right[i] += s * gain_right;
 		}
-		if(chorus_left && chorus_right) {
-			chorus_left[i] += s * pan_left * chorus_amt;
-			chorus_right[i] += s * pan_right * chorus_amt;
+	}
+
+	if(chorus_left && chorus_right) {
+		gain_left = pan_left * chorus_amt;
+		gain_right = pan_right * chorus_amt;
+		for(int i = 0; i < sample_count; i++) {
+			float s = buf[i];
+			chorus_left[i] += s * gain_left;
+			chorus_right[i] += s * gain_right;
 		}
 	}
 

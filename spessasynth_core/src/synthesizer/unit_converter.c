@@ -236,9 +236,69 @@ float ss_modcurve_get_value(int transform_type, SS_ModulatorCurveType curve_type
 	return precomputed_transforms[MODULATOR_RESOLUTION * (curve_type * MOD_CURVE_TYPES_AMOUNT + transform_type) + index_0_to_16_383];
 }
 
+/* ── Pan tables ─────────────────────────────────────────────────────────── */
+
+static const float HALF_PI = M_PI / 2.0;
+
+enum { MIN_PAN = -500 };
+enum { MAX_PAN = 500 };
+enum { PAN_RESOLUTION = MAX_PAN - MIN_PAN };
+
+float ss_panTableLeft[PAN_RESOLUTION + 1];
+float ss_panTableRight[PAN_RESOLUTION + 1];
+bool pan_table_initialized = false;
+
+/* Initialize pan lookup tables */
+void ss_init_pan_table(void) {
+	if(pan_table_initialized) return;
+	for(int pan = MIN_PAN; pan <= MAX_PAN; pan++) {
+		/* Clamp to 0-1 */
+		const float realPan = (float)(pan - MIN_PAN) / (float)PAN_RESOLUTION;
+		const int tableIndex = pan - MIN_PAN;
+		ss_panTableLeft[tableIndex] = cos(HALF_PI * realPan);
+		ss_panTableRight[tableIndex] = sin(HALF_PI * realPan);
+	}
+	pan_table_initialized = true;
+}
+
+/* ── Lanczos tables ─────────────────────────────────────────────────────── */
+
+enum { LANCZOS_RADIUS = 2 };
+static inline double lanczos(double d) {
+	if(d == 0.) return 1.;
+	if(fabs(d) > (double)LANCZOS_RADIUS) return 0.;
+	double dr = (d * M_PI) / (double)LANCZOS_RADIUS;
+	return sin(d) * sin(dr) / (d * dr);
+}
+
+enum { LANCZOS_MIN = -1000 * LANCZOS_RADIUS };
+enum { LANCZOS_MAX = 1000 * LANCZOS_RADIUS };
+enum { LANCZOS_COUNT = LANCZOS_MAX - LANCZOS_MIN + 1 };
+enum { LANCZOS_SCALE = 1000 };
+static double lanczos_table[LANCZOS_COUNT];
+static bool lanczos_table_initialized = false;
+
+static void init_lanczos_table(void) {
+	if(lanczos_table_initialized) return;
+	for(int i = 0; i < LANCZOS_COUNT; i++) {
+		double real_lanczos_value = ((double)(i + LANCZOS_MIN) / LANCZOS_SCALE);
+		lanczos_table[i] = lanczos(real_lanczos_value);
+	}
+	lanczos_table_initialized = true;
+}
+
+double ss_lanczos(double d) {
+	init_lanczos_table();
+	if(d == 0.) return 1.;
+	if(fabs(d) > (double)LANCZOS_RADIUS) return 0.;
+	const int index = (int)(d * (double)LANCZOS_SCALE) - LANCZOS_MIN;
+	return lanczos_table[index];
+}
+
 /* ── One-time initializer for all lookup tables ─────────────────────────── */
 
 extern void ss_lowpass_ensure_cache(void);
+extern void ss_init_insertion_pan_tables(void);
 
 void ss_unit_converter_init(void) {
 	init_timecent_table();
@@ -246,5 +306,8 @@ void ss_unit_converter_init(void) {
 	init_centibel_table();
 	init_convex_table();
 	init_modcurve_table();
+	init_lanczos_table();
+	ss_init_pan_table();
+	ss_init_insertion_pan_tables();
 	ss_lowpass_ensure_cache();
 }

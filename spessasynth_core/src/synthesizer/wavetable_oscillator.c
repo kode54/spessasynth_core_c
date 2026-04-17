@@ -139,12 +139,7 @@ static bool get_sample_hermite(SS_Voice *v, float *out, int count, double step) 
 /* ── Sinc interpolation ──────────────────────────────────────────────────── */
 
 enum { radius = 2 };
-static inline double lanczos(double d) {
-	if(d == 0.) return 1.;
-	if(fabs(d) > (double)radius) return 0.;
-	double dr = (d * M_PI) / (double)radius;
-	return sin(d) * sin(dr) / (d * dr);
-}
+extern double ss_lanczos(double d);
 
 static float itpSinc(const float *buf, double pos, double incr, size_t loop_end, size_t loop_length) {
 	size_t offset = (size_t)(pos);
@@ -161,7 +156,7 @@ static float itpSinc(const float *buf, double pos, double incr, size_t loop_end,
 	if(max > 8) max = 8;
 
 	for(int m = min; m < max; ++m) {
-		double factor = lanczos((m - fpos + 0.5) * scale);
+		double factor = ss_lanczos((m - fpos + 0.5) * scale);
 		size_t index = offset + m;
 		if(loop_length && index >= loop_end) {
 			index -= loop_length;

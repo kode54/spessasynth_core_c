@@ -295,7 +295,7 @@ static float pan_table_left[128];
 static float pan_table_right[128];
 static int pan_tables_initialized = 0;
 
-static void init_pan_tables(void) {
+void ss_init_insertion_pan_tables(void) {
 	if(pan_tables_initialized) return;
 	for(int pan = -64; pan <= 63; pan++) {
 		float real_pan = (float)(pan + 64) / 127.0f;
@@ -1171,7 +1171,7 @@ static void phaw_free(SS_InsertionProcessor *self) {
 SS_InsertionProcessor *ss_insertion_create(uint32_t type,
                                            uint32_t sample_rate,
                                            uint32_t max_buf_size) {
-	init_pan_tables();
+	ss_init_insertion_pan_tables();
 
 	switch(type) {
 		/* ── Thru ── */
