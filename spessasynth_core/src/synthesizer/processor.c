@@ -28,6 +28,8 @@ extern void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch, d
 extern void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
 extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
 
+void ss_processor_set_midi_volume(SS_Processor *proc, float volume);
+
 /* GS: maps part index (0-15) to MIDI channel. Part 0 → ch 9 (drums), parts 1-9 → ch 0-8, parts 10-15 → ch 10-15 */
 static const int GS_PART_TO_CHANNEL[16] = { 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15 };
 
@@ -95,7 +97,7 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 	proc->master_params.delay_enabled = true;
 
 	/* MIDI volume */
-	proc->midi_volume = 1.0f;
+	ss_processor_set_midi_volume(proc, 1.0);
 	proc->pan_left = proc->pan_right = cos(M_PI / 4.0); /* Center */
 
 	/* Smoothing factors — scale relative to 44 100 Hz reference */
@@ -446,8 +448,7 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 					switch(data[3]) {
 						case 0x01: { /* Master Volume */
 							uint16_t vol = (uint16_t)((data[5] << 7) | data[4]);
-							proc->master_params.master_volume =
-							powf((float)vol / 16384.0f, (float)M_E);
+							ss_processor_set_midi_volume(proc, (float)vol / 16384.0);
 							break;
 						}
 						case 0x02: { /* Master Balance / Pan */
@@ -556,6 +557,12 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 			/*  data[0]=0x41, data[1]=device_id, data[2]=0x42 (GS),
 			    data[3]=0x12 (data set 1), data[4..6]=address, data[7+]=payload */
 			if(len < 8) break;
+			/* Some Roland */
+			if(data[2] == 0x16) {
+				ss_processor_set_midi_volume(proc, (float)data[5] / 100.0);
+				return;
+			}
+
 			if(data[2] != 0x42 || data[3] != 0x12) break;
 
 			uint32_t addr = ((uint32_t)data[4] << 16) |
@@ -584,7 +591,7 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 						}
 						break;
 					case 0x04: /* Master volume */
-						proc->master_params.master_volume = powf((float)val / 127.0f, (float)M_E);
+						ss_processor_set_midi_volume(proc, (float)val / 127.0f);
 						break;
 					case 0x05: /* Master key shift (semitones, signed) */
 						proc->master_params.master_pitch = (float)((int)val - 64);
@@ -980,10 +987,10 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 						}
 						break;
 					case 0x04: /* Master volume */
-						proc->master_params.master_volume = powf((float)xg_val / 127.0f, (float)M_E);
+						ss_processor_set_midi_volume(proc, (float)xg_val / 127.0f);
 						break;
 					case 0x05: /* Master attenuation */
-						proc->master_params.master_volume = powf((float)(127 - xg_val) / 127.0f, (float)M_E);
+						ss_processor_set_midi_volume(proc, (float)(127 - xg_val) / 127.0f);
 						break;
 					case 0x06: /* Master transpose (semitones) */
 						proc->master_params.master_pitch = (float)((int)xg_val - 64);
@@ -1182,4 +1189,11 @@ void ss_processor_system_reset(SS_Processor *proc) {
 
 	(void)t;
 	proc_emit(proc, SS_EVENT_STOP_ALL, -1, 0, 0);
+}
+
+void ss_processor_set_midi_volume(SS_Processor *proc, float volume) {
+	/* GM2 specification, section 4.1: volume is squared.
+	 * Though, according to my own testing, Math.E seems like a better choice
+	 */
+	proc->midi_volume = pow(volume, M_E);
 }
