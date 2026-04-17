@@ -105,7 +105,6 @@ typedef struct {
 	uint64_t decay_end;
 	bool entered_release;
 	bool can_end_on_silent_sustain;
-	float peak_gain;
 } SS_VolumeEnvelope;
 
 /* ── Modulation envelope ─────────────────────────────────────────────────── */

@@ -65,9 +65,8 @@ void ss_volume_envelope_recalculate(SS_Voice *v,
 
 	env->can_end_on_silent_sustain = mod_gens[SS_GEN_SUSTAIN_VOL_ENV] >= PERCEIVED_CB_SILENCE;
 
-	/* Attenuation target (dB) */
-	env->peak_gain = ss_centibel_attenuation_to_gain(mod_gens[SS_GEN_INITIAL_ATTENUATION]);
-	env->output_gain = env->peak_gain;
+	/* Start at silence */
+	env->output_gain = 0;
 
 	/* Sustain */
 	int sustain_raw = mod_gens[SS_GEN_SUSTAIN_VOL_ENV];
