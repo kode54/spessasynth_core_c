@@ -69,10 +69,11 @@ Featuring Reverb, Chorus, Delay, Insertion effects and more!
     - **Correct articulator support:** _Converts articulators to both modulators and generators!_
     - **Tested and working with gm.dls!**
     - **Correct volume:** _Properly translated to SoundFont volume!_
-    - ~~**A-Law encoding support**~~
+    - **A-Law encoding support**
     - **Both unsigned 8-bit and signed 16-bit sample support (24-bit could easily be supported, theoretically, if it is even in use anywhere)**
     - **Detects special articulator combinations:** _Such as vibratoLfoToPitch_
 - **Sound bank manager:** Stack multiple sound banks!
+    - **Dynamically caches only samples which are utilized:** If you use the stdio reader, or if you use the callback reader implementation with backing that doesn't read the entire bank to memory, only samples which are actually used will be loaded, until the Sound Bank is unloaded.
 - **Unlimited channel count:** Your CPU is the limit! Though technically, it limits to whatever you set it to on startup.
 - **Built-in, configurable effects:**
     - **Reverb:** _Multiple characters including delay and panning delay!_
@@ -155,7 +156,7 @@ Featuring Reverb, Chorus, Delay, Insertion effects and more!
 - Read DLS (DownLoadable Sounds) files like SF2 files!
 - Converts articulators to both **modulators** and **generators**!
 - Works with both unsigned 8-bit samples and signed 16-bit samples!
-- ~~A-Law encoding support: Sure, why not?~~
+- A-Law encoding support: Sure, why not?
 - **Covers special generator cases:** _such as modLfoToPitch_!
 - **Correct volume:** _looking at you, Viena and gm.sf2!_
 - Support built right into the synthesizer!
