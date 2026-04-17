@@ -1000,18 +1000,23 @@ static void ss_channel_data_entry_fine(SS_MIDIChannel *ch, int val, double time)
 		}
 
 		case SS_DATAENTRY_NRP_FINE: {
-			const int nrpn_coarse = ch->midi_controllers[SS_MIDCON_NRPN_MSB] >> 7;
-			const int nrpn_fine = ch->midi_controllers[SS_MIDCON_NRPN_LSB] >> 7;
-			if(nrpn_coarse == SS_NRPN_MSB_SF2) {
+			const int param_coarse = ch->midi_controllers[SS_MIDCON_NRPN_MSB] >> 7;
+			const int param_fine = ch->midi_controllers[SS_MIDCON_NRPN_LSB] >> 7;
+
+			/* SF2 and GS NRPN don't use lsb (but sometimes these are still sent!) */
+			if(param_coarse == SS_NRPN_MSB_SF2 ||
+			   (param_coarse >= SS_NRPN_GS_MSB_DRUM_FILTER_CUTOFF &&
+			    param_fine <= SS_NRPN_GS_MSB_DRUM_DELAY_SEND) ||
+			   param_coarse == SS_NRPN_MSB_PART_PARAMETER) {
 				return;
 			}
-			switch(nrpn_coarse) {
+			switch(param_coarse) {
 				default:
 					/* Unsupported NRPN */
 					break;
 
 				case SS_NRPN_MSB_AWE32:
-					ss_channel_nrpn_awe32(ch, nrpn_fine, val, ch->midi_controllers[SS_MIDCON_DATA_ENTRY_MSB] >> 7, time);
+					ss_channel_nrpn_awe32(ch, param_fine, val, ch->midi_controllers[SS_MIDCON_DATA_ENTRY_MSB] >> 7, time);
 					break;
 			}
 			break;
