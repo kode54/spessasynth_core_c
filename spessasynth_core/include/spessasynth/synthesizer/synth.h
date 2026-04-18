@@ -75,7 +75,7 @@ void ss_lowpass_filter_apply(SS_LowpassFilter *f,
                              const int16_t *modulated_generators,
                              float *buffer, int count,
                              float fc_excursion, float smoothing,
-							 float gain, float gain_inc);
+                             float gain, float gain_inc);
 
 /* ── Volume envelope ─────────────────────────────────────────────────────── */
 
