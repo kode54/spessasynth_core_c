@@ -564,7 +564,7 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 			/* Some Roland */
 			if(data[2] == 0x16) {
 				ss_processor_set_midi_volume(proc, (float)data[5] / 100.0);
-				return;
+				break;
 			}
 
 			if(data[2] != 0x42 || data[3] != 0x12) break;
@@ -629,11 +629,11 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 						const bool is_delay = addr3 >= 0x50 && addr3 <= 0x5a;
 						/* Disable effect editing if locked */
 						if(is_reverb && !proc->master_params.reverb_enabled)
-							return;
+							break;
 						if(is_chorus && !proc->master_params.chorus_enabled)
-							return;
+							break;
 						if(is_delay && !proc->master_params.delay_enabled)
-							return;
+							break;
 						/*
 						 0x40 - chorus to delay; any delay param activates delay
 						 */
@@ -821,6 +821,87 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 						efx_mch->insertion_enabled = (data[7] == 1);
 						if(data[7] == 1) proc->insertion_active = true;
 					}
+					break;
+				}
+
+				/* Patch Parameter controllers */
+				if(addr2_nibble == 2) {
+					/* This is an individual part (channel) parameter
+					 * Determine the channel
+					 * Note that: 0 means channel 9 (drums), and only then 1 means channel 0, 2 channel 1, etc.
+					 * SC-88Pro manual page 196
+					 */
+					uint8_t part_idx = addr2_byte & 0x0F;
+					int channel_idx = GS_PART_TO_CHANNEL[part_idx];
+					if(channel_idx < 0 || channel_idx >= proc->channel_count) break;
+
+					SS_MIDIChannel *mch = proc->midi_channels[channel_idx];
+					uint8_t gs_param = (uint8_t)(addr & 0xFF);
+					uint8_t gs_val = data[7];
+
+					switch(gs_param & 0xf0) {
+						default:
+							/* Not recognized */
+							break;
+
+						case 0x00: {
+							/* Modulation wheel */
+							if((gs_param & 0x0f) == 0x04) {
+								/* LFO1 Pitch depth
+								 * Special case:
+								 * If the source is a mod wheel, it's a strange way of setting the modulation depth
+								 * Testcase: J-Cycle.mid (it affects gm.dls which uses LFO1 for modulation)
+								 */
+								const float cents = ((float)gs_val / 127.0) * 600.0;
+								mch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] = cents / 50.0;
+								break;
+							}
+							ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, SS_MIDCON_MODULATION_WHEEL, false);
+							break;
+						}
+
+						case 0x10: {
+							/* Pitch wheel */
+							if((gs_param & 0x0f) == 0x00) {
+								/* See https://github.com/spessasus/SpessaSynth/issues/154
+								 * Pitch control
+								 * Special case:
+								 * If the source is a pitch wheel, it's a strange way of setting the pitch wheel range
+								 * Testcase: th07_03.mid
+								 */
+								const int centeredValue = (int)gs_val - 64;
+								mch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = centeredValue << 7;
+								break;
+							}
+							ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL, true);
+							break;
+						}
+
+						case 0x20: {
+							/* Channel pressure */
+							ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, NON_CC_INDEX_OFFSET + SS_MODSRC_CHANNEL_PRESSURE, false);
+							break;
+						}
+
+						case 0x30: {
+							/* Poly pressure */
+							ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, NON_CC_INDEX_OFFSET + SS_MODSRC_POLY_PRESSURE, false);
+							break;
+						}
+
+						case 0x40: {
+							/* CC1 */
+							ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, mch->cc1, false);
+							break;
+						}
+
+						case 0x50: {
+							/* CC2 */
+							ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, mch->cc2, false);
+							break;
+						}
+					}
+					break;
 				}
 
 				if(addr2_nibble != 1) break; /* only handle 0x10-0x1F below */

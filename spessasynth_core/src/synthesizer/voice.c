@@ -67,7 +67,8 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
                           int midi_note, int velocity,
                           double current_time, int target_key, int real_key,
                           const int16_t *generators,
-                          const SS_Modulator *modulators, size_t mod_count) {
+                          const SS_Modulator *modulators, size_t mod_count,
+                          const SS_DynamicModulatorSystem *dms) {
 	SS_Voice *v = (SS_Voice *)calloc(1, sizeof(SS_Voice));
 	if(!v) return NULL;
 
@@ -114,13 +115,18 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
 	v->exclusive_class = generators[SS_GEN_EXCLUSIVE_CLASS];
 
 	/* Copy modulators */
-	if(mod_count > 0) {
-		v->modulators = (SS_Modulator *)malloc(mod_count * sizeof(SS_Modulator));
+	if(mod_count > 0 || dms->is_active) {
+		size_t adjusted_mod_count = mod_count + (dms->is_active ? dms->modulator_count : 0);
+		v->modulators = (SS_Modulator *)malloc(adjusted_mod_count * sizeof(SS_Modulator));
 		if(v->modulators) {
 			for(size_t i = 0; i < mod_count; i++)
 				v->modulators[i] = ss_modulator_copy(&modulators[i]);
-			v->modulator_count = mod_count;
 		}
+		if(dms->is_active) {
+			for(size_t i = 0, count = dms->modulator_count; i < count; i++)
+				v->modulators[i + mod_count] = ss_modulator_copy(&dms->modulators[i].modulator);
+		}
+		v->modulator_count = adjusted_mod_count;
 	}
 
 	ss_lowpass_filter_init(&v->filter, sample_rate);

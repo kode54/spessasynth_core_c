@@ -141,6 +141,29 @@ typedef struct {
 	bool rx_note_off; /* receive note off, fast-kill on off (default false) */
 } SS_DrumParameters;
 
+/* ── Dynamic Modulator System ────────────────────────────────────────────── */
+
+typedef struct {
+	SS_Modulator modulator;
+	uint16_t source;
+	uint16_t destination;
+	bool is_bipolar;
+	bool is_negative;
+} SS_DynamicModulatorSystem_Modulator;
+
+typedef struct {
+	SS_DynamicModulatorSystem_Modulator *modulators;
+	size_t modulator_count;
+	size_t modulators_allocated;
+	bool is_active;
+} SS_DynamicModulatorSystem;
+
+void ss_dynamic_modulator_system_init(SS_DynamicModulatorSystem *dms);
+void ss_dynamic_modulator_system_free(SS_DynamicModulatorSystem *dms);
+void ss_dynamic_modulator_system_setup_receiver(SS_DynamicModulatorSystem *dms,
+                                                uint8_t addr3, uint8_t data,
+                                                uint16_t source, bool is_bipolar);
+
 /* ── Voice ───────────────────────────────────────────────────────────────── */
 
 typedef struct SS_Voice {
@@ -206,7 +229,8 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
                           int midi_note, int velocity,
                           double current_time, int target_key, int real_key,
                           const int16_t *generators,
-                          const SS_Modulator *modulators, size_t mod_count);
+                          const SS_Modulator *modulators, size_t mod_count,
+                          const SS_DynamicModulatorSystem *dms);
 /*SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int real_key);*/
 void ss_voice_free(SS_Voice *v);
 
@@ -256,6 +280,8 @@ typedef struct SS_MIDIChannel {
 	float custom_controllers[SS_CUSTOM_CTRL_COUNT];
 
 	SS_DataEntryState data_entry_state;
+
+	SS_DynamicModulatorSystem dms;
 
 	int channel_transpose_key_shift;
 	int8_t channel_octave_tuning[128];

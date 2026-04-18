@@ -29,6 +29,7 @@ set(SS_SOURCES
     src/synthesizer/wavetable_oscillator.c
     src/synthesizer/voice.c
     src/synthesizer/midi_channel.c
+    src/synthesizer/dynamic_modulators.c
     src/synthesizer/processor.c
     src/synthesizer/dsp/chorus.c
     src/synthesizer/dsp/dattorro_reverb.c

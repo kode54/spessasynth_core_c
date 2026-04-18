@@ -21,7 +21,8 @@ extern SS_Voice *ss_voice_create(uint32_t sr,
                                  int midi_note, int velocity,
                                  double current_time, int target_key, int real_key,
                                  const int16_t *generators,
-                                 const SS_Modulator *modulators, size_t mod_count);
+                                 const SS_Modulator *modulators, size_t mod_count,
+                                 const SS_DynamicModulatorSystem *dms);
 /*extern SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int real_key);*/
 extern void ss_voice_free(SS_Voice *v);
 extern void ss_voice_release(SS_Voice *v, double current_time, double min_note_length);
@@ -252,6 +253,8 @@ static void reset_controllers_to_defaults(SS_MIDIChannel *ch) {
 	ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = 2 << 7; /* Default 2 semitones */
 	ss_channel_pitch_wheel(ch, 8192, -1, 0);
 
+	ss_dynamic_modulator_system_init(&ch->dms);
+
 	reset_portamento(ch);
 	reset_drum_params(ch);
 	reset_vibrato_params(ch);
@@ -294,6 +297,7 @@ void ss_channel_free(SS_MIDIChannel *ch) {
 		ss_voice_free(ch->voices[i]);
 	free(ch->voices);
 	free(ch->sustained_voices);
+	ss_dynamic_modulator_system_free(&ch->dms);
 	free(ch);
 }
 
@@ -418,6 +422,8 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 
 	SS_Processor *proc = ch->synth;
 
+	SS_DynamicModulatorSystem *dms = &ch->dms;
+
 	for(size_t si = 0; si < sd_count; si++) {
 		SS_SynthesisData *sd = &synth_data[si];
 		SS_BasicSample *samp = sd->sample;
@@ -472,7 +478,7 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		SS_Voice *voice = ss_voice_create(sr, ch->preset, &audio, real_key, voice_vel,
 		                                  time, target_key, real_key,
 		                                  generators,
-		                                  sd->modulators, sd->mod_count);
+		                                  sd->modulators, sd->mod_count, dms);
 		if(!voice) continue;
 
 		/* Portamento */
@@ -1119,6 +1125,10 @@ because I wanted support for Touhou MIDIs :-)
 							break;
 
 						case SS_NRPN_GS_LSB_VIBRATO_RATE:
+							if(ch->dms.is_active) {
+								ss_channel_controller(ch, SS_MIDCON_VIBRATO_RATE, val, time);
+								return;
+							}
 							if(val == 64) {
 								/* Default value */
 								return;
