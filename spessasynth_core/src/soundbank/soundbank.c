@@ -436,8 +436,9 @@ bool ss_sample_decode(SS_BasicSample *s) {
 
 					if(hdr[0] == 'O' && hdr[1] == 'g' && hdr[2] == 'g' && hdr[3] == 'S') {
 #ifdef SS_HAVE_STB_VORBIS
+						bool res = ss_vorbis_decode(s);
 						ss_mutex_leave(s->mutex);
-						return ss_vorbis_decode(s);
+						return res;
 #else
 						ss_mutex_leave(s->mutex);
 						return false;
@@ -445,8 +446,9 @@ bool ss_sample_decode(SS_BasicSample *s) {
 					}
 					if(hdr[0] == 'f' && hdr[1] == 'L' && hdr[2] == 'a' && hdr[3] == 'C') {
 #ifdef SS_HAVE_LIBFLAC
+						bool res = ss_flac_decode(s);
 						ss_mutex_leave(s->mutex);
-						return ss_flac_decode(s);
+						return res;
 #else
 						return false;
 #endif
@@ -475,8 +477,9 @@ bool ss_sample_decode(SS_BasicSample *s) {
 			const uint8_t *hdr = s->compressed_data;
 			if(hdr[0] == 'O' && hdr[1] == 'g' && hdr[2] == 'g' && hdr[3] == 'S') {
 #ifdef SS_HAVE_STB_VORBIS
+				bool res = ss_vorbis_decode(s);
 				ss_mutex_leave(s->mutex);
-				return ss_vorbis_decode(s);
+				return res;
 #else
 				ss_mutex_leave(s->mutex);
 				return false;
@@ -484,8 +487,9 @@ bool ss_sample_decode(SS_BasicSample *s) {
 			}
 			if(hdr[0] == 'f' && hdr[1] == 'L' && hdr[2] == 'a' && hdr[3] == 'C') {
 #ifdef SS_HAVE_LIBFLAC
+				bool res = ss_flac_decode(s);
 				ss_mutex_leave(s->mutex);
-				return ss_flac_decode(s);
+				return res;
 #else
 				ss_mutex_leave(s->mutex);
 				return false;
