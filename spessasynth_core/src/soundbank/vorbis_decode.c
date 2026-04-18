@@ -85,6 +85,8 @@ bool ss_vorbis_decode(SS_BasicSample *s) {
 	int sample_rate = 0;
 	float *pcm = NULL;
 
+	bool partial_sample = (s->audio_file_sample_offset > 0) || (s->audio_file_sample_count != ~0ULL);
+
 	stb_vorbis_file file_callbacks = {
 		.fgetc = &stb_vorbis_fgetc,
 		.fread = &stb_vorbis_fread,
@@ -123,7 +125,7 @@ bool ss_vorbis_decode(SS_BasicSample *s) {
 	/* Convert int16 -> float, mixdown to mono if stereo */
 	s->audio_data = pcm;
 	s->audio_data_length = (size_t)n_samples;
-	s->sample_rate = (uint32_t)sample_rate;
+	if(!partial_sample)	s->sample_rate = (uint32_t)sample_rate;
 
 	/* Free compressed data now that it's decoded */
 	if(s->owns_raw_data) {

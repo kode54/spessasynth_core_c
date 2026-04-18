@@ -189,6 +189,8 @@ bool ss_flac_decode(SS_BasicSample *s) {
 	if(!s || !s->audio_file)
 		return false;
 
+	bool partial_sample = (s->audio_file_sample_offset > 0) || (s->audio_file_sample_count != ~0ULL);
+
 	FlacState st;
 	memset(&st, 0, sizeof(st));
 	st.file = s->audio_file;
@@ -239,7 +241,7 @@ bool ss_flac_decode(SS_BasicSample *s) {
 	/* Transfer ownership to sample */
 	s->audio_data = st.pcm;
 	s->audio_data_length = st.pcm_frames;
-	s->sample_rate = st.sample_rate;
+	if(!partial_sample) s->sample_rate = st.sample_rate;
 
 	/* Resize to possibly shrink, and add a bit for interpolators */
 	float *audio_data = (float *)realloc(s->audio_data, (s->audio_data_length + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
