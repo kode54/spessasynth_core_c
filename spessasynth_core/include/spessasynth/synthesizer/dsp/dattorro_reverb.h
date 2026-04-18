@@ -47,7 +47,7 @@ SS_DattorroReverb *ss_dattorro_reverb_create(float sampleRate);
 void ss_dattorro_reverb_clear(SS_DattorroReverb *reverb);
 void ss_dattorro_reverb_free(SS_DattorroReverb *reverb);
 void ss_dattorro_reverb_process(SS_DattorroReverb *reverb,
-                                const float *inputLeft, const float *inputRight,
+                                const float *input,
                                 float *outputLeft, float *outputRight,
                                 int sample_count);
 

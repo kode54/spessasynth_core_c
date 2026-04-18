@@ -358,14 +358,14 @@ void ss_reverb_set_macro(SS_Reverb *reverb, unsigned char value) {
 }
 
 void ss_reverb_process(SS_Reverb *reverb,
-                       const float *inputL, const float *inputR,
+                       const float *input,
                        float *outputL, float *outputR,
                        int sample_count) {
 	int i;
 	switch(reverb->parameters.character) {
 		default: {
 			// Reverb
-			ss_dattorro_reverb_process(reverb->dattorro, inputL, inputR, outputL, outputR, sample_count);
+			ss_dattorro_reverb_process(reverb->dattorro, input, outputL, outputR, sample_count);
 			return;
 		}
 
@@ -378,18 +378,14 @@ void ss_reverb_process(SS_Reverb *reverb,
 				float z = reverb->preLPFz;
 				const float a = reverb->preLPFa;
 				for(i = 0; i < sample_count; i++) {
-					const float x = (inputL[i] + inputR[i]) / 2.0;
+					const float x = input[i];
 					z += a * (x - z);
 					preLPF[i] = z;
 				}
 				reverb->preLPFz = z;
 				delayIn = preLPF;
 			} else {
-				// Stash an unprocessed downmix here
-				float *downmix = reverb->delayPreLPF;
-				for(i = 0; i < sample_count; i++)
-					downmix[i] = (inputL[i] + inputR[i]) / 2.0;
-				delayIn = downmix;
+				delayIn = input;
 			}
 
 			ss_delay_line_process(reverb->delayLeft, delayIn, reverb->delayLeftOutput, sample_count);
@@ -414,18 +410,14 @@ void ss_reverb_process(SS_Reverb *reverb,
 				float z = reverb->preLPFz;
 				const float a = reverb->preLPFa;
 				for(i = 0; i < sample_count; i++) {
-					const float x = (inputL[i] + inputR[i]) / 2.0;
+					const float x = input[i];
 					z += a * (x - z);
 					preLPF[i] = z;
 				}
 				reverb->preLPFz = z;
 				delayIn = preLPF;
 			} else {
-				// Once again, downmix to the preLPF buffer
-				float *downmix = reverb->delayPreLPF;
-				for(i = 0; i < sample_count; i++)
-					downmix[i] = (inputL[i] + inputR[i]) / 2.0;
-				delayIn = downmix;
+				delayIn = input;
 			}
 
 			// Mix right into left

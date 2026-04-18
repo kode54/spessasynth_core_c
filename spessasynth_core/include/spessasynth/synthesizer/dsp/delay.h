@@ -54,9 +54,9 @@ void ss_delay_clear(SS_Delay *delay);
 void ss_delay_free(SS_Delay *delay);
 
 void ss_delay_process(SS_Delay *delay,
-                      const float *inputL, const float *inputR,
+                      const float *input,
                       float *outputL, float *outputR,
-                      float *reverbL, float *reverbR,
+                      float *reverb,
                       int sample_count);
 
 void ss_delay_set_send_level_to_reverb(SS_Delay *delay, unsigned char value);

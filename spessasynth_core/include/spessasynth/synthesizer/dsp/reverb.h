@@ -64,7 +64,7 @@ void ss_reverb_set_pre_lowpass(SS_Reverb *reverb, unsigned char preLowpass);
 void ss_reverb_set_macro(SS_Reverb *reverb, unsigned char value);
 
 void ss_reverb_process(SS_Reverb *reverb,
-                       const float *inputL, const float *inputR,
+                       const float *input,
                        float *outputL, float *outputR,
                        int sample_count);
 

@@ -369,9 +369,9 @@ void ss_channel_reset_controllers(SS_MIDIChannel *ch);
 void ss_channel_render(SS_MIDIChannel *ch,
                        double time_now,
                        float *out_left, float *out_right,
-                       float *reverb_left, float *reverb_right,
-                       float *chorus_left, float *chorus_right,
-                       float *delay_left, float *delay_right,
+                       float *reverb,
+                       float *chorus,
+                       float *delay,
                        uint32_t sample_count);
 
 /* ── Synth processor options ─────────────────────────────────────────────── */
@@ -458,12 +458,9 @@ typedef struct SS_Processor {
 	SS_Delay *delay;
 	SS_InsertionProcessor *insertion; /* active insertion effect processor (owned) */
 
-	float reverb_left[SS_MAX_SOUND_CHUNK];
-	float reverb_right[SS_MAX_SOUND_CHUNK];
-	float chorus_left[SS_MAX_SOUND_CHUNK];
-	float chorus_right[SS_MAX_SOUND_CHUNK];
-	float delay_left[SS_MAX_SOUND_CHUNK];
-	float delay_right[SS_MAX_SOUND_CHUNK];
+	float reverb_buffer[SS_MAX_SOUND_CHUNK];
+	float chorus_buffer[SS_MAX_SOUND_CHUNK];
+	float delay_buffer[SS_MAX_SOUND_CHUNK];
 	float insertion_left[SS_MAX_SOUND_CHUNK]; /* per-block insertion input accumulation buffer */
 	float insertion_right[SS_MAX_SOUND_CHUNK];
 

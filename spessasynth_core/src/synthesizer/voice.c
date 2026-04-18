@@ -346,9 +346,9 @@ bool ss_voice_render(SS_Voice *v,
                      const SS_MIDIChannel *ch,
                      double time_now,
                      float *out_left, float *out_right,
-                     float *reverb_left, float *reverb_right,
-                     float *chorus_left, float *chorus_right,
-                     float *delay_left, float *delay_right,
+                     float *reverb,
+                     float *chorus,
+                     float *delay,
                      int sample_count,
                      SS_InterpolationType interp,
                      float vol_smoothing,
@@ -546,10 +546,10 @@ bool ss_voice_render(SS_Voice *v,
 	if(pan_index > 1000) pan_index = 1000;
 	const float pan_left = ss_panTableLeft[pan_index];
 	const float pan_right = ss_panTableRight[pan_index];
-	float gain_left = pan_left * output_gain;
-	float gain_right = pan_right * output_gain;
+	const float gain_left = pan_left * output_gain;
+	const float gain_right = pan_right * output_gain;
 
-	if(ch->synth && ch->synth->delay_active && delay_left && delay_right) {
+	if(ch->synth && ch->synth->delay_active && delay) {
 		const int delaySend = ch->midi_controllers[SS_MIDCON_VARIATION_DEPTH] * v->delay_send;
 		if(delaySend > 0) {
 			const float delayGain =
@@ -557,9 +557,8 @@ bool ss_voice_render(SS_Voice *v,
 			ch->synth->master_params.delay_gain *
 			((float)(delaySend >> 7) / 127.0);
 			for(int i = 0; i < sample_count; i++) {
-				const float delaySample = delayGain * buf[i];
-				delay_left[i] += delaySample;
-				delay_right[i] += delaySample;
+				const float s = delayGain * buf[i];
+				delay[i] += s;
 			}
 		}
 	}
@@ -570,25 +569,19 @@ bool ss_voice_render(SS_Voice *v,
 		out_right[i] += s * gain_right;
 	}
 
-	if(reverb_left && reverb_right && reverb_amt > 0) {
+	if(reverb && reverb_amt > 0) {
 		const float reverb_gain = output_gain * (reverb_amt / 1000.0);
-		gain_left = pan_left * reverb_gain;
-		gain_right = pan_right * reverb_gain;
 		for(int i = 0; i < sample_count; i++) {
 			float s = buf[i];
-			reverb_left[i] += s * gain_left;
-			reverb_right[i] += s * gain_right;
+			reverb[i] += s * reverb_gain;
 		}
 	}
 
-	if(chorus_left && chorus_right && chorus_amt > 0) {
+	if(chorus && chorus_amt > 0) {
 		const float chorus_gain = output_gain * (reverb_amt / 1000.0);
-		gain_left = pan_left * chorus_gain;
-		gain_right = pan_right * chorus_gain;
 		for(int i = 0; i < sample_count; i++) {
 			float s = buf[i];
-			chorus_left[i] += s * gain_left;
-			chorus_right[i] += s * gain_right;
+			chorus[i] += s * chorus_gain;
 		}
 	}
 

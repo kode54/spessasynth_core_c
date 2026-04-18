@@ -174,7 +174,7 @@ void ss_dattorro_reverb_free(SS_DattorroReverb *reverb) {
 	free(reverb);
 }
 
-void ss_dattorro_reverb_process(SS_DattorroReverb *reverb, const float *inputLeft, const float *inputRight, float *outputLeft, float *outputRight, int sample_count) {
+void ss_dattorro_reverb_process(SS_DattorroReverb *reverb, const float *input, float *outputLeft, float *outputRight, int sample_count) {
 	const unsigned int pd = reverb->preDelay;
 	const float fi = reverb->inputDiffusion[0];
 	const float si = reverb->inputDiffusion[1];
@@ -194,7 +194,7 @@ void ss_dattorro_reverb_process(SS_DattorroReverb *reverb, const float *inputLef
 	int i, j;
 
 	for(i = 0; i < sample_count; i++) {
-		reverb->pDelay[(blockStart + i) % blockLength] = (inputLeft[i] + inputRight[i]) / 2.0;
+		reverb->pDelay[(blockStart + i) % blockLength] = input[i];
 	}
 
 	for(i = 0; i < sample_count; i++) {

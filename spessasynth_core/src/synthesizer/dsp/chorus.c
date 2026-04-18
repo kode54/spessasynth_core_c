@@ -237,10 +237,10 @@ void ss_chorus_set_macro(SS_Chorus *chorus, unsigned char value) {
 }
 
 void ss_chorus_process(SS_Chorus *chorus,
-                       const float *inputL, const float *inputR,
+                       const float *input,
                        float *outputL, float *outputR,
-                       float *outputReverbL, float *outputReverbR,
-                       float *outputDelayL, float *outputDelayR,
+                       float *outputReverb,
+                       float *outputDelay,
                        int sample_count) {
 	float *bufferL = chorus->leftDelayBuffer;
 	float *bufferR = chorus->rightDelayBuffer;
@@ -259,12 +259,12 @@ void ss_chorus_process(SS_Chorus *chorus,
 	float z = chorus->preLPFz;
 	const float a = chorus->preLPFa;
 
-	const bool outReverb = outputReverbL && outputReverbR && reverbGain > 0.0;
-	const bool outDelay = outputDelayL && outputDelayR && delayGain > 0.0;
+	const bool outReverb = outputReverb && reverbGain > 0.0;
+	const bool outDelay = outputDelay && delayGain > 0.0;
 
 	int i;
 	for(i = 0; i < sample_count; i++) {
-		float inputSample = (inputL[i] + inputR[i]) / 2.0;
+		float inputSample = input[i];
 		// Pre lowpass filter
 		if(preLPF) {
 			z += a * (inputSample - z);
@@ -309,14 +309,15 @@ void ss_chorus_process(SS_Chorus *chorus,
 		*outputL++ += outL * gain;
 		*outputR++ += outR * gain;
 
+		// Mono downmix for effects
+		const float mono = (outL + outR) / 2.0;
+
 		// Mix other effects outputs
 		if(outReverb) {
-			*outputReverbL++ += outL * reverbGain;
-			*outputReverbR++ += outR * reverbGain;
+			*outputReverb++ += mono * reverbGain;
 		}
 		if(outDelay) {
-			*outputDelayL++ += outL * delayGain;
-			*outputDelayR++ += outR * delayGain;
+			*outputDelay++ += mono * delayGain;
 		}
 
 		// Advance pointers

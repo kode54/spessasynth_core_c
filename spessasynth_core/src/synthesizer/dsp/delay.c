@@ -345,29 +345,24 @@ void ss_delay_set_macro(SS_Delay *delay, unsigned char value) {
 }
 
 void ss_delay_process(SS_Delay *delay,
-                      const float *inputL, const float *inputR,
+                      const float *input,
                       float *outputL, float *outputR,
-                      float *reverbL, float *reverbR,
+                      float *reverb,
                       int sample_count) {
-	float *delayIn;
+	const float *delayIn;
 	if(delay->parameters.pre_lowpass > 0) {
 		float *preLPF = delay->delay_pre_lpf;
 		float z = delay->preLPFz;
 		const float a = delay->preLPFa;
 		for(int i = 0; i < sample_count; i++) {
-			const float x = (inputL[i] + inputR[i]) / 2.0;
+			const float x = input[i];
 			z += a * (x - z);
 			preLPF[i] = z;
 		}
 		delay->preLPFz = z;
 		delayIn = preLPF;
 	} else {
-		/* Use the buffer just to downmix */
-		float *downmix = delay->delay_pre_lpf;
-		for(int i = 0; i < sample_count; i++) {
-			downmix[i] = (inputL[i] + inputR[i]) / 2.0;
-		}
-		delayIn = downmix;
+		delayIn = input;
 	}
 
 	/*
@@ -388,9 +383,7 @@ void ss_delay_process(SS_Delay *delay,
 	float *center = delay->delay_center_output;
 	for(int i = 0; i < sample_count; i++) {
 		const float sample = center[i];
-		const float outReverb = sample * reverbGain;
-		reverbL[i] += outReverb;
-		reverbR[i] += outReverb;
+		reverb[i] += sample * reverbGain;
 		const float outSample = sample * gain;
 		outputL[i] += outSample;
 		outputR[i] += outSample;
@@ -398,7 +391,7 @@ void ss_delay_process(SS_Delay *delay,
 
 	/* Add input into delay (stereo delays take input from both) */
 	for(int i = 0; i < sample_count; i++) {
-		center[i] += (inputL[i] + inputR[i]) / 2.0;
+		center[i] += input[i];
 	}
 
 	/* Process stereo delays (reuse preLPF array as delays overwrite samples) */
@@ -408,13 +401,13 @@ void ss_delay_process(SS_Delay *delay,
 	for(int i = 0; i < sample_count; i++) {
 		const float sample = stereoOut[i];
 		outputL[i] += sample * gain;
-		reverbL[i] += sample * reverbGain;
+		reverb[i] += sample * reverbGain;
 	}
 	/* Right */
 	ss_delay_line_process(delay->delayRight, center, stereoOut, sample_count);
 	for(int i = 0; i < sample_count; i++) {
 		const float sample = stereoOut[i];
 		outputR[i] += sample * gain;
-		reverbR[i] += sample * reverbGain;
+		reverb[i] += sample * reverbGain;
 	}
 }

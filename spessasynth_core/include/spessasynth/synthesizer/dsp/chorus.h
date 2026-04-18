@@ -59,10 +59,10 @@ void ss_chorus_set_level(SS_Chorus *chorus, unsigned char value);
 void ss_chorus_set_macro(SS_Chorus *chorus, unsigned char value);
 
 void ss_chorus_process(SS_Chorus *chorus,
-                       const float *inputL, const float *inputR,
+                       const float *input,
                        float *outputL, float *outputR,
-                       float *outputReverbL, float *outputReverbR,
-                       float *outputDelayL, float *outputDelayR,
+                       float *outputReverb,
+                       float *outputDelay,
                        int sample_count);
 
 #ifdef __cplusplus

@@ -244,16 +244,16 @@ static void proc_emit(SS_Processor *proc, SS_SynthEventType type,
 
 static void ss_processor_render_internal(SS_Processor *proc,
                                          float *out_left, float *out_right,
-                                         float *reverb_left, float *reverb_right,
-                                         float *chorus_left, float *chorus_right,
-                                         float *delay_left, float *delay_right,
+                                         float *reverb,
+                                         float *chorus,
+                                         float *delay,
                                          uint32_t sample_count) {
 	if(!proc || sample_count == 0) return;
 
 	/* Use silent scratch buffers when caller passes NULL for effects */
-	float *rl = reverb_left, *rr = reverb_right;
-	float *cl = chorus_left, *cr = chorus_right;
-	float *dl = delay_left, *dr = delay_right;
+	float *rvb = reverb;
+	float *chr = chorus;
+	float *dly = delay;
 
 	proc->total_voices = 0;
 
@@ -269,12 +269,12 @@ static void ss_processor_render_internal(SS_Processor *proc,
 			 * Skip reverb/chorus/delay sends: the insertion processor handles them. */
 			ss_channel_render(ch, time_now,
 			                  proc->insertion_left, proc->insertion_right,
-			                  NULL, NULL, NULL, NULL, NULL, NULL,
+			                  NULL, NULL, NULL,
 			                  sample_count);
 		} else {
 			ss_channel_render(ch, time_now,
 			                  out_left, out_right,
-			                  rl, rr, cl, cr, dl, dr,
+			                  rvb, chr, dly,
 			                  sample_count);
 		}
 
@@ -293,57 +293,45 @@ void ss_processor_render(SS_Processor *proc,
 	memset(out_left, 0, sizeof(float) * sample_count);
 	memset(out_right, 0, sizeof(float) * sample_count);
 
-	float *reverb_left, *reverb_right;
-	float *chorus_left, *chorus_right;
-	float *delay_left, *delay_right;
+	float *reverb;
+	float *chorus;
+	float *delay;
 
-	reverb_left = proc->reverb_left;
-	reverb_right = proc->reverb_right;
-	chorus_left = proc->chorus_left;
-	chorus_right = proc->chorus_right;
-	delay_left = proc->delay_left;
-	delay_right = proc->delay_right;
+	reverb = proc->reverb_buffer;
+	chorus = proc->chorus_buffer;
+	delay = proc->delay_buffer;
 
 	while(sample_count) {
 		const int block_count = sample_count > SS_MAX_SOUND_CHUNK ? SS_MAX_SOUND_CHUNK : sample_count;
 		sample_count -= block_count;
 
-		memset(reverb_left, 0, sizeof(float) * block_count);
-		memset(reverb_right, 0, sizeof(float) * block_count);
-		memset(chorus_left, 0, sizeof(float) * block_count);
-		memset(chorus_right, 0, sizeof(float) * block_count);
+		memset(reverb, 0, sizeof(float) * block_count);
+		memset(chorus, 0, sizeof(float) * block_count);
 		if(proc->delay_active) {
-			memset(delay_left, 0, sizeof(float) * block_count);
-			memset(delay_right, 0, sizeof(float) * block_count);
+			memset(delay, 0, sizeof(float) * block_count);
 		}
 		if(proc->options.enable_effects && proc->insertion_active) {
 			memset(proc->insertion_left, 0, sizeof(float) * block_count);
 			memset(proc->insertion_right, 0, sizeof(float) * block_count);
 		}
 
-		ss_processor_render_internal(proc, out_left, out_right, reverb_left, reverb_right, chorus_left, chorus_right, delay_left, delay_right, block_count);
+		ss_processor_render_internal(proc, out_left, out_right, reverb, chorus, delay, block_count);
 
 		/* Run insertion processor first: it feeds into the stereo out and effect buses */
 		if(proc->options.enable_effects && proc->insertion_active && proc->insertion) {
 			proc->insertion->process(proc->insertion,
 			                         proc->insertion_left, proc->insertion_right,
 			                         out_left, out_right,
-			                         reverb_left, chorus_left, delay_left,
+			                         reverb, chorus, delay,
 			                         0, block_count);
-			/* Add insertion mono sends into stereo effect buses */
-			memcpy(reverb_right, reverb_left, sizeof(float) * block_count);
-			memcpy(chorus_right, chorus_left, sizeof(float) * block_count);
-			if(proc->delay_active) {
-				memcpy(delay_right, delay_left, sizeof(float) * block_count);
-			}
 		}
 
 		/* These mix into the output, with the option of chorus and/or delay emitting into the reverb buffers */
-		ss_chorus_process(proc->chorus, chorus_left, chorus_right, out_left, out_right, reverb_left, reverb_right, delay_left, delay_right, block_count);
+		ss_chorus_process(proc->chorus, chorus, out_left, out_right, reverb, delay, block_count);
 		if(proc->delay_active && proc->master_params.midi_system != SS_SYSTEM_XG) {
-			ss_delay_process(proc->delay, delay_left, delay_right, out_left, out_right, reverb_left, reverb_right, block_count);
+			ss_delay_process(proc->delay, delay, out_left, out_right, reverb, block_count);
 		}
-		ss_reverb_process(proc->reverb, reverb_left, reverb_right, out_left, out_right, block_count);
+		ss_reverb_process(proc->reverb, reverb, out_left, out_right, block_count);
 
 		out_left += block_count;
 		out_right += block_count;
