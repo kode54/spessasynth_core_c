@@ -535,6 +535,12 @@ void ss_processor_program_change(SS_Processor *proc, int ch, int program, double
 void ss_processor_pitch_wheel(SS_Processor *proc, int ch, int value, int midi_note, double t);
 void ss_processor_channel_pressure(SS_Processor *proc, int ch, int pressure, double t);
 void ss_processor_poly_pressure(SS_Processor *proc, int ch, int note, int pressure, double t);
+
+/*
+ * This function takes a pointer to the inner message, not counting the leading 0xf0
+ * or trailing 0xf7. It is up to the caller to validate that those are present in the
+ * source, but exclude them when passing the buffer and size to this message.
+ */
 void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, double t);
 
 /**
