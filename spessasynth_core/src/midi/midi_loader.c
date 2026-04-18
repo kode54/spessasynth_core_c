@@ -285,6 +285,7 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 
 		for(size_t ei = 0; ei < track->event_count; ei++) {
 			SS_MIDIMessage *e = &track->events[ei];
+			e->track_index = (uint16_t)ti;
 			uint8_t sb = e->status_byte;
 
 			/* ── Voice message ──────────────────────────────────────────── */
@@ -454,6 +455,7 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 
 static bool parse_track(SS_MIDIFile *m, SS_File *file,
                         size_t start_ticks) {
+	size_t track_index = m->track_count;
 	SS_MIDITrack *track = &m->tracks[m->track_count++];
 	memset(track, 0, sizeof(*track));
 	track->port = -1;
@@ -488,6 +490,7 @@ static bool parse_track(SS_MIDIFile *m, SS_File *file,
 				SS_MIDIMessage msg;
 				msg.ticks = abs_tick;
 				msg.status_byte = meta_type;
+				msg.track_index = (uint16_t)track_index;
 				msg.data_length = meta_len;
 				msg.data = NULL;
 
@@ -509,6 +512,7 @@ static bool parse_track(SS_MIDIFile *m, SS_File *file,
 				SS_MIDIMessage msg;
 				msg.ticks = abs_tick;
 				msg.status_byte = status_byte;
+				msg.track_index = (uint16_t)track_index;
 				msg.data_length = slen;
 				msg.data = NULL;
 				if(slen > 0 && pos + slen <= buf_len) {
@@ -543,6 +547,7 @@ static bool parse_track(SS_MIDIFile *m, SS_File *file,
 		SS_MIDIMessage msg;
 		msg.ticks = abs_tick;
 		msg.status_byte = status_byte;
+		msg.track_index = (uint16_t)track_index;
 		msg.data_length = (uint32_t)data_bytes;
 		msg.data = NULL;
 

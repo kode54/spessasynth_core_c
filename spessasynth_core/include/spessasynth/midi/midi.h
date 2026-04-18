@@ -22,6 +22,7 @@ extern "C" {
 typedef struct {
 	size_t ticks; /* absolute ticks from track start */
 	uint8_t status_byte; /* for voice: 0x80-0xEF; for meta/sysex: type byte */
+	uint16_t track_index; /* index into SS_MIDIFile.tracks — used for multi-port channel offset */
 	uint8_t *data; /* owned; NULL for events with no data bytes */
 	size_t data_length;
 } SS_MIDIMessage;

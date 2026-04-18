@@ -23,6 +23,20 @@ static double read_tempo_bpm(const uint8_t *d) {
 	return 60000000.0 / (double)us;
 }
 
+/** Compute the effective channel for a message, applying the multi-port
+ *  channel offset determined by the message's source track. */
+static int effective_channel(const SS_MIDIFile *midi,
+                             const SS_MIDIMessage *e) {
+	int ch = e->status_byte & 0x0F;
+	if(!midi->is_multi_port || !midi->port_channel_offset_map) return ch;
+	size_t ti = e->track_index;
+	if(ti >= midi->track_count) return ch;
+	int port = midi->tracks[ti].port;
+	if(port < 0) return ch;
+	if((size_t)port >= midi->port_channel_offset_map_count) return ch;
+	return ch + midi->port_channel_offset_map[port];
+}
+
 /** Decode status_byte → voice message type and channel.
  *  Returns false if this is a meta/sysex event. */
 #if 0
@@ -200,7 +214,7 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 		/* Non-note voice events */
 		if(sb >= 0x80 && sb < 0xF0 && seq->proc) {
 			uint8_t type = sb & 0xF0;
-			int ch = sb & 0x0F;
+			int ch = effective_channel(midi, e);
 			switch(type) {
 				case 0xB0: /* CC */
 					if(e->data_length >= 2)
@@ -250,7 +264,7 @@ static void process_event(SS_Sequencer *seq, SS_MIDIFile *midi,
 	/* Voice event */
 	if(sb >= 0x80 && sb < 0xF0) {
 		uint8_t type = sb & 0xF0;
-		int ch = sb & 0x0F;
+		int ch = effective_channel(midi, e);
 		switch(type) {
 			case 0x90: /* note on */
 				if(e->data_length >= 2) {
