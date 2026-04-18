@@ -485,6 +485,10 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 				bank->samples[i].audio_file_type = SS_SMPLT_COMPRESSED;
 				bank->samples[i].audio_file_sample_offset = byte_start;
 				bank->samples[i].audio_file_sample_count = byte_end - byte_start;
+
+				/* Ugh! Absolute sample counts! */
+				bank->samples[i].loop_start -= byte_start;
+				bank->samples[i].loop_end -= byte_start;
 			}
 		}
 	}
