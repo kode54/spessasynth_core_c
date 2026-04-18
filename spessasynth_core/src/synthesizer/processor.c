@@ -1245,6 +1245,9 @@ void ss_processor_system_reset(SS_Processor *proc) {
 		if(p) ch->preset = p;
 	}
 
+	// Reset the volume
+	ss_processor_set_midi_volume(proc, 1.0);
+
 	// Reset the effects processors' buffers
 	ss_reverb_clear(proc->reverb);
 	ss_chorus_clear(proc->chorus);
