@@ -519,8 +519,6 @@ bool ss_voice_render(SS_Voice *v,
 	float pan_val;
 	if(v->override_pan != 0.0f) {
 		pan_val = v->override_pan / 500.0f;
-		if(pan_val < -1.0f) pan_val = -1.0f;
-		if(pan_val > 1.0f) pan_val = 1.0f;
 	} else {
 		/* Smooth only the generator pan (matches TS: currentPan tracks modulated[pan] only).
 		 * v->current_pan is stored in the -500..500 generator range.
@@ -528,8 +526,6 @@ bool ss_voice_render(SS_Voice *v,
 		v->current_pan += ((float)v->modulated_generators[SS_GEN_PAN] - v->current_pan) * pan_smoothing;
 		float ch_pan = (float)ch->midi_controllers[SS_MIDCON_PAN] / (63.5f * 128.0f) - 1.0f;
 		pan_val = v->current_pan / 500.0f + ch_pan;
-		if(pan_val < -1.0f) pan_val = -1.0f;
-		if(pan_val > 1.0f) pan_val = 1.0f;
 	}
 
 	/* Master volume applied here */
@@ -539,7 +535,9 @@ bool ss_voice_render(SS_Voice *v,
 
 	/* Equal-power panning */
 	ss_init_pan_table(); /* just in case */
-	const int pan_index = (int)((pan_val + 1.0f) * 500.0f);
+	int pan_index = (int)((pan_val + 1.0f) * 500.0f);
+	if(pan_index < 0) pan_index = 0;
+	if(pan_index > 1000) pan_index = 1000;
 	const float pan_left = ss_panTableLeft[pan_index];
 	const float pan_right = ss_panTableRight[pan_index];
 	float gain_left = pan_left * output_gain;

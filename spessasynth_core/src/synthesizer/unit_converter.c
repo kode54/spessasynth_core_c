@@ -290,8 +290,9 @@ static void init_lanczos_table(void) {
 double ss_lanczos(double d) {
 	init_lanczos_table();
 	if(d == 0.) return 1.;
-	if(fabs(d) > (double)LANCZOS_RADIUS) return 0.;
-	const int index = (int)(d * (double)LANCZOS_SCALE) - LANCZOS_MIN;
+	/* if(fabs(d) > (double)LANCZOS_RADIUS) return 0.; */
+	const unsigned int index = (unsigned int)((int)(d * (double)LANCZOS_SCALE) - LANCZOS_MIN);
+	if(index >= LANCZOS_COUNT) return 0.;
 	return lanczos_table[index];
 }
 
