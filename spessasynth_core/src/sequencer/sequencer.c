@@ -37,6 +37,37 @@ static int effective_channel(const SS_MIDIFile *midi,
 	return ch + midi->port_channel_offset_map[port];
 }
 
+/* ── Embedded RMIDI soundbank (load/unload into processor) ───────────────── */
+
+#define SS_SEQ_EMBEDDED_BANK_ID "embeddedBank"
+
+/** Parse midi->embedded_soundbank and register it with the processor. */
+static void load_embedded_bank(SS_Sequencer *seq, SS_MIDIFile *midi) {
+	if(!seq || !seq->proc || !midi) return;
+	if(!midi->embedded_soundbank || midi->embedded_soundbank_size == 0) return;
+
+	SS_File *bank_file = ss_file_open_from_memory(midi->embedded_soundbank,
+	                                              midi->embedded_soundbank_size,
+	                                              false);
+	if(!bank_file) return;
+
+	SS_SoundBank *bank = ss_soundbank_load(bank_file);
+	ss_file_close(bank_file);
+	if(!bank) return;
+
+	if(!ss_processor_load_soundbank(seq->proc, bank,
+	                                SS_SEQ_EMBEDDED_BANK_ID,
+	                                midi->bank_offset)) {
+		ss_soundbank_free(bank);
+	}
+}
+
+/** Remove the embedded bank from the processor, freeing it. */
+static void unload_embedded_bank(SS_Sequencer *seq) {
+	if(!seq || !seq->proc) return;
+	ss_processor_remove_soundbank(seq->proc, SS_SEQ_EMBEDDED_BANK_ID, false);
+}
+
 /** Decode status_byte → voice message type and channel.
  *  Returns false if this is a meta/sysex event. */
 #if 0
@@ -130,12 +161,15 @@ bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 		seq->base_time = 0.0;
 		seq->current_time = 0.0;
 		seq->finished = false;
+		/* This song is now current — attach its embedded bank, if any. */
+		load_embedded_bank(seq, midi);
 	}
 
 	return true;
 }
 
 void ss_sequencer_clear(SS_Sequencer *seq) {
+	unload_embedded_bank(seq);
 	for(size_t i = 0; i < seq->song_count; i++)
 		free(seq->songs[i].event_indexes);
 	seq->song_count = 0;
@@ -328,6 +362,9 @@ static void process_event(SS_Sequencer *seq, SS_MIDIFile *midi,
 }
 
 static bool ss_sequencer_next_song(SS_Sequencer *seq) {
+	/* Detach the outgoing song's embedded bank before advancing. */
+	unload_embedded_bank(seq);
+
 	seq->current_song_index++;
 	if((size_t)seq->current_song_index < seq->song_count) {
 		seq->base_time += seq->current_time;
@@ -335,6 +372,8 @@ static bool ss_sequencer_next_song(SS_Sequencer *seq) {
 		seq->one_tick_seconds = 0.0;
 		if(seq->proc)
 			ss_processor_system_reset(seq->proc);
+		/* Attach the new current song's embedded bank, if any. */
+		load_embedded_bank(seq, seq->songs[seq->current_song_index].midi);
 		return true;
 	}
 	return false;
