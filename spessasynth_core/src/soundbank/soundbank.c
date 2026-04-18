@@ -131,31 +131,8 @@ SS_Modulator ss_modulator_copy(const SS_Modulator *src) {
  * All values follow the SF2 spec exactly.
  */
 
-#define MODSRC(curve, isbip, isneg, iscc, idx) (uint16_t)(((uint16_t)(curve) << 10) | (((isbip) ? 1 : 0) << 9) | (((isneg) ? 1 : 0) << 8) | (((iscc) ? 1 : 0) << 7) | (idx))
-
-#define MODISEFFECT(s1, s2, dest) \
-	((s1 == 0x00db || s2 == 0x00dd) && s2 == 0x0000 && (dest == SS_GEN_REVERB_EFFECTS_SEND || dest == SS_GEN_CHORUS_EFFECTS_SEND))
-
-#define MODISDEFAULTRESONANT(s1, s2, dest) \
-	(s1 == DEFAULT_RESONANT_MOD_SOURCE && s2 == 0x0 && dest == SS_GEN_INITIAL_FILTER_Q)
-
-#define ISCC(srcenum) (((srcenum) & (1 << 7)) != 0)
-#define SRCIDX(srcenum) ((srcenum) & 127)
-
-#define MODISMODWHEEL(s1, s2, dest) \
-	(((ISCC(s1) && SRCIDX(s1) == SS_MIDCON_MODULATION_WHEEL) || (ISCC(s2) && SRCIDX(s2) == SS_MIDCON_MODULATION_WHEEL)) && (dest == SS_GEN_MOD_LFO_TO_PITCH || dest == SS_GEN_VIB_LFO_TO_PITCH))
-
-#define MODULATOR(s1, s2, dest, amount, transform) { s1, s2, dest, amount, transform, 0, MODISEFFECT(s1, s2, dest), MODISDEFAULTRESONANT(s1, s2, dest), MODISMODWHEEL(s1, s2, dest) }
-
 #define DEFAULT_ATTENUATION_MOD_AMOUNT 960
 #define DEFAULT_ATTENUATION_MOD_CURVE_TYPE SS_MODCURVE_CONCAVE
-
-static const uint16_t DEFAULT_RESONANT_MOD_SOURCE = MODSRC(
-SS_MODCURVE_LINEAR,
-true,
-false,
-true,
-SS_MIDCON_FILTER_RESONANCE); /* Linear forwards bipolar cc 74 */
 
 const SS_Modulator SS_DEFAULT_MODULATORS[] = {
 	/* 1. Velocity -> Attenuation */
