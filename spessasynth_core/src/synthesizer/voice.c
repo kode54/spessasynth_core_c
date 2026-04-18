@@ -536,8 +536,8 @@ bool ss_voice_render(SS_Voice *v,
 
 	/* Master volume applied here */
 	const float output_gain = ch->synth ? ch->synth->master_params.master_volume * ch->synth->midi_volume * voice_gain : voice_gain;
-	const float reverb_amt = (float)v->modulated_generators[SS_GEN_REVERB_EFFECTS_SEND] / 1000.0f * v->reverb_send;
-	const float chorus_amt = (float)v->modulated_generators[SS_GEN_CHORUS_EFFECTS_SEND] / 1000.0f * v->chorus_send;
+	const float reverb_amt = (float)v->modulated_generators[SS_GEN_REVERB_EFFECTS_SEND] * v->reverb_send;
+	const float chorus_amt = (float)v->modulated_generators[SS_GEN_CHORUS_EFFECTS_SEND] * v->chorus_send;
 
 	/* Equal-power panning */
 	ss_init_pan_table(); /* just in case */
@@ -553,7 +553,7 @@ bool ss_voice_render(SS_Voice *v,
 		const int delaySend = ch->midi_controllers[SS_MIDCON_VARIATION_DEPTH] * v->delay_send;
 		if(delaySend > 0) {
 			const float delayGain =
-			gain *
+			output_gain *
 			ch->synth->master_params.delay_gain *
 			((float)(delaySend >> 7) / 127.0);
 			for(int i = 0; i < sample_count; i++) {
@@ -570,9 +570,10 @@ bool ss_voice_render(SS_Voice *v,
 		out_right[i] += s * gain_right;
 	}
 
-	if(reverb_left && reverb_right) {
-		gain_left = pan_left * reverb_amt;
-		gain_right = pan_right * reverb_amt;
+	if(reverb_left && reverb_right && reverb_amt > 0) {
+		const float reverb_gain = output_gain * (reverb_amt / 1000.0);
+		gain_left = pan_left * reverb_gain;
+		gain_right = pan_right * reverb_gain;
 		for(int i = 0; i < sample_count; i++) {
 			float s = buf[i];
 			reverb_left[i] += s * gain_left;
@@ -580,9 +581,10 @@ bool ss_voice_render(SS_Voice *v,
 		}
 	}
 
-	if(chorus_left && chorus_right) {
-		gain_left = pan_left * chorus_amt;
-		gain_right = pan_right * chorus_amt;
+	if(chorus_left && chorus_right && chorus_amt > 0) {
+		const float chorus_gain = output_gain * (reverb_amt / 1000.0);
+		gain_left = pan_left * chorus_gain;
+		gain_right = pan_right * chorus_gain;
 		for(int i = 0; i < sample_count; i++) {
 			float s = buf[i];
 			chorus_left[i] += s * gain_left;
