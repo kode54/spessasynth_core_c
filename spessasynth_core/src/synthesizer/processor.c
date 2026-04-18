@@ -178,6 +178,8 @@ bool ss_processor_load_soundbank(SS_Processor *proc,
 			proc->soundbanks[i] = bank;
 			if(offset >= 0 && offset <= 65535) {
 				proc->soundbank_offsets[i] = (uint16_t)offset;
+			} else {
+				proc->soundbank_offsets[i] = 0;
 			}
 			proc_refresh_presets(proc);
 			return true;
@@ -190,6 +192,8 @@ bool ss_processor_load_soundbank(SS_Processor *proc,
 	proc->soundbanks[idx] = bank;
 	if(offset >= 0 && offset <= 65535) {
 		proc->soundbank_offsets[idx] = (uint16_t)offset;
+	} else {
+		proc->soundbank_offsets[idx] = 0;
 	}
 	strncpy(proc->soundbank_ids[idx], id, sizeof(proc->soundbank_ids[idx]) - 1);
 
