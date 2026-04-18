@@ -448,20 +448,12 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 		bank->samples[i].mutex = ss_mutex_create();
 
 		if(ss_file_size(smpl_data) > 0) {
-			uint32_t byte_start = sample_starts[i] * 2;
-			uint32_t byte_end = sample_ends[i] * 2;
-			if(byte_end > ss_file_size(smpl_data)) byte_end = (uint32_t)ss_file_size(smpl_data);
-			bank->samples[i].loop_start -= byte_start / 2;
-			bank->samples[i].loop_end -= byte_start / 2;
-
 			if(compressed) {
 				/* SF3: copy compressed data slice */
-				byte_start = sample_starts[i];
-				byte_end = sample_ends[i];
+				uint32_t byte_start = sample_starts[i];
+				uint32_t byte_end = sample_ends[i];
 				size_t clen = (byte_end > byte_start) ? (byte_end - byte_start) : 0;
 				size_t offset = byte_start;
-				bank->samples[i].loop_start += byte_start;
-				bank->samples[i].loop_end += byte_start;
 				if(offset < ss_file_size(smpl_data) && offset + clen <= ss_file_size(smpl_data)) {
 					bank->samples[i].audio_file = ss_file_slice(smpl_data, byte_start, clen);
 					bank->samples[i].audio_file_type = SS_SMPLT_COMPRESSED;
@@ -470,6 +462,8 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 				}
 			} else if(!is_sf2pack) {
 				/* SF2: process raw s16le slice later */
+				uint32_t byte_start = sample_starts[i] * 2;
+				uint32_t byte_end = sample_ends[i] * 2;
 				if(byte_end > ss_file_size(smpl_data)) byte_end = (uint32_t)ss_file_size(smpl_data);
 				size_t slen = (byte_end > byte_start) ? (byte_end - byte_start) : 0;
 				bank->samples[i].audio_file = ss_file_slice(smpl_data, byte_start, slen);
@@ -485,10 +479,8 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 				}
 			} else {
 				/* SF2Pack: globally compressed to a single chunk, decoded to float already */
-				byte_start = sample_starts[i];
-				byte_end = sample_ends[i];
-				bank->samples[i].loop_start += byte_start;
-				bank->samples[i].loop_end += byte_start;
+				uint32_t byte_start = sample_starts[i];
+				uint32_t byte_end = sample_ends[i];
 				bank->samples[i].audio_file = ss_file_dup(smpl_data);
 				bank->samples[i].audio_file_type = SS_SMPLT_COMPRESSED;
 				bank->samples[i].audio_file_sample_offset = byte_start;
