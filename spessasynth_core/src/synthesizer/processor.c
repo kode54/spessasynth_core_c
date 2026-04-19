@@ -362,22 +362,25 @@ void ss_processor_render_interleaved(SS_Processor *proc,
 /* ── MIDI event dispatch ─────────────────────────────────────────────────── */
 
 void ss_processor_note_on(SS_Processor *proc, int ch, int note, int vel, double t) {
-	if(ch < 0 || ch >= proc->channel_count) return;
 	if(vel == 0) {
 		ss_processor_note_off(proc, ch, note, t);
 		return;
 	}
+	ch += proc->port_select_channel_offset;
+	if(ch < 0 || ch >= proc->channel_count) return;
 	ss_channel_note_on(proc->midi_channels[ch], note, vel, t);
 	proc_emit(proc, SS_EVENT_NOTE_ON, ch, note, vel);
 }
 
 void ss_processor_note_off(SS_Processor *proc, int ch, int note, double t) {
+	ch += proc->port_select_channel_offset;
 	if(ch < 0 || ch >= proc->channel_count) return;
 	ss_channel_note_off(proc->midi_channels[ch], note, t);
 	proc_emit(proc, SS_EVENT_NOTE_OFF, ch, note, 0);
 }
 
 void ss_processor_control_change(SS_Processor *proc, int ch, int cc, int val, double t) {
+	ch += proc->port_select_channel_offset;
 	if(ch < 0 || ch >= proc->channel_count) return;
 	ss_channel_controller(proc->midi_channels[ch], cc, val, t);
 	proc_emit(proc, SS_EVENT_CONTROLLER_CHANGE, ch, cc, val);
@@ -385,6 +388,7 @@ void ss_processor_control_change(SS_Processor *proc, int ch, int cc, int val, do
 
 void ss_processor_program_change(SS_Processor *proc, int ch, int program, double t) {
 	(void)t;
+	ch += proc->port_select_channel_offset;
 	if(ch < 0 || ch >= proc->channel_count) return;
 	ss_channel_program_change(proc->midi_channels[ch], program);
 	proc_emit(proc, SS_EVENT_PROGRAM_CHANGE, ch, program, 0);
@@ -392,6 +396,7 @@ void ss_processor_program_change(SS_Processor *proc, int ch, int program, double
 
 void ss_processor_pitch_wheel(SS_Processor *proc, int ch, int value, int midi_note, double t) {
 	(void)t;
+	ch += proc->port_select_channel_offset;
 	if(ch < 0 || ch >= proc->channel_count) return;
 	ss_channel_pitch_wheel(proc->midi_channels[ch], value, midi_note, t);
 	proc_emit(proc, SS_EVENT_PITCH_WHEEL, ch, value, midi_note);
@@ -399,6 +404,7 @@ void ss_processor_pitch_wheel(SS_Processor *proc, int ch, int value, int midi_no
 
 void ss_processor_channel_pressure(SS_Processor *proc, int ch, int pressure, double t) {
 	(void)t;
+	ch += proc->port_select_channel_offset;
 	if(ch < 0 || ch >= proc->channel_count) return;
 	/* Store channel pressure in a dedicated controller slot above CC127.
 	 * Our midi_channel uses index 128 (NON_CC_INDEX_OFFSET + channelPressure). */
@@ -409,6 +415,7 @@ void ss_processor_channel_pressure(SS_Processor *proc, int ch, int pressure, dou
 
 void ss_processor_poly_pressure(SS_Processor *proc, int ch, int note, int pressure, double t) {
 	(void)t;
+	ch += proc->port_select_channel_offset;
 	if(ch < 0 || ch >= proc->channel_count) return;
 	/* Apply poly pressure to matching voices */
 	SS_MIDIChannel *mch = proc->midi_channels[ch];
@@ -1233,6 +1240,8 @@ void ss_processor_system_reset(SS_Processor *proc) {
 		                                          ch->drum_channel);
 		if(p) ch->preset = p;
 	}
+
+	proc->port_select_channel_offset = 0;
 
 	// Reset the volume
 	ss_processor_set_midi_volume(proc, 1.0);

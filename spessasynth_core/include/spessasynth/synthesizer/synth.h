@@ -483,6 +483,8 @@ typedef struct SS_Processor {
 	void *event_userdata;
 
 	SS_ProcessorOptions options;
+
+	int port_select_channel_offset;
 } SS_Processor;
 
 /**
