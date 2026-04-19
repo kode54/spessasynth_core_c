@@ -18,7 +18,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h> /* strncasecmp */
 
 #if __has_include(<spessasynth_core/spessasynth.h>)
 #include <spessasynth_core/midi.h>
@@ -48,8 +47,10 @@ SS_MIDITrack *ss_midi_track_new(void) {
 
 void ss_midi_track_free(SS_MIDITrack *t) {
 	if(!t) return;
-	for(size_t i = 0; i < t->event_count; i++)
-		free(t->events[i].data);
+	if(t->events) {
+		for(size_t i = 0; i < t->event_count; i++)
+			free(t->events[i].data);
+	}
 	free(t->events);
 	free(t);
 }

@@ -27,7 +27,7 @@
 
 typedef struct {
 	SS_File *file;
-	size_t offset, size;
+	unsigned long offset, size;
 } SS_FileVorbis;
 
 static int stb_vorbis_fgetc(void *context) {
@@ -38,20 +38,20 @@ static int stb_vorbis_fgetc(void *context) {
 	return ss_file_read_u8(file->file, file->offset++);
 }
 
-static int stb_vorbis_fread(void *out, size_t unit, size_t count, void *context) {
+static int stb_vorbis_fread(void *out, unsigned long unit, unsigned long count, void *context) {
 	SS_FileVorbis *file = (SS_FileVorbis *)context;
-	const size_t total_bytes = unit * count;
-	const size_t offset = file->offset;
+	const unsigned long total_bytes = unit * count;
+	const unsigned long offset = file->offset;
 	ss_file_read_bytes(file->file, offset, (uint8_t *)out, total_bytes);
 	file->offset += total_bytes;
 	if(file->offset > file->size) {
 		file->offset = file->size;
 	}
-	const size_t bytes_read = file->offset - offset;
+	const unsigned long bytes_read = file->offset - offset;
 	return (int)(bytes_read / unit);
 }
 
-static int stb_vorbis_fseek(void *context, ssize_t offset, int mode) {
+static int stb_vorbis_fseek(void *context, long offset, int mode) {
 	SS_FileVorbis *file = (SS_FileVorbis *)context;
 	switch(mode) {
 		case SEEK_SET:

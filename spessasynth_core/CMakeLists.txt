@@ -98,7 +98,9 @@ if(SS_ENABLE_SF3_FLAC)
 endif()
 
 # ── Math ─────────────────────────────────────────────────────────────────────
+if(!MSVC)
 target_link_libraries(spessasynth_core PUBLIC m)
+endif()
 
 # ── Warnings ─────────────────────────────────────────────────────────────────
 if(MSVC)

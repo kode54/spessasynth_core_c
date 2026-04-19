@@ -14,8 +14,8 @@
 #include <stdio.h>
 
 struct SS_File {
-	size_t scope_begin, scope_end;
-	size_t current_offset;
+	uint64_t scope_begin, scope_end;
+	uint64_t current_offset;
 	SS_Mutex *mutex;
 	size_t *ref_count;
 	bool owns_file;
@@ -70,18 +70,18 @@ static uint8_t ss_file_memory_read_u8(SS_File *file) {
 static void ss_file_memory_read_bytes(SS_File *file, uint8_t *out, size_t count) {
 	SS_FileMemory *fm = (SS_FileMemory *)file;
 
-	const size_t max_to_read = file->scope_end - file->current_offset;
-	const size_t offset = file->current_offset;
-	const size_t to_read = count > max_to_read ? max_to_read : count;
+	const uint64_t max_to_read = file->scope_end - file->current_offset;
+	const uint64_t offset = file->current_offset;
+	const uint64_t to_read = count > max_to_read ? max_to_read : count;
 
 	if(to_read) {
-		memcpy(out, fm->buf + offset, to_read);
+		memcpy(out, fm->buf + offset, (size_t)to_read);
 	}
 
 	file->current_offset += to_read;
 
 	if(to_read < count) {
-		memset(out + to_read, 0, count - to_read);
+		memset(out + to_read, 0, (size_t)(count - to_read));
 	}
 }
 

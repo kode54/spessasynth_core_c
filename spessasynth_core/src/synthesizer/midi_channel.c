@@ -67,7 +67,7 @@ void ss_channel_exclusive_release(SS_MIDIChannel *ch, int note, double time);
 
 #define VOICE_GROW_BY 16
 
-static ssize_t clamp_ssize(ssize_t value, ssize_t min, ssize_t max) {
+static signed long clamp_ssize(signed long value, signed long min, signed long max) {
 	if(value < min) return min;
 	if(value > max) return max;
 	return value;
@@ -550,25 +550,25 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		voice->mod_lfo_start_time = time + ss_timecents_to_seconds(voice->modulated_generators[SS_GEN_DELAY_MOD_LFO]);
 
 		/* Modulate sample offsets (these are not real time) */
-		const ssize_t cursorStartOffset =
+		const signed long cursorStartOffset =
 		voice->modulated_generators[SS_GEN_START_ADDRS_OFFSET] +
 		voice->modulated_generators[SS_GEN_START_ADDRS_COARSE_OFFSET] *
 		32768;
-		const ssize_t endOffset =
+		const signed long endOffset =
 		voice->modulated_generators[SS_GEN_END_ADDR_OFFSET] +
 		voice->modulated_generators[SS_GEN_END_ADDRS_COARSE_OFFSET] *
 		32768;
-		const ssize_t loopStartOffset =
+		const signed long loopStartOffset =
 		voice->modulated_generators[SS_GEN_STARTLOOP_ADDRS_OFFSET] +
 		voice->modulated_generators[SS_GEN_STARTLOOP_ADDRS_COARSE_OFFSET] *
 		32768;
-		const ssize_t loopEndOffset =
+		const signed long loopEndOffset =
 		voice->modulated_generators[SS_GEN_ENDLOOP_ADDRS_OFFSET] +
 		voice->modulated_generators[SS_GEN_ENDLOOP_ADDRS_COARSE_OFFSET] *
 		32768;
 
 		/* Clamp the sample offsets */
-		const ssize_t lastSample = audio.sample_data_len - 1;
+		const signed long lastSample = audio.sample_data_len - 1;
 		voice->sample.cursor = clamp_ssize(cursorStartOffset, 0, lastSample);
 		voice->sample.end = clamp_ssize(lastSample + endOffset, 0, lastSample);
 		voice->sample.loop_start = clamp_ssize(audio.loop_start + loopStartOffset, 0, lastSample);

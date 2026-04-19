@@ -66,19 +66,19 @@ void ss_dynamic_modulator_system_free(SS_DynamicModulatorSystem *dms) {
 	dms->modulators = NULL;
 }
 
-static ssize_t find_modulator(SS_DynamicModulatorSystem *dms, uint16_t source,
+static signed long find_modulator(SS_DynamicModulatorSystem *dms, uint16_t source,
                               uint16_t destination, bool is_bipolar, bool is_negative) {
 	for(size_t i = 0; i < dms->modulator_count; i++) {
 		SS_DynamicModulatorSystem_Modulator *mod = &dms->modulators[i];
 		if(mod->source == source && mod->destination == destination &&
 		   mod->is_bipolar == is_bipolar && mod->is_negative == is_negative) {
-			return (ssize_t)i;
+			return (signed long)i;
 		}
 	}
 	return -1;
 }
 
-static void delete_modulator(SS_DynamicModulatorSystem *dms, ssize_t id) {
+static void delete_modulator(SS_DynamicModulatorSystem *dms, signed long id) {
 	if(id < 0) return;
 	size_t new_count = 0;
 	for(size_t i = 0, _id = (size_t)id, count = dms->modulator_count; i < count; i++) {
@@ -92,7 +92,7 @@ static void delete_modulator(SS_DynamicModulatorSystem *dms, ssize_t id) {
 static void set_modulator(SS_DynamicModulatorSystem *dms,
                           uint16_t source, uint16_t destination,
                           int16_t amount, bool is_bipolar) {
-	ssize_t id = find_modulator(dms, source, destination, is_bipolar, false);
+	signed long id = find_modulator(dms, source, destination, is_bipolar, false);
 	if(amount == 0) {
 		delete_modulator(dms, id);
 		return;

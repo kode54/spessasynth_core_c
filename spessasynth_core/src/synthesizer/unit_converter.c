@@ -4,6 +4,7 @@
  * Direct port of unit_converter.ts.
  */
 
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <stdlib.h>
 #if __has_include(<spessasynth_core/spessasynth.h>)

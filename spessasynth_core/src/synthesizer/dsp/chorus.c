@@ -3,6 +3,7 @@
  * A simple chorus filter.  Basically a port of chorus.ts.
  */
 
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>

@@ -5,6 +5,7 @@
  * Imports Dattorro Reverb and Delay Line
  */
 
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>

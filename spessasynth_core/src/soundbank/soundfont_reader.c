@@ -10,6 +10,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#define strncasecmp _strnicmp
+#endif
+
 #if __has_include(<spessasynth_core/spessasynth.h>)
 #include <spessasynth_core/file.h>
 #include <spessasynth_core/midi_enums.h>

@@ -299,9 +299,9 @@ extern stb_vorbis * stb_vorbis_open_file_section(FILE *f, int close_handle_on_cl
 typedef struct
 {
    int (*fgetc)(void *context);
-   int (*fread)(void *out, size_t unit, size_t count, void *context);
-   int (*fseek)(void *context, ssize_t offset, int mode);
-   size_t (*ftell)(void *context);
+   int (*fread)(void *out, unsigned long unit, unsigned long count, void *context);
+   int (*fseek)(void *context, long offset, int mode);
+   unsigned long (*ftell)(void *context);
 } stb_vorbis_file;
 
 stb_vorbis * stb_vorbis_open_file_callbacks_section(const stb_vorbis_file *file_callbacks,

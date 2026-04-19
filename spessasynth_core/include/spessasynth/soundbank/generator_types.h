@@ -1,6 +1,8 @@
 #ifndef SS_GENERATOR_TYPES_H
 #define SS_GENERATOR_TYPES_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

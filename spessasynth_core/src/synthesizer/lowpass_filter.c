@@ -5,6 +5,7 @@
  * Original coefficient calculation ported from meltysynth by sinshu.
  */
 
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>

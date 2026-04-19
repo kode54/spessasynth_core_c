@@ -3,6 +3,7 @@
  * A complex delay filter.  Basically a port of delay.ts.
  */
 
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>

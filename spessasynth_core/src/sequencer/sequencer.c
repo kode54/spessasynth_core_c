@@ -123,7 +123,7 @@ SS_Sequencer *ss_sequencer_create(SS_Processor *proc) {
 	seq->proc = proc;
 	seq->playback_rate = 1.0;
 	seq->loop_count = 0;
-	seq->current_song_index = -1;
+	seq->current_song_index = ~0UL;
 	return seq;
 }
 
@@ -156,7 +156,7 @@ bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 	if(!song->event_indexes) return false;
 	seq->song_count++;
 
-	if(seq->current_song_index < 0) {
+	if(seq->current_song_index == ~0UL) {
 		seq->current_song_index = 0;
 		seq->base_time = 0.0;
 		seq->current_time = 0.0;

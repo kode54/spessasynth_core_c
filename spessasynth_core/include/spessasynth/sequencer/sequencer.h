@@ -28,7 +28,7 @@ typedef struct {
 	SS_SequencerSong *songs;
 	size_t song_count;
 	size_t song_capacity;
-	ssize_t current_song_index;
+	size_t current_song_index;
 
 	double base_time; /* absolute time */
 	double current_time; /* seconds, same units as proc->current_synth_time */

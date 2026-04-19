@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #if __has_include(<spessasynth_core/spessasynth.h>)
 #include <spessasynth_core/indexed_byte_array.h>
 #include <spessasynth_core/midi_enums.h>
