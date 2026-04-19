@@ -1059,6 +1059,7 @@ because I wanted support for Touhou MIDIs :-)
 			break;
 
 		// Process GS NRPNs
+		case SS_DATAENTRY_NRP_COARSE:
 		case SS_DATAENTRY_NRP_FINE: {
 			const int nrpn_coarse = ch->midi_controllers[SS_MIDCON_NRPN_MSB] >> 7;
 			const int nrpn_fine = ch->midi_controllers[SS_MIDCON_NRPN_LSB] >> 7;
