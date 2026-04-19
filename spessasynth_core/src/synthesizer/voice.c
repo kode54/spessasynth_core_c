@@ -122,25 +122,25 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
 		if(v->modulators) {
 			for(size_t i = 0; i < mod_count; i++)
 				v->modulators[i] = ss_modulator_copy(&modulators[i]);
-		}
-		if(dms->is_active) {
-			for(size_t i = 0, count = dms->modulator_count; i < count; i++) {
-				signed long match = -1;
-				const SS_Modulator mod = ss_modulator_copy(&dms->modulators[i].modulator);
-				for(size_t ii = 0; ii < adjusted_mod_count; ii++) {
-					if(ss_modulator_is_identical(&v->modulators[ii], &mod)) {
-						match = (signed long)ii;
-						break;
+			if(dms->is_active) {
+				for(size_t i = 0, count = dms->modulator_count; i < count; i++) {
+					signed long match = -1;
+					const SS_Modulator mod = ss_modulator_copy(&dms->modulators[i].modulator);
+					for(size_t ii = 0; ii < adjusted_mod_count; ii++) {
+						if(ss_modulator_is_identical(&v->modulators[ii], &mod)) {
+							match = (signed long)ii;
+							break;
+						}
+					}
+					if(match >= 0) {
+						v->modulators[match] = mod;
+					} else {
+						v->modulators[adjusted_mod_count++] = mod;
 					}
 				}
-				if(match >= 0) {
-					v->modulators[match] = mod;
-				} else {
-					v->modulators[adjusted_mod_count++] = mod;
-				}
 			}
+			v->modulator_count = adjusted_mod_count;
 		}
-		v->modulator_count = adjusted_mod_count;
 	}
 
 	ss_lowpass_filter_init(&v->filter, sample_rate);

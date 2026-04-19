@@ -46,8 +46,9 @@ static void add_modulator(SS_DynamicModulatorSystem *dms, const SS_Modulator *mo
 	}
 	if(dms->modulator_count < allocated) {
 		size_t index = dms->modulator_count++;
+		const uint16_t source = (ISCC(mod->source_enum) ? mod->source_enum & 0x7f : (mod->source_enum & 0x7f) + NON_CC_INDEX_OFFSET);
 		dms->modulators[index].modulator = *mod;
-		dms->modulators[index].source = mod->source_enum;
+		dms->modulators[index].source = source;
 		dms->modulators[index].destination = mod->dest_enum;
 		dms->modulators[index].is_bipolar = (mod->source_enum & (1 << 9)) != 0;
 		dms->modulators[index].is_negative = (mod->source_enum & (1 << 8)) != 0;
@@ -66,11 +67,11 @@ void ss_dynamic_modulator_system_free(SS_DynamicModulatorSystem *dms) {
 	dms->modulators = NULL;
 }
 
-static signed long find_modulator(SS_DynamicModulatorSystem *dms, uint16_t source_enum,
+static signed long find_modulator(SS_DynamicModulatorSystem *dms, uint16_t source,
                               uint16_t destination, bool is_bipolar, bool is_negative) {
 	for(size_t i = 0; i < dms->modulator_count; i++) {
 		SS_DynamicModulatorSystem_Modulator *mod = &dms->modulators[i];
-		if(mod->source == source_enum && mod->destination == destination &&
+		if(mod->source == source && mod->destination == destination &&
 		   mod->is_bipolar == is_bipolar && mod->is_negative == is_negative) {
 			return (signed long)i;
 		}
@@ -102,7 +103,7 @@ static void set_modulator(SS_DynamicModulatorSystem *dms,
 		isCC = true;
 	}
 	const uint16_t source_enum = MODSRC(SS_MODCURVE_LINEAR, is_bipolar, false, isCC, srcNum);
-	signed long id = find_modulator(dms, source_enum, destination, is_bipolar, false);
+	signed long id = find_modulator(dms, source, destination, is_bipolar, false);
 	if(amount == 0) {
 		delete_modulator(dms, id);
 		return;
