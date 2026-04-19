@@ -429,9 +429,780 @@ void ss_processor_poly_pressure(SS_Processor *proc, int ch, int note, int pressu
 
 /* ── System Exclusive ────────────────────────────────────────────────────── */
 
+void sysex_handle_gm(SS_Processor *proc, const uint8_t *data, size_t len, double t, int channel_offset) {
+	if(len < 4) return;
+	/* data[1] = device ID (0x7f = all), data[2] = sub-ID1 */
+	switch(data[2]) {
+		case 0x04: /* Device Control */
+			if(len < 6) break;
+			switch(data[3]) {
+				case 0x01: { /* Master Volume */
+					uint16_t vol = (uint16_t)((data[5] << 7) | data[4]);
+					ss_processor_set_midi_volume(proc, (float)vol / 16384.0);
+					break;
+				}
+				case 0x02: { /* Master Balance / Pan */
+					uint16_t bal = (uint16_t)((data[5] << 7) | data[4]);
+					proc->master_params.master_pan =
+					((float)bal - 8192.0f) / 8192.0f;
+					break;
+				}
+				case 0x03: { /* Fine Tuning */
+					if(len < 7) break;
+					int raw = (int)(((data[5] << 7) | data[6]) - 8192);
+					proc->master_params.master_tuning =
+					(float)(raw / 81.92);
+					break;
+				}
+				case 0x04: { /* Coarse Tuning */
+					int semitones = (int)data[5] - 64;
+					proc->master_params.master_tuning =
+					(float)(semitones * 100);
+					break;
+				}
+			}
+			break;
+
+		case 0x09: /* GM system */
+			if(len < 4) break;
+			if(data[3] == 0x01) {
+				proc->master_params.midi_system = SS_SYSTEM_GM;
+			} else if(data[3] == 0x03) {
+				proc->master_params.midi_system = SS_SYSTEM_GM;
+			} else {
+				proc->master_params.midi_system = SS_SYSTEM_GS;
+			}
+			ss_processor_system_reset(proc);
+			break;
+
+		case 0x08: /* MIDI Tuning Standard */
+		{
+			if(len < 5) break;
+			size_t idx = 4;
+			switch(data[3]) {
+				case 0x01: { /* Bulk Tuning Dump */
+					if(len < 384 + 4) break;
+					int program = (int)data[idx++];
+					/* skip 16-byte name */
+					idx += 16;
+					/* Ensure tuning grid exists */
+					if(!proc->master_params.tunings) {
+						proc->master_params.tunings =
+						(SS_TuningEntry **)calloc(128, sizeof(SS_TuningEntry *));
+					}
+					if(!proc->master_params.tunings[program]) {
+						proc->master_params.tunings[program] =
+						(SS_TuningEntry *)calloc(128, sizeof(SS_TuningEntry));
+					}
+					for(int n = 0; n < 128 && idx + 2 < len; n++) {
+						uint8_t b1 = data[idx++];
+						uint8_t b2 = data[idx++];
+						uint8_t b3 = data[idx++];
+						if(b1 == 0x7f && b2 == 0x7f && b3 == 0x7f) {
+							proc->master_params.tunings[program][n].midi_note = n;
+							proc->master_params.tunings[program][n].cent_tuning = 0.0f;
+						} else {
+							int fraction = (b2 << 7) | b3;
+							proc->master_params.tunings[program][n].midi_note = (int)b1;
+							proc->master_params.tunings[program][n].cent_tuning =
+							(float)(fraction * 0.0061);
+						}
+					}
+					break;
+				}
+				case 0x02: { /* Single Note Tuning Change */
+					if(len < 6) break;
+					int program = (int)data[idx++];
+					int num_notes = (int)data[idx++];
+					if(!proc->master_params.tunings) {
+						proc->master_params.tunings =
+						(SS_TuningEntry **)calloc(128, sizeof(SS_TuningEntry *));
+					}
+					if(!proc->master_params.tunings[program]) {
+						proc->master_params.tunings[program] =
+						(SS_TuningEntry *)calloc(128, sizeof(SS_TuningEntry));
+					}
+					for(int ni = 0; ni < num_notes && idx + 3 <= len; ni++) {
+						uint8_t key = data[idx++];
+						uint8_t b1 = data[idx++];
+						uint8_t b2 = data[idx++];
+						uint8_t b3 = data[idx++];
+						if(b1 == 0x7f && b2 == 0x7f && b3 == 0x7f) continue;
+						int fraction = (b2 << 7) | b3;
+						proc->master_params.tunings[program][key].midi_note = (int)b1;
+						proc->master_params.tunings[program][key].cent_tuning =
+						(float)(fraction * 0.0061);
+					}
+					break;
+				}
+			}
+			break;
+		}
+	}
+}
+
+void sysex_handle_gs(SS_Processor *proc, const uint8_t *data, size_t len, double t, int channel_offset) {
+	/*  data[0]=0x41, data[1]=device_id, data[2]=0x42 (GS),
+	    data[3]=0x12 (data set 1), data[4..6]=address, data[7+]=payload */
+	if(len < 8) return;
+
+	/* Some Roland */
+	if(data[2] == 0x16) {
+		ss_processor_set_midi_volume(proc, (float)data[5] / 100.0);
+		return;
+	}
+
+	if(data[2] != 0x42 || data[3] != 0x12) return;
+
+	uint32_t addr = ((uint32_t)data[4] << 16) |
+	                ((uint32_t)data[5] << 8) |
+	                (uint32_t)data[6];
+
+	/* GS Reset */
+	if(addr == 0x40007f && data[7] == 0x00) {
+		proc->master_params.midi_system = SS_SYSTEM_GS;
+		ss_processor_system_reset(proc);
+		return;
+	}
+
+	/* System Level: 0x40_00_xx */
+	if((addr & 0xFFFF00u) == 0x400000u) {
+		uint8_t addr3 = (uint8_t)(addr & 0xFF);
+		uint8_t val = data[7];
+		switch(addr3) {
+			case 0x00: /* Master tune (4-nibble BCD) */
+				if(len >= 11) {
+					uint32_t tune = ((uint32_t)(val & 0x0f) << 12) |
+					                ((uint32_t)(data[8] & 0x0f) << 8) |
+					                ((uint32_t)(data[9] & 0x0f) << 4) |
+					                (uint32_t)(data[10] & 0x0f);
+					proc->master_params.master_tuning = ((float)tune - 1024.0f) / 10.0f;
+				}
+				break;
+			case 0x04: /* Master volume */
+				ss_processor_set_midi_volume(proc, (float)val / 127.0f);
+				break;
+			case 0x05: /* Master key shift (semitones, signed) */
+				proc->master_params.master_pitch = (float)((int)val - 64);
+				break;
+			case 0x06: /* Master pan */
+				proc->master_params.master_pan = (float)((int)val - 64) / 64.0f;
+				break;
+			case 0x7f: /* Roland mode set: 0x7f=GS off (→GM) */
+				if(val == 0x7f) {
+					proc->master_params.midi_system = SS_SYSTEM_GM;
+					ss_processor_system_reset(proc);
+				}
+				break;
+			default:
+				break;
+		}
+		return;
+	}
+
+	/* Part address: 0x40_1n_xx / 0x40_2n_xx, n = part 0-F */
+	if((addr & 0xF00000u) != 0x400000u) return;
+
+	if((addr & 0xF0F000u) == 0x400000u) {
+		uint8_t addr2 = (addr >> 8) & 0xFF;
+		uint8_t addr3 = (addr & 0xFF);
+		uint8_t value = (data[7] > 127) ? 127 : data[7];
+		switch(addr2) {
+			case 0x01: {
+				const bool is_reverb = addr3 >= 0x30 && addr3 <= 0x37;
+				const bool is_chorus = addr3 >= 0x38 && addr3 <= 0x40;
+				const bool is_delay = addr3 >= 0x50 && addr3 <= 0x5a;
+				/* Disable effect editing if locked */
+				if(is_reverb && !proc->master_params.reverb_enabled)
+					break;
+				if(is_chorus && !proc->master_params.chorus_enabled)
+					break;
+				if(is_delay && !proc->master_params.delay_enabled)
+					break;
+				/*
+				 0x40 - chorus to delay; any delay param activates delay
+				 */
+				if(addr3 == 0x40 || is_delay)
+					proc->delay_active = true;
+				switch(addr3) {
+					default:
+						/* Unsupported preset */
+						break;
+
+					case 0:
+						/* Patch name, ignore */
+						break;
+
+					/* Reverb */
+					case 0x30: /* Reverb macro */
+						ss_reverb_set_macro(proc->reverb, value);
+						break;
+
+					case 0x31: /* Reverb character */
+						ss_reverb_set_character(proc->reverb, value);
+						break;
+
+					case 0x32: /* Reverb pre-LPF */
+						ss_reverb_set_pre_lowpass(proc->reverb, value);
+						break;
+
+					case 0x33: /* Reverb level */
+						ss_reverb_set_level(proc->reverb, value);
+						break;
+
+					case 0x34: /* Reverb time */
+						ss_reverb_set_time(proc->reverb, value);
+						break;
+
+					case 0x35: /* Reverb delay feedback */
+						ss_reverb_set_delay_feedback(proc->reverb, value);
+						break;
+
+					case 0x36: /* Reverb send to chorus, legacy SC-55 that's recognized by later models and unsupported. */
+						break;
+
+					case 0x37: /* Reverb pre-delay time */
+						ss_reverb_set_pre_delay_time(proc->reverb, value);
+						break;
+
+					/* Chorus */
+					case 0x38: /* Chorus macro */
+						ss_chorus_set_macro(proc->chorus, value);
+						break;
+
+					case 0x39: /* Chorus pre-LPF */
+						ss_chorus_set_pre_lowpass(proc->chorus, value);
+						break;
+
+					case 0x3a: /* Chorus level */
+						ss_chorus_set_level(proc->chorus, value);
+						break;
+
+					case 0x3b: /* Chorus feedback */
+						ss_chorus_set_feedback(proc->chorus, value);
+						break;
+
+					case 0x3c: /* Chorus delay */
+						ss_chorus_set_delay(proc->chorus, value);
+						break;
+
+					case 0x3d: /* Chorus rate */
+						ss_chorus_set_rate(proc->chorus, value);
+						break;
+
+					case 0x3e: /* Chorus depth */
+						ss_chorus_set_depth(proc->chorus, value);
+						break;
+
+					case 0x3f: /* Chorus send level to reverb */
+						ss_chorus_set_send_level_to_reverb(proc->chorus, value);
+						break;
+
+					case 0x40: /* Chorus send level to delay */
+						ss_chorus_set_send_level_to_delay(proc->chorus, value);
+						break;
+
+					/* Delay */
+					case 0x50: /* Delay macro */
+						ss_delay_set_macro(proc->delay, value);
+						break;
+
+					case 0x51: /* Delay pre-LPF */
+						ss_delay_set_pre_lowpass(proc->delay, value);
+						break;
+
+					case 0x52: /* Delay time center */
+						ss_delay_set_time_center(proc->delay, value);
+						break;
+
+					case 0x53: /* Delay time ratio left */
+						ss_delay_set_time_ratio_left(proc->delay, value);
+						break;
+
+					case 0x54: /* Delay time ratio right */
+						ss_delay_set_time_ratio_right(proc->delay, value);
+						break;
+
+					case 0x55: /* Delay level center */
+						ss_delay_set_level_center(proc->delay, value);
+						break;
+
+					case 0x56: /* Delay level left */
+						ss_delay_set_level_left(proc->delay, value);
+						break;
+
+					case 0x57: /* Delay level right */
+						ss_delay_set_level_right(proc->delay, value);
+						break;
+
+					case 0x58: /* Delay level */
+						ss_delay_set_level(proc->delay, value);
+						break;
+
+					case 0x59: /* Delay feedback */
+						ss_delay_set_feedback(proc->delay, value);
+						break;
+
+					case 0x5a: /* Delay send level to reverb */
+						ss_delay_set_send_level_to_reverb(proc->delay, value);
+						break;
+				}
+				break;
+			}
+
+			/* EFX Parameter (addr2=0x03) */
+			case 0x03: {
+				uint8_t efx_val = (data[7] > 127) ? 127 : data[7];
+				if(addr3 == 0x00) {
+					/* EFX Type: 16-bit MSB<<8|LSB */
+					if(len < 9) break;
+					uint32_t efx_type = ((uint32_t)data[7] << 8) | (uint32_t)data[8];
+					ss_insertion_free(proc->insertion);
+					proc->insertion = ss_insertion_create(efx_type, proc->sample_rate, SS_MAX_SOUND_CHUNK);
+					if(!proc->insertion)
+						proc->insertion = ss_insertion_create(0x0000, proc->sample_rate, SS_MAX_SOUND_CHUNK);
+					if(proc->insertion) {
+						proc->insertion->reset(proc->insertion);
+						proc->insertion->send_level_to_reverb = (40.0f / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
+						proc->insertion->send_level_to_chorus = 0.0f;
+						proc->insertion->send_level_to_delay = 0.0f;
+					}
+				} else if(addr3 >= 0x03 && addr3 <= 0x16) {
+					/* EFX parameters (MIDI param indices 0x03-0x16) */
+					if(proc->insertion)
+						proc->insertion->set_parameter(proc->insertion, (int)addr3, (int)efx_val);
+				} else if(addr3 == 0x17) {
+					if(proc->insertion)
+						proc->insertion->send_level_to_reverb =
+						((float)efx_val / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
+				} else if(addr3 == 0x18) {
+					if(proc->insertion)
+						proc->insertion->send_level_to_chorus =
+						((float)efx_val / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
+				} else if(addr3 == 0x19) {
+					proc->delay_active = true;
+					if(proc->insertion)
+						proc->insertion->send_level_to_delay =
+						((float)efx_val / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
+				}
+				break;
+			}
+		}
+		return;
+	}
+
+	/* Part parameters (addr2=0x1n) and tone-map EFX assign (addr2=0x4n) */
+	{
+		uint8_t addr2_byte = (uint8_t)((addr >> 8) & 0xFF);
+		uint8_t addr2_nibble = addr2_byte >> 4;
+
+		/* Tone-map EFX assign: addr2=0x4n, addr3=0x22 */
+		if(addr2_nibble == 4) {
+			uint8_t efx_part = addr2_byte & 0x0F;
+			int efx_ch = GS_PART_TO_CHANNEL[efx_part] + channel_offset;
+			if(efx_ch >= 0 && efx_ch < proc->channel_count &&
+			   (addr & 0xFF) == 0x22) {
+				SS_MIDIChannel *efx_mch = proc->midi_channels[efx_ch];
+				efx_mch->insertion_enabled = (data[7] == 1);
+				if(data[7] == 1) proc->insertion_active = true;
+			}
+			return;
+		}
+
+		/* Patch Parameter controllers */
+		if(addr2_nibble == 2) {
+			/* This is an individual part (channel) parameter
+			 * Determine the channel
+			 * Note that: 0 means channel 9 (drums), and only then 1 means channel 0, 2 channel 1, etc.
+			 * SC-88Pro manual page 196
+			 */
+			uint8_t part_idx = addr2_byte & 0x0F;
+			int channel_idx = GS_PART_TO_CHANNEL[part_idx] + channel_offset;
+			if(channel_idx < 0 || channel_idx >= proc->channel_count) return;
+
+			SS_MIDIChannel *mch = proc->midi_channels[channel_idx];
+			uint8_t gs_param = (uint8_t)(addr & 0xFF);
+			uint8_t gs_val = data[7];
+
+			switch(gs_param & 0xf0) {
+				default:
+					/* Not recognized */
+					break;
+
+				case 0x00: {
+					/* Modulation wheel */
+					if((gs_param & 0x0f) == 0x04) {
+						/* LFO1 Pitch depth
+						 * Special case:
+						 * If the source is a mod wheel, it's a strange way of setting the modulation depth
+						 * Testcase: J-Cycle.mid (it affects gm.dls which uses LFO1 for modulation)
+						 */
+						const float cents = ((float)gs_val / 127.0) * 600.0;
+						mch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] = cents / 50.0;
+						break;
+					}
+					ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, SS_MIDCON_MODULATION_WHEEL, false);
+					break;
+				}
+
+				case 0x10: {
+					/* Pitch wheel */
+					if((gs_param & 0x0f) == 0x00) {
+						/* See https://github.com/spessasus/SpessaSynth/issues/154
+						 * Pitch control
+						 * Special case:
+						 * If the source is a pitch wheel, it's a strange way of setting the pitch wheel range
+						 * Testcase: th07_03.mid
+						 */
+						const int centeredValue = (int)gs_val - 64;
+						mch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = centeredValue << 7;
+						break;
+					}
+					ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL, true);
+					break;
+				}
+
+				case 0x20: {
+					/* Channel pressure */
+					ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, NON_CC_INDEX_OFFSET + SS_MODSRC_CHANNEL_PRESSURE, false);
+					break;
+				}
+
+				case 0x30: {
+					/* Poly pressure */
+					ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, NON_CC_INDEX_OFFSET + SS_MODSRC_POLY_PRESSURE, false);
+					break;
+				}
+
+				case 0x40: {
+					/* CC1 */
+					ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, mch->cc1, false);
+					break;
+				}
+
+				case 0x50: {
+					/* CC2 */
+					ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, mch->cc2, false);
+					break;
+				}
+			}
+			return;
+		}
+
+		if(addr2_nibble == 1) {
+			uint8_t part_idx = addr2_byte & 0x0F;
+			int channel_idx = GS_PART_TO_CHANNEL[part_idx] + channel_offset;
+			if(channel_idx < 0 || channel_idx >= proc->channel_count) return;
+
+			SS_MIDIChannel *mch = proc->midi_channels[channel_idx];
+			uint8_t gs_param = (uint8_t)(addr & 0xFF);
+			uint8_t gs_val = data[7];
+			double t = proc->current_synth_time;
+
+			switch(gs_param) {
+				case 0x00: /* Tone number: bank select MSB + program */
+					if(len < 9) break;
+					ss_channel_controller(mch, SS_MIDCON_BANK_SELECT, (int)gs_val, t);
+					ss_channel_program_change(mch, (int)data[8]);
+					break;
+
+				case 0x02: /* Rx. channel (0x10 = off) */
+					mch->rx_channel = (gs_val == 0x10) ? -1 : (int)gs_val;
+					if(mch->rx_channel != mch->channel_number)
+						proc->custom_channel_numbers = true;
+					break;
+
+				case 0x13: /* Mono/poly mode */
+					mch->poly_mode = (gs_val == 1);
+					break;
+
+				case 0x14: /* Assign mode */
+					mch->assign_mode = gs_val;
+					break;
+
+				case 0x15: /* Use for drum part */
+				{
+					mch->drum_map = gs_val;
+					bool is_drums = (gs_val > 0);
+					if(is_drums != mch->is_gm_gs_drum) {
+						mch->bank_lsb = 0;
+						mch->bank_msb = 0;
+						mch->is_gm_gs_drum = is_drums;
+					}
+					mch->drum_channel = is_drums || (mch->channel_number % 16 == 9);
+					proc_emit(proc, SS_EVENT_DRUM_CHANGE, channel_idx, (int)mch->drum_channel, 0);
+					break;
+				}
+
+				case 0x16: /* Pitch key shift */
+					ss_channel_set_custom_controller(mch, SS_CUSTOM_CTRL_KEY_SHIFT, (float)((int)gs_val - 64));
+					break;
+
+				case 0x19: /* Part level (CC7) */
+					ss_channel_controller(mch, SS_MIDCON_MAIN_VOLUME, (int)gs_val, t);
+					break;
+
+				case 0x1c: /* Pan position (0=random) */
+					if(gs_val == 0) {
+						mch->random_pan = true;
+					} else {
+						mch->random_pan = false;
+						ss_channel_controller(mch, SS_MIDCON_PAN, (int)gs_val, t);
+					}
+					break;
+
+				case 0x1f: /* CC1 controller number */
+					mch->cc1 = gs_val;
+					break;
+
+				case 0x20: /* CC2 controller number */
+					mch->cc2 = gs_val;
+					break;
+
+				case 0x21: /* Chorus send (CC93) */
+					ss_channel_controller(mch, SS_MIDCON_CHORUS_DEPTH, (int)gs_val, t);
+					break;
+
+				case 0x22: /* Reverb send (CC91) */
+					ss_channel_controller(mch, SS_MIDCON_REVERB_DEPTH, (int)gs_val, t);
+					break;
+
+				case 0x2a: /* Fine tune (14-bit) */
+					if(len >= 9) {
+						uint16_t tune_val = ((uint16_t)gs_val << 7) | (data[8] & 0x7fu);
+						ss_channel_set_tuning(mch, ((float)tune_val - 8192.0f) / 81.92f);
+					}
+					break;
+
+				case 0x2c: /* Delay send (CC94) */
+					ss_channel_controller(mch, SS_MIDCON_VARIATION_DEPTH, (int)gs_val, t);
+					break;
+
+				case 0x30: /* Vibrato rate (CC76) */
+					ss_channel_controller(mch, SS_MIDCON_VIBRATO_RATE, (int)gs_val, t);
+					break;
+
+				case 0x31: /* Vibrato depth (CC77) */
+					ss_channel_controller(mch, SS_MIDCON_VIBRATO_DEPTH, (int)gs_val, t);
+					break;
+
+				case 0x32: /* Filter cutoff (CC74) */
+					ss_channel_controller(mch, SS_MIDCON_BRIGHTNESS, (int)gs_val, t);
+					break;
+
+				case 0x33: /* Filter resonance (CC71) */
+					ss_channel_controller(mch, SS_MIDCON_FILTER_RESONANCE, (int)gs_val, t);
+					break;
+
+				case 0x34: /* Attack time (CC73) */
+					ss_channel_controller(mch, SS_MIDCON_ATTACK_TIME, (int)gs_val, t);
+					break;
+
+				case 0x35: /* Decay time (CC75) */
+					ss_channel_controller(mch, SS_MIDCON_DECAY_TIME, (int)gs_val, t);
+					break;
+
+				case 0x36: /* Release time (CC72) */
+					ss_channel_controller(mch, SS_MIDCON_RELEASE_TIME, (int)gs_val, t);
+					break;
+
+				case 0x37: /* Vibrato delay (CC78) */
+					ss_channel_controller(mch, SS_MIDCON_VIBRATO_DELAY, (int)gs_val, t);
+					break;
+
+				case 0x40: /* Scale tuning (12 bytes, repeating for all 128 notes) */
+				{
+					int tuning_bytes = (int)len - 9;
+					if(tuning_bytes < 0) tuning_bytes = 0;
+					if(tuning_bytes > 12) tuning_bytes = 12;
+					int8_t new_tuning[12] = { 0 };
+					for(int i = 0; i < tuning_bytes; i++)
+						new_tuning[i] = (int8_t)((data[7 + i] & 0x7f) - 64);
+					for(int i = 0; i < 128; i++)
+						mch->channel_octave_tuning[i] = new_tuning[i % 12];
+					ss_channel_set_tuning(mch, (float)((int)gs_val - 64));
+					break;
+				}
+
+				default:
+					break;
+			}
+		}
+	}
+}
+
+void sysex_handle_xg(SS_Processor *proc, const uint8_t *data, size_t len, double t, int channel_offset) {
+	/*  data[0]=0x43, data[1]=0x10 (parameter change), data[2]=0x4c (XG),
+	          data[3]=addr1, data[4]=addr2, data[5]=addr3, data[6]=value */
+	if(len < 7) return;
+	if(data[1] != 0x10 || data[2] != 0x4c) return;
+
+	uint8_t xg_addr1 = data[3];
+	uint8_t xg_addr2 = data[4];
+	uint8_t xg_addr3 = data[5];
+	uint8_t xg_val = data[6];
+
+	/* XG System parameters (addr1=0x00, addr2=0x00) */
+	if(xg_addr1 == 0x00 && xg_addr2 == 0x00) {
+		switch(xg_addr3) {
+			case 0x00: /* Master tune (4-nibble) */
+				if(len >= 10) {
+					uint32_t tune = ((uint32_t)(data[6] & 0x0f) << 12) |
+					                ((uint32_t)(data[7] & 0x0f) << 8) |
+					                ((uint32_t)(data[8] & 0x0f) << 4) |
+					                (uint32_t)(data[9] & 0x0f);
+					proc->master_params.master_tuning = ((float)tune - 1024.0f) / 10.0f;
+				}
+				break;
+			case 0x04: /* Master volume */
+				ss_processor_set_midi_volume(proc, (float)xg_val / 127.0f);
+				break;
+			case 0x05: /* Master attenuation */
+				ss_processor_set_midi_volume(proc, (float)(127 - xg_val) / 127.0f);
+				break;
+			case 0x06: /* Master transpose (semitones) */
+				proc->master_params.master_pitch = (float)((int)xg_val - 64);
+				break;
+			case 0x7e: /* XG Reset */
+			case 0x7f: /* XG System On */
+				proc->master_params.midi_system = SS_SYSTEM_XG;
+				ss_processor_system_reset(proc);
+				break;
+			default:
+				break;
+		}
+		return;
+	}
+
+	/* XG Part parameters (addr1=0x08, addr2=channel) */
+	if(xg_addr1 == 0x08) {
+		if(proc->master_params.midi_system != SS_SYSTEM_XG) return;
+		int channel_idx = (int)(xg_addr2) + channel_offset;
+		if(channel_idx < 0 || channel_idx >= proc->channel_count) return;
+		SS_MIDIChannel *mch = proc->midi_channels[channel_idx];
+
+		switch(xg_addr3) {
+			case 0x01: /* Bank select MSB (CC0) */
+				ss_channel_controller(mch, SS_MIDCON_BANK_SELECT, (int)xg_val, t);
+				break;
+			case 0x02: /* Bank select LSB (CC32) */
+				ss_channel_controller(mch, SS_MIDCON_BANK_SELECT_LSB, (int)xg_val, t);
+				break;
+			case 0x03: /* Program change */
+				ss_channel_program_change(mch, (int)xg_val);
+				break;
+			case 0x04: /* Rx. channel */
+				mch->rx_channel = (int)xg_val;
+				if(mch->rx_channel != mch->channel_number)
+					proc->custom_channel_numbers = true;
+				break;
+			case 0x05: /* Poly/mono mode */
+				mch->poly_mode = (xg_val == 1);
+				break;
+			case 0x07: /* Part mode (0=normal, else=drum) */
+				mch->drum_channel = (xg_val != 0);
+				proc_emit(proc, SS_EVENT_DRUM_CHANGE, channel_idx, (int)mch->drum_channel, 0);
+				break;
+			case 0x08: /* Note shift (key shift) — ignore on drum channels */
+				if(!mch->drum_channel) {
+					ss_channel_set_custom_controller(mch, SS_CUSTOM_CTRL_KEY_SHIFT, (float)((int)xg_val - 64));
+				}
+				break;
+			case 0x0b: /* Volume (CC7) */
+				ss_channel_controller(mch, SS_MIDCON_MAIN_VOLUME, (int)xg_val, t);
+				break;
+			case 0x0e: /* Pan (0=random) */
+				if(xg_val == 0) {
+					mch->random_pan = true;
+				} else {
+					mch->random_pan = false;
+					ss_channel_controller(mch, SS_MIDCON_PAN, (int)xg_val, t);
+				}
+				break;
+			case 0x12: /* Chorus send (CC93) */
+				ss_channel_controller(mch, SS_MIDCON_CHORUS_DEPTH, (int)xg_val, t);
+				break;
+			case 0x13: /* Reverb send (CC91) */
+				ss_channel_controller(mch, SS_MIDCON_REVERB_DEPTH, (int)xg_val, t);
+				break;
+			case 0x15: /* Vibrato rate (CC76) */
+				ss_channel_controller(mch, SS_MIDCON_VIBRATO_RATE, (int)xg_val, t);
+				break;
+			case 0x16: /* Vibrato depth (CC77) */
+				ss_channel_controller(mch, SS_MIDCON_VIBRATO_DEPTH, (int)xg_val, t);
+				break;
+			case 0x17: /* Vibrato delay (CC78) */
+				ss_channel_controller(mch, SS_MIDCON_VIBRATO_DELAY, (int)xg_val, t);
+				break;
+			case 0x18: /* Filter cutoff (CC74) */
+				ss_channel_controller(mch, SS_MIDCON_BRIGHTNESS, (int)xg_val, t);
+				break;
+			case 0x19: /* Filter resonance (CC71) */
+				ss_channel_controller(mch, SS_MIDCON_FILTER_RESONANCE, (int)xg_val, t);
+				break;
+			case 0x1a: /* Attack time (CC73) */
+				ss_channel_controller(mch, SS_MIDCON_ATTACK_TIME, (int)xg_val, t);
+				break;
+			case 0x1b: /* Decay time (CC75) */
+				ss_channel_controller(mch, SS_MIDCON_DECAY_TIME, (int)xg_val, t);
+				break;
+			case 0x1c: /* Release time (CC72) */
+				ss_channel_controller(mch, SS_MIDCON_RELEASE_TIME, (int)xg_val, t);
+				break;
+			default:
+				break;
+		}
+		return;
+	}
+
+	/* XG Drum setup (addr1 high nibble = 3, e.g. 0x30-0x3F) */
+	if((xg_addr1 >> 4) == 3) {
+		if(proc->master_params.midi_system != SS_SYSTEM_XG) return;
+		uint8_t drum_key = xg_addr2;
+		/* Apply to all drum channels */
+		for(int ci = 0; ci < proc->channel_count; ci++) {
+			SS_MIDIChannel *mch = proc->midi_channels[ci];
+			if(!mch || !mch->drum_channel) continue;
+			switch(xg_addr3) {
+				case 0x00: /* Drum pitch coarse */
+					mch->drum_params[drum_key].pitch = (float)((int)xg_val - 64) * 100.0f;
+					break;
+				case 0x01: /* Drum pitch fine */
+					mch->drum_params[drum_key].pitch += (float)((int)xg_val - 64);
+					break;
+				case 0x02: /* Drum level */
+					mch->drum_params[drum_key].gain = (float)xg_val / 120.0f;
+					break;
+				case 0x03: /* Drum alternate group (exclusive class) */
+					mch->drum_params[drum_key].exclusive_class = xg_val;
+					break;
+				case 0x04: /* Drum pan */
+					mch->drum_params[drum_key].pan = xg_val;
+					break;
+				case 0x05: /* Drum reverb send */
+					mch->drum_params[drum_key].reverb_gain = (float)xg_val / 127.0f;
+					break;
+				case 0x06: /* Drum chorus send */
+					mch->drum_params[drum_key].chorus_gain = (float)xg_val / 127.0f;
+					break;
+				case 0x09: /* Receive note off */
+					mch->drum_params[drum_key].rx_note_off = (xg_val == 1);
+					break;
+				case 0x0a: /* Receive note on */
+					mch->drum_params[drum_key].rx_note_on = (xg_val == 1);
+					break;
+				default:
+					break;
+			}
+		}
+	}
+}
+
 void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, double t) {
 	(void)t;
-	if(!data || len < 3) return;
+	if(!data || len < 1) return;
+
+	int channel_offset = proc->port_select_channel_offset;
 
 	uint8_t manufacturer = data[0];
 
@@ -439,778 +1210,24 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 		/* ── Universal Non-Realtime / Realtime ────────────────────────────── */
 		case 0x7e: /* Non-realtime */
 		case 0x7f: /* Realtime     */
-		{
-			if(len < 4) break;
-			/* data[1] = device ID (0x7f = all), data[2] = sub-ID1 */
-			switch(data[2]) {
-				case 0x04: /* Device Control */
-					if(len < 6) break;
-					switch(data[3]) {
-						case 0x01: { /* Master Volume */
-							uint16_t vol = (uint16_t)((data[5] << 7) | data[4]);
-							ss_processor_set_midi_volume(proc, (float)vol / 16384.0);
-							break;
-						}
-						case 0x02: { /* Master Balance / Pan */
-							uint16_t bal = (uint16_t)((data[5] << 7) | data[4]);
-							proc->master_params.master_pan =
-							((float)bal - 8192.0f) / 8192.0f;
-							break;
-						}
-						case 0x03: { /* Fine Tuning */
-							if(len < 7) break;
-							int raw = (int)(((data[5] << 7) | data[6]) - 8192);
-							proc->master_params.master_tuning =
-							(float)(raw / 81.92);
-							break;
-						}
-						case 0x04: { /* Coarse Tuning */
-							int semitones = (int)data[5] - 64;
-							proc->master_params.master_tuning =
-							(float)(semitones * 100);
-							break;
-						}
-					}
-					break;
-
-				case 0x09: /* GM system */
-					if(len < 4) break;
-					if(data[3] == 0x01) {
-						proc->master_params.midi_system = SS_SYSTEM_GM;
-					} else if(data[3] == 0x03) {
-						proc->master_params.midi_system = SS_SYSTEM_GM;
-					} else {
-						proc->master_params.midi_system = SS_SYSTEM_GS;
-					}
-					ss_processor_system_reset(proc);
-					break;
-
-				case 0x08: /* MIDI Tuning Standard */
-				{
-					if(len < 5) break;
-					size_t idx = 4;
-					switch(data[3]) {
-						case 0x01: { /* Bulk Tuning Dump */
-							if(len < 384 + 4) break;
-							int program = (int)data[idx++];
-							/* skip 16-byte name */
-							idx += 16;
-							/* Ensure tuning grid exists */
-							if(!proc->master_params.tunings) {
-								proc->master_params.tunings =
-								(SS_TuningEntry **)calloc(128, sizeof(SS_TuningEntry *));
-							}
-							if(!proc->master_params.tunings[program]) {
-								proc->master_params.tunings[program] =
-								(SS_TuningEntry *)calloc(128, sizeof(SS_TuningEntry));
-							}
-							for(int n = 0; n < 128 && idx + 2 < len; n++) {
-								uint8_t b1 = data[idx++];
-								uint8_t b2 = data[idx++];
-								uint8_t b3 = data[idx++];
-								if(b1 == 0x7f && b2 == 0x7f && b3 == 0x7f) {
-									proc->master_params.tunings[program][n].midi_note = n;
-									proc->master_params.tunings[program][n].cent_tuning = 0.0f;
-								} else {
-									int fraction = (b2 << 7) | b3;
-									proc->master_params.tunings[program][n].midi_note = (int)b1;
-									proc->master_params.tunings[program][n].cent_tuning =
-									(float)(fraction * 0.0061);
-								}
-							}
-							break;
-						}
-						case 0x02: { /* Single Note Tuning Change */
-							if(len < 6) break;
-							int program = (int)data[idx++];
-							int num_notes = (int)data[idx++];
-							if(!proc->master_params.tunings) {
-								proc->master_params.tunings =
-								(SS_TuningEntry **)calloc(128, sizeof(SS_TuningEntry *));
-							}
-							if(!proc->master_params.tunings[program]) {
-								proc->master_params.tunings[program] =
-								(SS_TuningEntry *)calloc(128, sizeof(SS_TuningEntry));
-							}
-							for(int ni = 0; ni < num_notes && idx + 3 <= len; ni++) {
-								uint8_t key = data[idx++];
-								uint8_t b1 = data[idx++];
-								uint8_t b2 = data[idx++];
-								uint8_t b3 = data[idx++];
-								if(b1 == 0x7f && b2 == 0x7f && b3 == 0x7f) continue;
-								int fraction = (b2 << 7) | b3;
-								proc->master_params.tunings[program][key].midi_note = (int)b1;
-								proc->master_params.tunings[program][key].cent_tuning =
-								(float)(fraction * 0.0061);
-							}
-							break;
-						}
-					}
-					break;
-				}
-			}
+			sysex_handle_gm(proc, data, len, t, channel_offset);
 			break;
-		}
 
 		/* ── Roland GS ────────────────────────────────────────────────────── */
-		case 0x41: {
-			/*  data[0]=0x41, data[1]=device_id, data[2]=0x42 (GS),
-			    data[3]=0x12 (data set 1), data[4..6]=address, data[7+]=payload */
-			if(len < 8) break;
-			/* Some Roland */
-			if(data[2] == 0x16) {
-				ss_processor_set_midi_volume(proc, (float)data[5] / 100.0);
-				break;
-			}
-
-			if(data[2] != 0x42 || data[3] != 0x12) break;
-
-			uint32_t addr = ((uint32_t)data[4] << 16) |
-			                ((uint32_t)data[5] << 8) |
-			                (uint32_t)data[6];
-
-			/* GS Reset */
-			if(addr == 0x40007f && data[7] == 0x00) {
-				proc->master_params.midi_system = SS_SYSTEM_GS;
-				ss_processor_system_reset(proc);
-				break;
-			}
-
-			/* System Level: 0x40_00_xx */
-			if((addr & 0xFFFF00u) == 0x400000u) {
-				uint8_t addr3 = (uint8_t)(addr & 0xFF);
-				uint8_t val = data[7];
-				switch(addr3) {
-					case 0x00: /* Master tune (4-nibble BCD) */
-						if(len >= 11) {
-							uint32_t tune = ((uint32_t)(val & 0x0f) << 12) |
-							                ((uint32_t)(data[8] & 0x0f) << 8) |
-							                ((uint32_t)(data[9] & 0x0f) << 4) |
-							                (uint32_t)(data[10] & 0x0f);
-							proc->master_params.master_tuning = ((float)tune - 1024.0f) / 10.0f;
-						}
-						break;
-					case 0x04: /* Master volume */
-						ss_processor_set_midi_volume(proc, (float)val / 127.0f);
-						break;
-					case 0x05: /* Master key shift (semitones, signed) */
-						proc->master_params.master_pitch = (float)((int)val - 64);
-						break;
-					case 0x06: /* Master pan */
-						proc->master_params.master_pan = (float)((int)val - 64) / 64.0f;
-						break;
-					case 0x7f: /* Roland mode set: 0x7f=GS off (→GM) */
-						if(val == 0x7f) {
-							proc->master_params.midi_system = SS_SYSTEM_GM;
-							ss_processor_system_reset(proc);
-						}
-						break;
-					default:
-						break;
-				}
-				break;
-			}
-
-			/* Part address: 0x40_1n_xx / 0x40_2n_xx, n = part 0-F */
-			if((addr & 0xF00000u) != 0x400000u) break;
-
-			if((addr & 0xF0F000u) == 0x400000u) {
-				uint8_t addr2 = (addr >> 8) & 0xFF;
-				uint8_t addr3 = (addr & 0xFF);
-				uint8_t value = (data[7] > 127) ? 127 : data[7];
-				switch(addr2) {
-					case 0x01: {
-						const bool is_reverb = addr3 >= 0x30 && addr3 <= 0x37;
-						const bool is_chorus = addr3 >= 0x38 && addr3 <= 0x40;
-						const bool is_delay = addr3 >= 0x50 && addr3 <= 0x5a;
-						/* Disable effect editing if locked */
-						if(is_reverb && !proc->master_params.reverb_enabled)
-							break;
-						if(is_chorus && !proc->master_params.chorus_enabled)
-							break;
-						if(is_delay && !proc->master_params.delay_enabled)
-							break;
-						/*
-						 0x40 - chorus to delay; any delay param activates delay
-						 */
-						if(addr3 == 0x40 || is_delay)
-							proc->delay_active = true;
-						switch(addr3) {
-							default:
-								/* Unsupported preset */
-								break;
-
-							case 0:
-								/* Patch name, ignore */
-								break;
-
-							/* Reverb */
-							case 0x30: /* Reverb macro */
-								ss_reverb_set_macro(proc->reverb, value);
-								break;
-
-							case 0x31: /* Reverb character */
-								ss_reverb_set_character(proc->reverb, value);
-								break;
-
-							case 0x32: /* Reverb pre-LPF */
-								ss_reverb_set_pre_lowpass(proc->reverb, value);
-								break;
-
-							case 0x33: /* Reverb level */
-								ss_reverb_set_level(proc->reverb, value);
-								break;
-
-							case 0x34: /* Reverb time */
-								ss_reverb_set_time(proc->reverb, value);
-								break;
-
-							case 0x35: /* Reverb delay feedback */
-								ss_reverb_set_delay_feedback(proc->reverb, value);
-								break;
-
-							case 0x36: /* Reverb send to chorus, legacy SC-55 that's recognized by later models and unsupported. */
-								break;
-
-							case 0x37: /* Reverb pre-delay time */
-								ss_reverb_set_pre_delay_time(proc->reverb, value);
-								break;
-
-							/* Chorus */
-							case 0x38: /* Chorus macro */
-								ss_chorus_set_macro(proc->chorus, value);
-								break;
-
-							case 0x39: /* Chorus pre-LPF */
-								ss_chorus_set_pre_lowpass(proc->chorus, value);
-								break;
-
-							case 0x3a: /* Chorus level */
-								ss_chorus_set_level(proc->chorus, value);
-								break;
-
-							case 0x3b: /* Chorus feedback */
-								ss_chorus_set_feedback(proc->chorus, value);
-								break;
-
-							case 0x3c: /* Chorus delay */
-								ss_chorus_set_delay(proc->chorus, value);
-								break;
-
-							case 0x3d: /* Chorus rate */
-								ss_chorus_set_rate(proc->chorus, value);
-								break;
-
-							case 0x3e: /* Chorus depth */
-								ss_chorus_set_depth(proc->chorus, value);
-								break;
-
-							case 0x3f: /* Chorus send level to reverb */
-								ss_chorus_set_send_level_to_reverb(proc->chorus, value);
-								break;
-
-							case 0x40: /* Chorus send level to delay */
-								ss_chorus_set_send_level_to_delay(proc->chorus, value);
-								break;
-
-							/* Delay */
-							case 0x50: /* Delay macro */
-								ss_delay_set_macro(proc->delay, value);
-								break;
-
-							case 0x51: /* Delay pre-LPF */
-								ss_delay_set_pre_lowpass(proc->delay, value);
-								break;
-
-							case 0x52: /* Delay time center */
-								ss_delay_set_time_center(proc->delay, value);
-								break;
-
-							case 0x53: /* Delay time ratio left */
-								ss_delay_set_time_ratio_left(proc->delay, value);
-								break;
-
-							case 0x54: /* Delay time ratio right */
-								ss_delay_set_time_ratio_right(proc->delay, value);
-								break;
-
-							case 0x55: /* Delay level center */
-								ss_delay_set_level_center(proc->delay, value);
-								break;
-
-							case 0x56: /* Delay level left */
-								ss_delay_set_level_left(proc->delay, value);
-								break;
-
-							case 0x57: /* Delay level right */
-								ss_delay_set_level_right(proc->delay, value);
-								break;
-
-							case 0x58: /* Delay level */
-								ss_delay_set_level(proc->delay, value);
-								break;
-
-							case 0x59: /* Delay feedback */
-								ss_delay_set_feedback(proc->delay, value);
-								break;
-
-							case 0x5a: /* Delay send level to reverb */
-								ss_delay_set_send_level_to_reverb(proc->delay, value);
-								break;
-						}
-						break;
-					}
-
-					/* EFX Parameter (addr2=0x03) */
-					case 0x03: {
-						uint8_t efx_val = (data[7] > 127) ? 127 : data[7];
-						if(addr3 == 0x00) {
-							/* EFX Type: 16-bit MSB<<8|LSB */
-							if(len < 9) break;
-							uint32_t efx_type = ((uint32_t)data[7] << 8) | (uint32_t)data[8];
-							ss_insertion_free(proc->insertion);
-							proc->insertion = ss_insertion_create(efx_type, proc->sample_rate, SS_MAX_SOUND_CHUNK);
-							if(!proc->insertion)
-								proc->insertion = ss_insertion_create(0x0000, proc->sample_rate, SS_MAX_SOUND_CHUNK);
-							if(proc->insertion) {
-								proc->insertion->reset(proc->insertion);
-								proc->insertion->send_level_to_reverb = (40.0f / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
-								proc->insertion->send_level_to_chorus = 0.0f;
-								proc->insertion->send_level_to_delay = 0.0f;
-							}
-						} else if(addr3 >= 0x03 && addr3 <= 0x16) {
-							/* EFX parameters (MIDI param indices 0x03-0x16) */
-							if(proc->insertion)
-								proc->insertion->set_parameter(proc->insertion, (int)addr3, (int)efx_val);
-						} else if(addr3 == 0x17) {
-							if(proc->insertion)
-								proc->insertion->send_level_to_reverb =
-								((float)efx_val / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
-						} else if(addr3 == 0x18) {
-							if(proc->insertion)
-								proc->insertion->send_level_to_chorus =
-								((float)efx_val / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
-						} else if(addr3 == 0x19) {
-							proc->delay_active = true;
-							if(proc->insertion)
-								proc->insertion->send_level_to_delay =
-								((float)efx_val / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
-						}
-						break;
-					}
-				}
-				break;
-			}
-
-			/* Part parameters (addr2=0x1n) and tone-map EFX assign (addr2=0x4n) */
-			{
-				uint8_t addr2_byte = (uint8_t)((addr >> 8) & 0xFF);
-				uint8_t addr2_nibble = addr2_byte >> 4;
-
-				/* Tone-map EFX assign: addr2=0x4n, addr3=0x22 */
-				if(addr2_nibble == 4) {
-					uint8_t efx_part = addr2_byte & 0x0F;
-					int efx_ch = GS_PART_TO_CHANNEL[efx_part];
-					if(efx_ch >= 0 && efx_ch < proc->channel_count &&
-					   (addr & 0xFF) == 0x22) {
-						SS_MIDIChannel *efx_mch = proc->midi_channels[efx_ch];
-						efx_mch->insertion_enabled = (data[7] == 1);
-						if(data[7] == 1) proc->insertion_active = true;
-					}
-					break;
-				}
-
-				/* Patch Parameter controllers */
-				if(addr2_nibble == 2) {
-					/* This is an individual part (channel) parameter
-					 * Determine the channel
-					 * Note that: 0 means channel 9 (drums), and only then 1 means channel 0, 2 channel 1, etc.
-					 * SC-88Pro manual page 196
-					 */
-					uint8_t part_idx = addr2_byte & 0x0F;
-					int channel_idx = GS_PART_TO_CHANNEL[part_idx];
-					if(channel_idx < 0 || channel_idx >= proc->channel_count) break;
-
-					SS_MIDIChannel *mch = proc->midi_channels[channel_idx];
-					uint8_t gs_param = (uint8_t)(addr & 0xFF);
-					uint8_t gs_val = data[7];
-
-					switch(gs_param & 0xf0) {
-						default:
-							/* Not recognized */
-							break;
-
-						case 0x00: {
-							/* Modulation wheel */
-							if((gs_param & 0x0f) == 0x04) {
-								/* LFO1 Pitch depth
-								 * Special case:
-								 * If the source is a mod wheel, it's a strange way of setting the modulation depth
-								 * Testcase: J-Cycle.mid (it affects gm.dls which uses LFO1 for modulation)
-								 */
-								const float cents = ((float)gs_val / 127.0) * 600.0;
-								mch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] = cents / 50.0;
-								break;
-							}
-							ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, SS_MIDCON_MODULATION_WHEEL, false);
-							break;
-						}
-
-						case 0x10: {
-							/* Pitch wheel */
-							if((gs_param & 0x0f) == 0x00) {
-								/* See https://github.com/spessasus/SpessaSynth/issues/154
-								 * Pitch control
-								 * Special case:
-								 * If the source is a pitch wheel, it's a strange way of setting the pitch wheel range
-								 * Testcase: th07_03.mid
-								 */
-								const int centeredValue = (int)gs_val - 64;
-								mch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = centeredValue << 7;
-								break;
-							}
-							ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL, true);
-							break;
-						}
-
-						case 0x20: {
-							/* Channel pressure */
-							ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, NON_CC_INDEX_OFFSET + SS_MODSRC_CHANNEL_PRESSURE, false);
-							break;
-						}
-
-						case 0x30: {
-							/* Poly pressure */
-							ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, NON_CC_INDEX_OFFSET + SS_MODSRC_POLY_PRESSURE, false);
-							break;
-						}
-
-						case 0x40: {
-							/* CC1 */
-							ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, mch->cc1, false);
-							break;
-						}
-
-						case 0x50: {
-							/* CC2 */
-							ss_dynamic_modulator_system_setup_receiver(&mch->dms, gs_param, gs_val, mch->cc2, false);
-							break;
-						}
-					}
-					break;
-				}
-
-				if(addr2_nibble != 1) break; /* only handle 0x10-0x1F below */
-
-				uint8_t part_idx = addr2_byte & 0x0F;
-				int channel_idx = GS_PART_TO_CHANNEL[part_idx];
-				if(channel_idx < 0 || channel_idx >= proc->channel_count) break;
-
-				SS_MIDIChannel *mch = proc->midi_channels[channel_idx];
-				uint8_t gs_param = (uint8_t)(addr & 0xFF);
-				uint8_t gs_val = data[7];
-				double t = proc->current_synth_time;
-
-				switch(gs_param) {
-					case 0x00: /* Tone number: bank select MSB + program */
-						if(len < 9) break;
-						ss_channel_controller(mch, SS_MIDCON_BANK_SELECT, (int)gs_val, t);
-						ss_channel_program_change(mch, (int)data[8]);
-						break;
-
-					case 0x02: /* Rx. channel (0x10 = off) */
-						mch->rx_channel = (gs_val == 0x10) ? -1 : (int)gs_val;
-						if(mch->rx_channel != mch->channel_number)
-							proc->custom_channel_numbers = true;
-						break;
-
-					case 0x13: /* Mono/poly mode */
-						mch->poly_mode = (gs_val == 1);
-						break;
-
-					case 0x14: /* Assign mode */
-						mch->assign_mode = gs_val;
-						break;
-
-					case 0x15: /* Use for drum part */
-					{
-						mch->drum_map = gs_val;
-						bool is_drums = (gs_val > 0);
-						if(is_drums != mch->is_gm_gs_drum) {
-							mch->bank_lsb = 0;
-							mch->bank_msb = 0;
-							mch->is_gm_gs_drum = is_drums;
-						}
-						mch->drum_channel = is_drums || (mch->channel_number % 16 == 9);
-						proc_emit(proc, SS_EVENT_DRUM_CHANGE, channel_idx, (int)mch->drum_channel, 0);
-						break;
-					}
-
-					case 0x16: /* Pitch key shift */
-						ss_channel_set_custom_controller(mch, SS_CUSTOM_CTRL_KEY_SHIFT, (float)((int)gs_val - 64));
-						break;
-
-					case 0x19: /* Part level (CC7) */
-						ss_channel_controller(mch, SS_MIDCON_MAIN_VOLUME, (int)gs_val, t);
-						break;
-
-					case 0x1c: /* Pan position (0=random) */
-						if(gs_val == 0) {
-							mch->random_pan = true;
-						} else {
-							mch->random_pan = false;
-							ss_channel_controller(mch, SS_MIDCON_PAN, (int)gs_val, t);
-						}
-						break;
-
-					case 0x1f: /* CC1 controller number */
-						mch->cc1 = gs_val;
-						break;
-
-					case 0x20: /* CC2 controller number */
-						mch->cc2 = gs_val;
-						break;
-
-					case 0x21: /* Chorus send (CC93) */
-						ss_channel_controller(mch, SS_MIDCON_CHORUS_DEPTH, (int)gs_val, t);
-						break;
-
-					case 0x22: /* Reverb send (CC91) */
-						ss_channel_controller(mch, SS_MIDCON_REVERB_DEPTH, (int)gs_val, t);
-						break;
-
-					case 0x2a: /* Fine tune (14-bit) */
-						if(len >= 9) {
-							uint16_t tune_val = ((uint16_t)gs_val << 7) | (data[8] & 0x7fu);
-							ss_channel_set_tuning(mch, ((float)tune_val - 8192.0f) / 81.92f);
-						}
-						break;
-
-					case 0x2c: /* Delay send (CC94) */
-						ss_channel_controller(mch, SS_MIDCON_VARIATION_DEPTH, (int)gs_val, t);
-						break;
-
-					case 0x30: /* Vibrato rate (CC76) */
-						ss_channel_controller(mch, SS_MIDCON_VIBRATO_RATE, (int)gs_val, t);
-						break;
-
-					case 0x31: /* Vibrato depth (CC77) */
-						ss_channel_controller(mch, SS_MIDCON_VIBRATO_DEPTH, (int)gs_val, t);
-						break;
-
-					case 0x32: /* Filter cutoff (CC74) */
-						ss_channel_controller(mch, SS_MIDCON_BRIGHTNESS, (int)gs_val, t);
-						break;
-
-					case 0x33: /* Filter resonance (CC71) */
-						ss_channel_controller(mch, SS_MIDCON_FILTER_RESONANCE, (int)gs_val, t);
-						break;
-
-					case 0x34: /* Attack time (CC73) */
-						ss_channel_controller(mch, SS_MIDCON_ATTACK_TIME, (int)gs_val, t);
-						break;
-
-					case 0x35: /* Decay time (CC75) */
-						ss_channel_controller(mch, SS_MIDCON_DECAY_TIME, (int)gs_val, t);
-						break;
-
-					case 0x36: /* Release time (CC72) */
-						ss_channel_controller(mch, SS_MIDCON_RELEASE_TIME, (int)gs_val, t);
-						break;
-
-					case 0x37: /* Vibrato delay (CC78) */
-						ss_channel_controller(mch, SS_MIDCON_VIBRATO_DELAY, (int)gs_val, t);
-						break;
-
-					case 0x40: /* Scale tuning (12 bytes, repeating for all 128 notes) */
-					{
-						int tuning_bytes = (int)len - 9;
-						if(tuning_bytes < 0) tuning_bytes = 0;
-						if(tuning_bytes > 12) tuning_bytes = 12;
-						int8_t new_tuning[12] = { 0 };
-						for(int i = 0; i < tuning_bytes; i++)
-							new_tuning[i] = (int8_t)((data[7 + i] & 0x7f) - 64);
-						for(int i = 0; i < 128; i++)
-							mch->channel_octave_tuning[i] = new_tuning[i % 12];
-						ss_channel_set_tuning(mch, (float)((int)gs_val - 64));
-						break;
-					}
-
-					default:
-						break;
-				}
-			}
+		case 0x41:
+			sysex_handle_gs(proc, data, len, t, channel_offset);
 			break;
-		}
 
 		/* ── Yamaha XG ────────────────────────────────────────────────────── */
-		case 0x43: {
-			/*  data[0]=0x43, data[1]=0x10 (parameter change), data[2]=0x4c (XG),
-			    data[3]=addr1, data[4]=addr2, data[5]=addr3, data[6]=value */
-			if(len < 7) break;
-			if(data[1] != 0x10 || data[2] != 0x4c) break;
+		case 0x43:
+			sysex_handle_xg(proc, data, len, t, channel_offset);
+			break;
 
-			uint8_t xg_addr1 = data[3];
-			uint8_t xg_addr2 = data[4];
-			uint8_t xg_addr3 = data[5];
-			uint8_t xg_val = data[6];
-
-			/* XG System parameters (addr1=0x00, addr2=0x00) */
-			if(xg_addr1 == 0x00 && xg_addr2 == 0x00) {
-				switch(xg_addr3) {
-					case 0x00: /* Master tune (4-nibble) */
-						if(len >= 10) {
-							uint32_t tune = ((uint32_t)(data[6] & 0x0f) << 12) |
-							                ((uint32_t)(data[7] & 0x0f) << 8) |
-							                ((uint32_t)(data[8] & 0x0f) << 4) |
-							                (uint32_t)(data[9] & 0x0f);
-							proc->master_params.master_tuning = ((float)tune - 1024.0f) / 10.0f;
-						}
-						break;
-					case 0x04: /* Master volume */
-						ss_processor_set_midi_volume(proc, (float)xg_val / 127.0f);
-						break;
-					case 0x05: /* Master attenuation */
-						ss_processor_set_midi_volume(proc, (float)(127 - xg_val) / 127.0f);
-						break;
-					case 0x06: /* Master transpose (semitones) */
-						proc->master_params.master_pitch = (float)((int)xg_val - 64);
-						break;
-					case 0x7e: /* XG Reset */
-					case 0x7f: /* XG System On */
-						proc->master_params.midi_system = SS_SYSTEM_XG;
-						ss_processor_system_reset(proc);
-						break;
-					default:
-						break;
-				}
-				break;
-			}
-
-			/* XG Part parameters (addr1=0x08, addr2=channel) */
-			if(xg_addr1 == 0x08) {
-				if(proc->master_params.midi_system != SS_SYSTEM_XG) break;
-				int channel_idx = (int)xg_addr2;
-				if(channel_idx < 0 || channel_idx >= proc->channel_count) break;
-				SS_MIDIChannel *mch = proc->midi_channels[channel_idx];
-				double t = proc->current_synth_time;
-
-				switch(xg_addr3) {
-					case 0x01: /* Bank select MSB (CC0) */
-						ss_channel_controller(mch, SS_MIDCON_BANK_SELECT, (int)xg_val, t);
-						break;
-					case 0x02: /* Bank select LSB (CC32) */
-						ss_channel_controller(mch, SS_MIDCON_BANK_SELECT_LSB, (int)xg_val, t);
-						break;
-					case 0x03: /* Program change */
-						ss_channel_program_change(mch, (int)xg_val);
-						break;
-					case 0x04: /* Rx. channel */
-						mch->rx_channel = (int)xg_val;
-						if(mch->rx_channel != mch->channel_number)
-							proc->custom_channel_numbers = true;
-						break;
-					case 0x05: /* Poly/mono mode */
-						mch->poly_mode = (xg_val == 1);
-						break;
-					case 0x07: /* Part mode (0=normal, else=drum) */
-						mch->drum_channel = (xg_val != 0);
-						proc_emit(proc, SS_EVENT_DRUM_CHANGE, channel_idx, (int)mch->drum_channel, 0);
-						break;
-					case 0x08: /* Note shift (key shift) — ignore on drum channels */
-						if(!mch->drum_channel) {
-							ss_channel_set_custom_controller(mch, SS_CUSTOM_CTRL_KEY_SHIFT, (float)((int)xg_val - 64));
-						}
-						break;
-					case 0x0b: /* Volume (CC7) */
-						ss_channel_controller(mch, SS_MIDCON_MAIN_VOLUME, (int)xg_val, t);
-						break;
-					case 0x0e: /* Pan (0=random) */
-						if(xg_val == 0) {
-							mch->random_pan = true;
-						} else {
-							mch->random_pan = false;
-							ss_channel_controller(mch, SS_MIDCON_PAN, (int)xg_val, t);
-						}
-						break;
-					case 0x12: /* Chorus send (CC93) */
-						ss_channel_controller(mch, SS_MIDCON_CHORUS_DEPTH, (int)xg_val, t);
-						break;
-					case 0x13: /* Reverb send (CC91) */
-						ss_channel_controller(mch, SS_MIDCON_REVERB_DEPTH, (int)xg_val, t);
-						break;
-					case 0x15: /* Vibrato rate (CC76) */
-						ss_channel_controller(mch, SS_MIDCON_VIBRATO_RATE, (int)xg_val, t);
-						break;
-					case 0x16: /* Vibrato depth (CC77) */
-						ss_channel_controller(mch, SS_MIDCON_VIBRATO_DEPTH, (int)xg_val, t);
-						break;
-					case 0x17: /* Vibrato delay (CC78) */
-						ss_channel_controller(mch, SS_MIDCON_VIBRATO_DELAY, (int)xg_val, t);
-						break;
-					case 0x18: /* Filter cutoff (CC74) */
-						ss_channel_controller(mch, SS_MIDCON_BRIGHTNESS, (int)xg_val, t);
-						break;
-					case 0x19: /* Filter resonance (CC71) */
-						ss_channel_controller(mch, SS_MIDCON_FILTER_RESONANCE, (int)xg_val, t);
-						break;
-					case 0x1a: /* Attack time (CC73) */
-						ss_channel_controller(mch, SS_MIDCON_ATTACK_TIME, (int)xg_val, t);
-						break;
-					case 0x1b: /* Decay time (CC75) */
-						ss_channel_controller(mch, SS_MIDCON_DECAY_TIME, (int)xg_val, t);
-						break;
-					case 0x1c: /* Release time (CC72) */
-						ss_channel_controller(mch, SS_MIDCON_RELEASE_TIME, (int)xg_val, t);
-						break;
-					default:
-						break;
-				}
-				break;
-			}
-
-			/* XG Drum setup (addr1 high nibble = 3, e.g. 0x30-0x3F) */
-			if((xg_addr1 >> 4) == 3) {
-				if(proc->master_params.midi_system != SS_SYSTEM_XG) break;
-				uint8_t drum_key = xg_addr2;
-				/* Apply to all drum channels */
-				for(int ci = 0; ci < proc->channel_count; ci++) {
-					SS_MIDIChannel *mch = proc->midi_channels[ci];
-					if(!mch || !mch->drum_channel) continue;
-					switch(xg_addr3) {
-						case 0x00: /* Drum pitch coarse */
-							mch->drum_params[drum_key].pitch = (float)((int)xg_val - 64) * 100.0f;
-							break;
-						case 0x01: /* Drum pitch fine */
-							mch->drum_params[drum_key].pitch += (float)((int)xg_val - 64);
-							break;
-						case 0x02: /* Drum level */
-							mch->drum_params[drum_key].gain = (float)xg_val / 120.0f;
-							break;
-						case 0x03: /* Drum alternate group (exclusive class) */
-							mch->drum_params[drum_key].exclusive_class = xg_val;
-							break;
-						case 0x04: /* Drum pan */
-							mch->drum_params[drum_key].pan = xg_val;
-							break;
-						case 0x05: /* Drum reverb send */
-							mch->drum_params[drum_key].reverb_gain = (float)xg_val / 127.0f;
-							break;
-						case 0x06: /* Drum chorus send */
-							mch->drum_params[drum_key].chorus_gain = (float)xg_val / 127.0f;
-							break;
-						case 0x09: /* Receive note off */
-							mch->drum_params[drum_key].rx_note_off = (xg_val == 1);
-							break;
-						case 0x0a: /* Receive note on */
-							mch->drum_params[drum_key].rx_note_on = (xg_val == 1);
-							break;
-						default:
-							break;
-					}
-				}
-				break;
-			}
+		/* ── Port select (Falcosoft MIDI Player) ──────────────────────────── */
+		/* https://www.vogons.org/viewtopic.php?p=1404746#p1404746 */
+		case 0xf5: {
+			if(len < 2) return;
+			proc->port_select_channel_offset = (data[1] - 1) * 16;
 			break;
 		}
 	}
