@@ -707,6 +707,73 @@ static bool parse_wave_pool(SS_File *waves_file,
                             SS_SoundBank *bank,
                             bool riff64);
 
+/* ── Per-instrument parse state (used by pgal aliasing too) ──────────────── */
+typedef struct {
+	uint32_t bank_msb;
+	uint32_t bank_lsb;
+	uint32_t patch;
+	bool is_drum;
+	SS_BasicInstrument *inst;
+	DLS_ArtBuf global_art;
+	DLS_ZoneExtra *zone_extras;
+	size_t zone_extra_count;
+	size_t zone_extra_cap;
+} DLS_InstrEntry;
+
+/* ── Deep copy helpers for pgal aliasing ─────────────────────────────────── */
+
+static bool art_buf_clone(const DLS_ArtBuf *src, DLS_ArtBuf *dst) {
+	memset(dst, 0, sizeof(*dst));
+	dst->dls1 = src->dls1;
+	if(src->count == 0) return true;
+	dst->blocks = (DLS_ConnBlock *)malloc(src->count * sizeof(DLS_ConnBlock));
+	if(!dst->blocks) return false;
+	memcpy(dst->blocks, src->blocks, src->count * sizeof(DLS_ConnBlock));
+	dst->count = src->count;
+	dst->cap = src->count;
+	return true;
+}
+
+static bool zone_deep_clone(const SS_Zone *src, SS_Zone *dst) {
+	memset(dst, 0, sizeof(*dst));
+	dst->key_range_min = src->key_range_min;
+	dst->key_range_max = src->key_range_max;
+	dst->vel_range_min = src->vel_range_min;
+	dst->vel_range_max = src->vel_range_max;
+	if(src->gen_count > 0) {
+		dst->generators = (SS_Generator *)malloc(src->gen_count * sizeof(SS_Generator));
+		if(!dst->generators) return false;
+		memcpy(dst->generators, src->generators, src->gen_count * sizeof(SS_Generator));
+		dst->gen_count = src->gen_count;
+	}
+	if(src->mod_count > 0) {
+		dst->modulators = (SS_Modulator *)malloc(src->mod_count * sizeof(SS_Modulator));
+		if(!dst->modulators) {
+			free(dst->generators);
+			dst->generators = NULL;
+			return false;
+		}
+		memcpy(dst->modulators, src->modulators, src->mod_count * sizeof(SS_Modulator));
+		dst->mod_count = src->mod_count;
+	}
+	return true;
+}
+
+static bool zone_extra_clone(const DLS_ZoneExtra *src, DLS_ZoneExtra *dst) {
+	memset(dst, 0, sizeof(*dst));
+	dst->wsmp_fine_tune = src->wsmp_fine_tune;
+	dst->has_wsmp_fine_tune = src->has_wsmp_fine_tune;
+	dst->wsmp_gain = src->wsmp_gain;
+	dst->has_wsmp_gain = src->has_wsmp_gain;
+	dst->wsmp_loop_start = src->wsmp_loop_start;
+	dst->wsmp_loop_length = src->wsmp_loop_length;
+	dst->wsmp_loop_type = src->wsmp_loop_type;
+	dst->has_wsmp_loop = src->has_wsmp_loop;
+	dst->wsmp_unity_note = src->wsmp_unity_note;
+	dst->has_wsmp_unity_note = src->has_wsmp_unity_note;
+	return art_buf_clone(&src->art, &dst->art);
+}
+
 /* ── Main DLS loader ─────────────────────────────────────────────────────── */
 
 SS_SoundBank *ss_dls_load(SS_File *main_file, bool riff64) {
@@ -730,21 +797,10 @@ SS_SoundBank *ss_dls_load(SS_File *main_file, bool riff64) {
 	SS_File *waves_file = NULL;
 	bool has_waves = false;
 
-	/* Temporary per-instrument storage */
-	typedef struct {
-		uint32_t bank_msb;
-		uint32_t bank_lsb;
-		uint32_t patch;
-		bool is_drum;
-		SS_BasicInstrument *inst;
-		DLS_ArtBuf global_art;
-		DLS_ZoneExtra *zone_extras;
-		size_t zone_extra_count;
-		size_t zone_extra_cap;
-	} DLS_InstrEntry;
-
 	DLS_InstrEntry *instr_entries = NULL;
 	size_t instr_count = 0, instr_cap = 0;
+	SS_File *pgal_file = NULL;
+	size_t pgal_size = 0;
 
 	while(ss_file_remaining(main_file) >= 4 + size_size) {
 		SS_RIFFChunk chunk;
@@ -760,6 +816,14 @@ SS_SoundBank *ss_dls_load(SS_File *main_file, bool riff64) {
 			pos += 4;
 			for(uint32_t i = 0; i < cCues; i++, pos += 4)
 				pool_offsets[i] = (uint32_t)ss_file_read_le(chunk.file, pos, 4);
+
+		} else if(strcmp(chunk.header, "pgal") == 0) {
+			/* Proprietary MobileBAE instrument aliasing chunk.
+			 * https://lpcwiki.miraheze.org/wiki/MobileBAE#Proprietary_instrument_aliasing_chunk
+			 * Deferred until all instruments have been parsed. */
+			pgal_file = chunk.file;
+			pgal_size = chunk.size;
+			chunk.file = NULL;
 
 		} else if(strcmp(chunk.header, "LIST") == 0) {
 			char list_id[5];
@@ -980,6 +1044,271 @@ SS_SoundBank *ss_dls_load(SS_File *main_file, bool riff64) {
 	if(has_waves && pool_offsets)
 		parse_wave_pool(waves_file, pool_offsets, pool_count, bank, riff64);
 
+	/* ── MobileBAE 'pgal' instrument aliasing ────────────────────────────── */
+	/*
+	 * Proprietary chunk used by MobileBAE-era DLS banks to alias existing
+	 * instruments under additional bank/program numbers, and to alias drum
+	 * notes to other drum notes within the drum kit.
+	 *
+	 * Layout:
+	 *   [0..3]  Optional signature "\0\x01\x02\x03". Some files lack it.
+	 *   [4..131]  128 drum alias bytes: drum key K is an alias of key A[K].
+	 *   [132..135]  4 bytes of unknown purpose ("footer").
+	 *   Repeated 8-byte records until EOF:
+	 *     0..1  alias bank (u16 LE; upper 7 bits = MSB, lower 7 bits = LSB)
+	 *     2     alias program
+	 *     3     reserved (0)
+	 *     4..5  input bank
+	 *     6     input program
+	 *     7     reserved (0)
+	 */
+	if(pgal_file && instr_count > 0) {
+		size_t pos = 0;
+		const size_t pgal_end = pgal_size;
+		uint8_t sig[4] = { 0 };
+		if(pgal_end >= 4) {
+			for(int i = 0; i < 4; i++)
+				sig[i] = ss_file_read_u8(pgal_file, i);
+			/* Skip the marker 00 01 02 03 when present */
+			if(sig[0] == 0 && sig[1] == 1 && sig[2] == 2 && sig[3] == 3)
+				pos = 4;
+		}
+
+		/* Locate a drum instrument entry (XG drums MSB=120/127 or GM/GS drums) */
+		DLS_InstrEntry *drum_entry = NULL;
+		for(size_t i = 0; i < instr_count; i++) {
+			DLS_InstrEntry *e = &instr_entries[i];
+			bool is_xg = (e->bank_msb == 120 || e->bank_msb == 127);
+			if(is_xg || e->is_drum) {
+				drum_entry = e;
+				break;
+			}
+		}
+
+		/* Drum alias table — 128 bytes, one per MIDI key */
+		if(pos + 128 > pgal_end || !drum_entry) {
+			/* Missing drum target or truncated table: abort aliasing */
+			goto pgal_done;
+		}
+
+		uint8_t drum_aliases[128];
+		for(int i = 0; i < 128; i++)
+			drum_aliases[i] = ss_file_read_u8(pgal_file, pos + i);
+		pos += 128;
+
+		for(int key = 0; key < 128; key++) {
+			uint8_t alias = drum_aliases[key];
+			if(alias == key) continue;
+
+			/* Find the source region — a zone whose key range is exactly [alias, alias]. */
+			SS_BasicInstrument *di = drum_entry->inst;
+			size_t src_zone_idx = (size_t)-1;
+			for(size_t z = 0; z < di->zone_count; z++) {
+				if(di->zones[z].base.key_range_min == (int8_t)alias &&
+				   di->zones[z].base.key_range_max == (int8_t)alias) {
+					src_zone_idx = z;
+					break;
+				}
+			}
+			if(src_zone_idx == (size_t)-1) continue;
+
+			/* Grow the zones array */
+			size_t new_count = di->zone_count + 1;
+			SS_InstrumentZone *nz = (SS_InstrumentZone *)realloc(
+			di->zones, new_count * sizeof(SS_InstrumentZone));
+			if(!nz) continue;
+			di->zones = nz;
+
+			/* Grow zone_extras in lockstep */
+			if(drum_entry->zone_extra_count >= drum_entry->zone_extra_cap) {
+				size_t nc = drum_entry->zone_extra_cap ? drum_entry->zone_extra_cap * 2 : 8;
+				while(nc < new_count) nc *= 2;
+				DLS_ZoneExtra *te = (DLS_ZoneExtra *)realloc(
+				drum_entry->zone_extras, nc * sizeof(DLS_ZoneExtra));
+				if(!te) continue;
+				drum_entry->zone_extras = te;
+				drum_entry->zone_extra_cap = nc;
+			}
+
+			/* Deep-copy the source zone (realloc may have moved di->zones) */
+			SS_InstrumentZone *src_z = &di->zones[src_zone_idx];
+			SS_InstrumentZone *dst_z = &di->zones[di->zone_count];
+			memset(dst_z, 0, sizeof(*dst_z));
+			if(!zone_deep_clone(&src_z->base, &dst_z->base)) continue;
+			/* Preserve the encoded wave-index pointer */
+			dst_z->sample = src_z->sample;
+			/* Remap key range to the aliased key */
+			dst_z->base.key_range_min = (int8_t)key;
+			dst_z->base.key_range_max = (int8_t)key;
+
+			/* Clone zone_extra for the new zone */
+			DLS_ZoneExtra *src_extra =
+			(drum_entry->zone_extras && src_zone_idx < drum_entry->zone_extra_count) ? &drum_entry->zone_extras[src_zone_idx] : NULL;
+			DLS_ZoneExtra *dst_extra = &drum_entry->zone_extras[di->zone_count];
+			if(src_extra) {
+				if(!zone_extra_clone(src_extra, dst_extra)) {
+					ss_zone_free(&dst_z->base);
+					continue;
+				}
+			} else {
+				zone_extra_init(dst_extra);
+			}
+
+			di->zone_count = new_count;
+			drum_entry->zone_extra_count = new_count;
+		}
+
+		/* Skip 4-byte "footer" of unknown purpose */
+		if(pos + 4 > pgal_end) goto pgal_done;
+		pos += 4;
+
+		/* Instrument alias records (8 bytes each) until EOF */
+		while(pos + 8 <= pgal_end) {
+			uint32_t alias_bank = (uint32_t)ss_file_read_le(pgal_file, pos, 2);
+			uint32_t alias_lsb = alias_bank & 0x7F;
+			uint32_t alias_msb = (alias_bank >> 7) & 0x7F;
+			uint32_t alias_prog = ss_file_read_u8(pgal_file, pos + 2);
+			/* pgal_file[pos + 3] should be 0 */
+			uint32_t input_bank = (uint32_t)ss_file_read_le(pgal_file, pos + 4, 2);
+			uint32_t input_lsb = input_bank & 0x7F;
+			uint32_t input_msb = (input_bank >> 7) & 0x7F;
+			uint32_t input_prog = ss_file_read_u8(pgal_file, pos + 6);
+			/* pgal_file[pos + 7] should be 0 */
+			pos += 8;
+
+			/* Find the input (source) instrument entry — non-drum match */
+			DLS_InstrEntry *src_entry = NULL;
+			for(size_t i = 0; i < instr_count; i++) {
+				DLS_InstrEntry *e = &instr_entries[i];
+				if(e->bank_msb == input_msb && e->bank_lsb == input_lsb &&
+				   e->patch == input_prog && !e->is_drum) {
+					src_entry = e;
+					break;
+				}
+			}
+			if(!src_entry || !src_entry->inst) continue;
+
+			/* Grow instr_entries */
+			if(instr_count >= instr_cap) {
+				size_t nc = instr_cap ? instr_cap * 2 : 16;
+				DLS_InstrEntry *tmp = (DLS_InstrEntry *)realloc(
+				instr_entries, nc * sizeof(DLS_InstrEntry));
+				if(!tmp) break;
+				instr_entries = tmp;
+				instr_cap = nc;
+				/* src_entry pointer may have been invalidated — relocate it */
+				for(size_t i = 0; i < instr_count; i++) {
+					DLS_InstrEntry *e = &instr_entries[i];
+					if(e->bank_msb == input_msb && e->bank_lsb == input_lsb &&
+					   e->patch == input_prog && !e->is_drum) {
+						src_entry = e;
+						break;
+					}
+				}
+			}
+
+			/* Deep-clone src_entry into a new entry */
+			SS_BasicInstrument *src_inst = src_entry->inst;
+			SS_BasicInstrument *new_inst = (SS_BasicInstrument *)calloc(
+			1, sizeof(SS_BasicInstrument));
+			if(!new_inst) continue;
+			strncpy(new_inst->name, src_inst->name, sizeof(new_inst->name) - 1);
+
+			/* Clone global_zone */
+			if(!zone_deep_clone(&src_inst->global_zone, &new_inst->global_zone)) {
+				free(new_inst);
+				continue;
+			}
+
+			/* Clone zones */
+			if(src_inst->zone_count > 0) {
+				new_inst->zones = (SS_InstrumentZone *)calloc(
+				src_inst->zone_count, sizeof(SS_InstrumentZone));
+				if(!new_inst->zones) {
+					ss_zone_free(&new_inst->global_zone);
+					free(new_inst);
+					continue;
+				}
+				bool ok = true;
+				for(size_t z = 0; z < src_inst->zone_count; z++) {
+					SS_InstrumentZone *sz = &src_inst->zones[z];
+					SS_InstrumentZone *dz = &new_inst->zones[z];
+					if(!zone_deep_clone(&sz->base, &dz->base)) {
+						ok = false;
+						break;
+					}
+					/* Preserve encoded wave-index pointer */
+					dz->sample = sz->sample;
+					new_inst->zone_count = z + 1;
+				}
+				if(!ok) {
+					for(size_t z = 0; z < new_inst->zone_count; z++)
+						ss_zone_free(&new_inst->zones[z].base);
+					free(new_inst->zones);
+					ss_zone_free(&new_inst->global_zone);
+					free(new_inst);
+					continue;
+				}
+			}
+
+			/* Populate the new entry */
+			DLS_InstrEntry *new_entry = &instr_entries[instr_count];
+			memset(new_entry, 0, sizeof(*new_entry));
+			new_entry->bank_msb = alias_msb;
+			new_entry->bank_lsb = alias_lsb;
+			new_entry->patch = alias_prog;
+			new_entry->is_drum = false;
+			new_entry->inst = new_inst;
+
+			/* Clone global_art */
+			bool entry_ok = art_buf_clone(&src_entry->global_art,
+			                              &new_entry->global_art);
+
+			/* Clone zone_extras */
+			if(entry_ok && src_entry->zone_extra_count > 0) {
+				new_entry->zone_extras = (DLS_ZoneExtra *)calloc(
+				src_entry->zone_extra_count, sizeof(DLS_ZoneExtra));
+				if(!new_entry->zone_extras) {
+					entry_ok = false;
+				} else {
+					for(size_t z = 0; z < src_entry->zone_extra_count; z++) {
+						if(!zone_extra_clone(&src_entry->zone_extras[z],
+						                     &new_entry->zone_extras[z])) {
+							entry_ok = false;
+							break;
+						}
+						new_entry->zone_extra_count = z + 1;
+					}
+					new_entry->zone_extra_cap = src_entry->zone_extra_count;
+				}
+			}
+
+			if(!entry_ok) {
+				/* Unwind partial entry; zones hold fake wave-index pointers
+				 * so we must clear them before freeing the instrument. */
+				for(size_t z = 0; z < new_inst->zone_count; z++)
+					new_inst->zones[z].sample = NULL;
+				ss_instrument_free(new_inst);
+				free(new_inst);
+				if(new_entry->zone_extras) {
+					for(size_t z = 0; z < new_entry->zone_extra_count; z++)
+						zone_extra_free(&new_entry->zone_extras[z]);
+					free(new_entry->zone_extras);
+				}
+				art_buf_free(&new_entry->global_art);
+				memset(new_entry, 0, sizeof(*new_entry));
+				continue;
+			}
+
+			instr_count++;
+		}
+	pgal_done:;
+	}
+	if(pgal_file) {
+		ss_file_close(pgal_file);
+		pgal_file = NULL;
+	}
+
 	/* ── Build presets from instrument entries ───────────────────────────── */
 	bank->instruments = (SS_BasicInstrument *)calloc(instr_count, sizeof(SS_BasicInstrument));
 	bank->instrument_count = instr_count;
@@ -1162,6 +1491,7 @@ fail:
 		free(instr_entries);
 	}
 	free(pool_offsets);
+	if(pgal_file) ss_file_close(pgal_file);
 	ss_soundbank_free(bank);
 	return NULL;
 }
