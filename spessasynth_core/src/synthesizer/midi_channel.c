@@ -195,7 +195,7 @@ static void reset_controllers_rp15_compliant(SS_MIDIChannel *ch, double time) {
 }
 
 static inline float drum_params_reverb(int note) {
-	if(note == 35 || note == 36)
+	if(note == 35 || note == 36) /* Kicks have no reverb */
 		return 0.0;
 	else
 		return 1.0;
@@ -242,6 +242,7 @@ static void reset_controllers_to_defaults(SS_MIDIChannel *ch) {
 				ss_channel_controller(ch, cc, reset_value >> 7, 0);
 			}
 		} else {
+			/* Out of range, do a regular reset */
 			ch->midi_controllers[cc] = reset_value;
 		}
 	}
