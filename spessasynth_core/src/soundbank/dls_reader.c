@@ -249,6 +249,14 @@ static uint16_t make_modsrc(SS_ModulatorCurveType curve, bool bipolar,
 	                  idx);
 }
 
+static void zone_add_mod_struct(SS_Zone *z, const SS_Modulator *mod) {
+	SS_Modulator *tmp = (SS_Modulator *)realloc(z->modulators,
+	                                            (z->mod_count + 1) * sizeof(SS_Modulator));
+	if(!tmp) return;
+	z->modulators = tmp;
+	z->modulators[z->mod_count++] = *mod;
+}
+
 static void zone_add_mod(SS_Zone *z, uint16_t src, uint16_t ctrl,
                          SS_GeneratorType dest, int16_t amount) {
 	SS_Modulator *tmp = (SS_Modulator *)realloc(z->modulators,
@@ -264,6 +272,20 @@ static void zone_add_mod(SS_Zone *z, uint16_t src, uint16_t ctrl,
 }
 
 /* ── DLS source → SF2 modulator source word ─────────────────────────────── */
+
+static const SS_Modulator DEFAULT_DLS_REVERB = MODULATOR(
+0x00db,
+0x0,
+SS_GEN_REVERB_EFFECTS_SEND,
+1000,
+0);
+
+static const SS_Modulator DEFAULT_DLS_CHORUS = MODULATOR(
+0x00dd,
+0x0,
+SS_GEN_CHORUS_EFFECTS_SEND,
+1000,
+0);
 
 /* Returns 0xFFFF if the source cannot be converted. */
 static uint16_t dls_src_to_sf2(uint16_t us_src, SS_DLSTransform transform,
@@ -1001,18 +1023,10 @@ SS_SoundBank *ss_dls_load(SS_File *main_file, bool riff64) {
 		 *             = 0x0180 | idx
 		 */
 		if(!has_reverb_mod) {
-			uint16_t src = make_modsrc(SS_MODCURVE_LINEAR, false, true, true, 91);
-			uint16_t no_ctrl = make_modsrc(SS_MODCURVE_LINEAR, false, false, false,
-			                               SS_MODSRC_NO_CONTROLLER);
-			zone_add_mod(&inst->global_zone, src, no_ctrl,
-			             SS_GEN_REVERB_EFFECTS_SEND, 1000);
+			zone_add_mod_struct(&inst->global_zone, &DEFAULT_DLS_REVERB);
 		}
 		if(!has_chorus_mod) {
-			uint16_t src = make_modsrc(SS_MODCURVE_LINEAR, false, true, true, 93);
-			uint16_t no_ctrl = make_modsrc(SS_MODCURVE_LINEAR, false, false, false,
-			                               SS_MODSRC_NO_CONTROLLER);
-			zone_add_mod(&inst->global_zone, src, no_ctrl,
-			             SS_GEN_CHORUS_EFFECTS_SEND, 1000);
+			zone_add_mod_struct(&inst->global_zone, &DEFAULT_DLS_CHORUS);
 		}
 
 		/* Resolve sample pointers and apply per-zone wsmp + articulation */
