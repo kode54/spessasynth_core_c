@@ -37,6 +37,18 @@ static int effective_channel(const SS_MIDIFile *midi,
 	return ch + midi->port_channel_offset_map[port];
 }
 
+/** Compute the effective port for a sysex message. */
+static int effective_port(const SS_MIDIFile *midi,
+                          const SS_MIDIMessage *e) {
+	if(!midi->is_multi_port || !midi->port_channel_offset_map) return 0;
+	size_t ti = e->track_index;
+	if(ti >= midi->track_count) return 0;
+	int port = midi->tracks[ti].port;
+	if(port < 0) return 0;
+	if((size_t)port >= midi->port_channel_offset_map_count) return 0;
+	return midi->port_channel_offset_map[port] / 16;
+}
+
 /* ── Embedded RMIDI soundbank (load/unload into processor) ───────────────── */
 
 #define SS_SEQ_EMBEDDED_BANK_ID "embeddedBank"
@@ -249,6 +261,11 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 		if(sb >= 0x80 && sb < 0xF0 && seq->proc) {
 			uint8_t type = sb & 0xF0;
 			int ch = effective_channel(midi, e);
+			uint8_t syx[2];
+			syx[0] = 0xf5;
+			syx[1] = (ch >> 4) + 1;
+			ss_processor_sysex(seq->proc, syx, 2, ev_time);
+			ch &= 0xf;
 			switch(type) {
 				case 0xB0: /* CC */
 					if(e->data_length >= 2)
@@ -270,6 +287,11 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 					/* Notes are skipped during seek */
 			}
 		} else if(sb == 0xF0 && seq->proc && e->data_length > 0) {
+			int port = effective_port(midi, e);
+			uint8_t syx[2];
+			syx[0] = 0xf5;
+			syx[1] = port + 1;
+			ss_processor_sysex(seq->proc, syx, 2, ev_time);
 			ss_processor_sysex(seq->proc, e->data, e->data_length, ev_time);
 		}
 	}
@@ -299,6 +321,11 @@ static void process_event(SS_Sequencer *seq, SS_MIDIFile *midi,
 	if(sb >= 0x80 && sb < 0xF0) {
 		uint8_t type = sb & 0xF0;
 		int ch = effective_channel(midi, e);
+		uint8_t syx[2];
+		syx[0] = 0xf5;
+		syx[1] = (ch >> 4) + 1;
+		ss_processor_sysex(seq->proc, syx, 2, t);
+		ch &= 0xf;
 		switch(type) {
 			case 0x90: /* note on */
 				if(e->data_length >= 2) {
@@ -339,6 +366,11 @@ static void process_event(SS_Sequencer *seq, SS_MIDIFile *midi,
 
 	/* SysEx */
 	if(sb == 0xF0 && e->data_length > 0) {
+		int port = effective_port(midi, e);
+		uint8_t syx[2];
+		syx[0] = 0xf5;
+		syx[1] = port + 1;
+		ss_processor_sysex(seq->proc, syx, 2, t);
 		ss_processor_sysex(seq->proc, e->data, e->data_length, t);
 		return;
 	}
