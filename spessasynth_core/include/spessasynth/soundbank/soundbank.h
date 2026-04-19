@@ -36,6 +36,7 @@ typedef struct {
 } SS_Modulator;
 
 SS_Modulator ss_modulator_copy(const SS_Modulator *src);
+bool ss_modulator_is_identical(const SS_Modulator *a, const SS_Modulator *b);
 
 /* ── Generator ────────────────────────────────────────────────────────────── */
 

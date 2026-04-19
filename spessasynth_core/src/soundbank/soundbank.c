@@ -605,7 +605,7 @@ void ss_synthesis_data_free_array(SS_SynthesisData *data, size_t count) {
 
 /* Returns true if two modulators are identical (same sources, dest, transform type).
  * Does not compare transform_amount — used for SF2 spec §9.5 summing. */
-static bool mod_is_identical(const SS_Modulator *a, const SS_Modulator *b) {
+bool ss_modulator_is_identical(const SS_Modulator *a, const SS_Modulator *b) {
 	return a->source_enum == b->source_enum &&
 	       a->amount_source_enum == b->amount_source_enum &&
 	       a->dest_enum == b->dest_enum &&
@@ -681,7 +681,7 @@ size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
 				const SS_Modulator *gm = &preset->global_zone.modulators[m];
 				bool found = false;
 				for(size_t k = 0; k < preset_mod_count; k++) {
-					if(mod_is_identical(&preset_mods[k], gm)) {
+					if(ss_modulator_is_identical(&preset_mods[k], gm)) {
 						found = true;
 						break;
 					}
@@ -766,7 +766,7 @@ size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
 					const SS_Modulator *gm = &inst->global_zone.modulators[m];
 					bool found = false;
 					for(size_t k = 0; k < sd->mod_count; k++) {
-						if(mod_is_identical(&sd->modulators[k], gm)) {
+						if(ss_modulator_is_identical(&sd->modulators[k], gm)) {
 							found = true;
 							break;
 						}
@@ -779,7 +779,7 @@ size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
 					const SS_Modulator *dm = &def_mods[m];
 					bool found = false;
 					for(size_t k = 0; k < sd->mod_count; k++) {
-						if(mod_is_identical(&sd->modulators[k], dm)) {
+						if(ss_modulator_is_identical(&sd->modulators[k], dm)) {
 							found = true;
 							break;
 						}
@@ -792,7 +792,7 @@ size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
 					const SS_Modulator *pm = &preset_mods[m];
 					size_t match = sd->mod_count;
 					for(size_t k = 0; k < sd->mod_count; k++) {
-						if(mod_is_identical(&sd->modulators[k], pm)) {
+						if(ss_modulator_is_identical(&sd->modulators[k], pm)) {
 							match = k;
 							break;
 						}
