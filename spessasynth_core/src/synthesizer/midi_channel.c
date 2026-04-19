@@ -164,7 +164,7 @@ static const int16_t default_controller_values[SS_MIDI_CONTROLLER_COUNT] = {
 enum { PORTAMENTO_CONTROL_UNSET = 1 };
 
 static const float custom_reset_array[SS_CUSTOM_CTRL_COUNT] = {
-	[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] = 1
+	[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] = 1.0
 };
 
 static void reset_vibrato_params(SS_MIDIChannel *ch) {

@@ -284,7 +284,7 @@ static float get_source_value(const SS_MIDIChannel *ch, const SS_Voice *v,
 	return ss_modcurve_get_value(transform, (SS_ModulatorCurveType)curve, raw);
 }
 
-static const float EFFECT_MODULATOR_TRANSFORM_MULTIPLIER = 1000 / 200;
+static const float EFFECT_MODULATOR_TRANSFORM_MULTIPLIER = 1000.0 / 200.0;
 
 void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch,
                                  double time) {
