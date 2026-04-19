@@ -1013,7 +1013,7 @@ static void ss_channel_data_entry_fine(SS_MIDIChannel *ch, int val, double time)
 			/* SF2 and GS NRPN don't use lsb (but sometimes these are still sent!) */
 			if(param_coarse == SS_NRPN_MSB_SF2 ||
 			   (param_coarse >= SS_NRPN_GS_MSB_DRUM_FILTER_CUTOFF &&
-			    param_fine <= SS_NRPN_GS_MSB_DRUM_DELAY_SEND) ||
+			    param_coarse <= SS_NRPN_GS_MSB_DRUM_DELAY_SEND) ||
 			   param_coarse == SS_NRPN_MSB_PART_PARAMETER) {
 				return;
 			}
