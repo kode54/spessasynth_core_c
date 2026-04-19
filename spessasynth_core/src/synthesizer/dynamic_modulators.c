@@ -66,11 +66,11 @@ void ss_dynamic_modulator_system_free(SS_DynamicModulatorSystem *dms) {
 	dms->modulators = NULL;
 }
 
-static signed long find_modulator(SS_DynamicModulatorSystem *dms, uint16_t source,
+static signed long find_modulator(SS_DynamicModulatorSystem *dms, uint16_t source_enum,
                               uint16_t destination, bool is_bipolar, bool is_negative) {
 	for(size_t i = 0; i < dms->modulator_count; i++) {
 		SS_DynamicModulatorSystem_Modulator *mod = &dms->modulators[i];
-		if(mod->source == source && mod->destination == destination &&
+		if(mod->source == source_enum && mod->destination == destination &&
 		   mod->is_bipolar == is_bipolar && mod->is_negative == is_negative) {
 			return (signed long)i;
 		}
@@ -92,7 +92,17 @@ static void delete_modulator(SS_DynamicModulatorSystem *dms, signed long id) {
 static void set_modulator(SS_DynamicModulatorSystem *dms,
                           uint16_t source, uint16_t destination,
                           int16_t amount, bool is_bipolar) {
-	signed long id = find_modulator(dms, source, destination, is_bipolar, false);
+	uint16_t srcNum;
+	bool isCC;
+	if(source >= NON_CC_INDEX_OFFSET) {
+		srcNum = source - NON_CC_INDEX_OFFSET;
+		isCC = false;
+	} else {
+		srcNum = source;
+		isCC = true;
+	}
+	const uint16_t source_enum = MODSRC(SS_MODCURVE_LINEAR, is_bipolar, false, isCC, srcNum);
+	signed long id = find_modulator(dms, source_enum, destination, is_bipolar, false);
 	if(amount == 0) {
 		delete_modulator(dms, id);
 		return;
@@ -101,16 +111,7 @@ static void set_modulator(SS_DynamicModulatorSystem *dms,
 		SS_DynamicModulatorSystem_Modulator *mod = &dms->modulators[id];
 		mod->modulator.transform_amount = amount;
 	} else {
-		uint16_t srcNum;
-		bool isCC;
-		if(source >= NON_CC_INDEX_OFFSET) {
-			srcNum = source - NON_CC_INDEX_OFFSET;
-			isCC = false;
-		} else {
-			srcNum = source;
-			isCC = true;
-		}
-		SS_Modulator mod = MODULATOR(MODSRC(SS_MODCURVE_LINEAR, false, is_bipolar, isCC, srcNum), 0x0, destination, amount, 0);
+		SS_Modulator mod = MODULATOR(source_enum, 0x0, destination, amount, 0);
 		add_modulator(dms, &mod);
 	}
 }
