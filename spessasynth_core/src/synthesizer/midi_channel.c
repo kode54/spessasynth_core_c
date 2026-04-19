@@ -188,11 +188,7 @@ static void reset_controllers_rp15_compliant(SS_MIDIChannel *ch, double time) {
 		}
 	}
 
-	memset(ch->channel_octave_tuning, 0, sizeof(ch->channel_octave_tuning));
-
 	ss_channel_pitch_wheel(ch, 8192, -1, time);
-
-	reset_vibrato_params(ch);
 
 	reset_generator_overrides(ch);
 	reset_generator_offsets(ch);
