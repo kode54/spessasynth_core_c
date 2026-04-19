@@ -132,7 +132,7 @@ static bool non_resettable_controllers[128] = {
 };
 
 /* Values come from Falcosoft MidiPlayer 6 */
-static const int16_t default_controller_values[128] = {
+static const int16_t default_controller_values[SS_MIDI_CONTROLLER_COUNT] = {
 	[SS_MIDCON_MAIN_VOLUME] = 100 << 7,
 	[SS_MIDCON_BALANCE] = 64 << 7,
 	[SS_MIDCON_EXPRESSION] = 127 << 7,
@@ -155,7 +155,10 @@ static const int16_t default_controller_values[128] = {
 	[SS_MIDCON_RPN_LSB] = 127 << 7,
 	[SS_MIDCON_RPN_MSB] = 127 << 7,
 	[SS_MIDCON_NRPN_LSB] = 127 << 7,
-	[SS_MIDCON_NRPN_MSB] = 127 << 7
+	[SS_MIDCON_NRPN_MSB] = 127 << 7,
+
+	[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL] = 64 << 7,
+	[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = 2 << 7
 };
 
 enum { PORTAMENTO_CONTROL_UNSET = 1 };
@@ -231,7 +234,7 @@ static void reset_portamento(SS_MIDIChannel *ch) {
 
 /* Default controller values per SF2 spec */
 static void reset_controllers_to_defaults(SS_MIDIChannel *ch) {
-	for(int cc = 0; cc < 128; cc++) {
+	for(int cc = 0; cc < SS_MIDI_CONTROLLER_COUNT; cc++) {
 		const int16_t reset_value = default_controller_values[cc];
 		if(ch->midi_controllers[cc] != reset_value && cc < 127) {
 			if(cc != SS_MIDCON_PORTAMENTO_CONTROL &&
