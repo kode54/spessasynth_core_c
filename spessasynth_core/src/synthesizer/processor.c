@@ -407,9 +407,9 @@ void ss_processor_channel_pressure(SS_Processor *proc, int ch, int pressure, dou
 	ch += proc->port_select_channel_offset;
 	if(ch < 0 || ch >= proc->channel_count) return;
 	/* Store channel pressure in a dedicated controller slot above CC127.
-	 * Our midi_channel uses index 128 (NON_CC_INDEX_OFFSET + channelPressure). */
+	 * 14-bit value at NON_CC_INDEX_OFFSET + SS_MODSRC_CHANNEL_PRESSURE. */
 	SS_MIDIChannel *mch = proc->midi_channels[ch];
-	mch->midi_controllers[128] = (int16_t)pressure;
+	mch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_CHANNEL_PRESSURE] = (int16_t)(pressure << 7);
 	ss_channel_compute_modulators(mch, t);
 }
 

@@ -592,7 +592,7 @@ bool ss_voice_render(SS_Voice *v,
 	}
 
 	if(chorus && chorus_amt > 0) {
-		const float chorus_gain = output_gain * (reverb_amt / 1000.0);
+		const float chorus_gain = output_gain * (chorus_amt / 1000.0);
 		for(int i = 0; i < sample_count; i++) {
 			float s = buf[i];
 			chorus[i] += s * chorus_gain;

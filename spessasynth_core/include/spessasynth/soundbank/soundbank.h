@@ -258,7 +258,7 @@ SS_SoundBank *ss_soundbank_load(SS_File *file);
 #define MODSRC(curve, isbip, isneg, iscc, idx) ((uint16_t)(((uint16_t)(curve) << 10) | (((isbip) ? 1 : 0) << 9) | (((isneg) ? 1 : 0) << 8) | (((iscc) ? 1 : 0) << 7) | (idx)))
 
 #define MODISEFFECT(s1, s2, dest) \
-	(((s1) == 0x00db || (s2) == 0x00dd) && (s2) == 0x0000 && ((dest) == SS_GEN_REVERB_EFFECTS_SEND || (dest) == SS_GEN_CHORUS_EFFECTS_SEND))
+	(((s1) == 0x00db || (s1) == 0x00dd) && (s2) == 0x0000 && ((dest) == SS_GEN_REVERB_EFFECTS_SEND || (dest) == SS_GEN_CHORUS_EFFECTS_SEND))
 
 #define MODISDEFAULTRESONANT(s1, s2, dest) \
 	((s1) == DEFAULT_RESONANT_MOD_SOURCE && (s2) == 0x0 && (dest) == SS_GEN_INITIAL_FILTER_Q)
