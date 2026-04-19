@@ -714,6 +714,7 @@ enum {
 	SS_NRPN_GS_LSB_TVF_FILTER_RESONANCE = 0x21,
 
 	SS_NRPN_GS_LSB_EG_ATTACK_TIME = 0x63,
+	SS_NRPN_GS_LSB_EG_DECAY_TIME = 0x64,
 	SS_NRPN_GS_LSB_EG_RELEASE_TIME = 0x66,
 
 	SS_NRPN_GS_MSB_DRUM_FILTER_CUTOFF = 0x14,
@@ -1159,8 +1160,16 @@ because I wanted support for Touhou MIDIs :-)
 							ss_channel_controller(ch, SS_MIDCON_BRIGHTNESS, val, time);
 							break;
 
+						case SS_NRPN_GS_LSB_TVF_FILTER_RESONANCE:
+							ss_channel_controller(ch, SS_MIDCON_FILTER_RESONANCE, val, time);
+							break;
+
 						case SS_NRPN_GS_LSB_EG_ATTACK_TIME:
 							ss_channel_controller(ch, SS_MIDCON_ATTACK_TIME, val, time);
+							break;
+
+						case SS_NRPN_GS_LSB_EG_DECAY_TIME:
+							ss_channel_controller(ch, SS_MIDCON_DECAY_TIME, val, time);
 							break;
 
 						case SS_NRPN_GS_LSB_EG_RELEASE_TIME:
