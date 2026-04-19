@@ -1408,7 +1408,7 @@ void ss_channel_pitch_wheel(SS_MIDIChannel *ch, int value, int midi_note, double
 		/* Recompute modulators only for active voices on this note */
 		for(size_t i = 0; i < ch->voice_count; i++) {
 			SS_Voice *v = ch->voices[i];
-			if(v && v->is_active && v->real_key == midi_note) {
+			if(v && v->is_active && v->midi_note == midi_note) {
 				ss_voice_compute_modulators(v, ch, time);
 			}
 		}
