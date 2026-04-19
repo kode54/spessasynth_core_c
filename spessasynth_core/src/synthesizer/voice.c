@@ -329,7 +329,8 @@ void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch,
 		{
 			int16_t g = v->modulated_generators[m->dest_enum];
 			int32_t new_val = (int32_t)g + (int32_t)val;
-			new_val = ss_generator_clamp((SS_GeneratorType)m->dest_enum, (int16_t)new_val);
+			if(new_val > 32767) new_val = 32767;
+			if(new_val < -32768) new_val = -32768;
 			v->modulated_generators[m->dest_enum] = (int16_t)new_val;
 			val = new_val;
 		}
