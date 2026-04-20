@@ -25,9 +25,7 @@ static const int DATA_BYTES[16] = {
 
 /* ── Parse a single MTrk chunk ───────────────────────────────────────────── */
 
-static bool parse_track(SS_MIDIFile *m, SS_File *file, size_t start_ticks) {
-	size_t track_index = m->track_count;
-	SS_MIDITrack *track = &m->tracks[m->track_count++];
+bool ss_midi_smf_parse_track(SS_MIDITrack *track, size_t track_index, SS_File *file, size_t start_ticks) {
 	memset(track, 0, sizeof(*track));
 	track->port = -1;
 
@@ -184,7 +182,9 @@ bool ss_midi_parse_smf(SS_MIDIFile *m, SS_File *smf_data, size_t smf_size) {
 		if(trk_end > smf_size) trk_end = smf_size;
 		SS_File *trk_data = ss_file_slice(smf_data, pos, trk_end - pos);
 		if(!trk_data) return false;
-		parse_track(m, trk_data, start_ticks);
+		size_t track_index = m->track_count;
+		SS_MIDITrack *track = &m->tracks[m->track_count++];
+		ss_midi_smf_parse_track(track, track_index, trk_data, start_ticks);
 		ss_file_close(trk_data);
 		pos = trk_end;
 	}
