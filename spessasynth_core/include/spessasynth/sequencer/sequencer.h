@@ -159,6 +159,10 @@ void ss_sequencer_tick(SS_Sequencer *seq, uint32_t sample_count);
 bool ss_sequencer_is_finished(const SS_Sequencer *seq);
 double ss_sequencer_get_time(const SS_Sequencer *seq);
 
+/** Bleh, this is in case the sequencer is torn down after the processor is
+ *  freed by the caller. Gotta prevent double-free. */
+void ss_sequencer_set_synthesizer(SS_Sequencer *seq, SS_Processor *proc);
+
 #ifdef __cplusplus
 }
 #endif

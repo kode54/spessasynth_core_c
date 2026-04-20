@@ -766,3 +766,7 @@ try_again:
 	}
 	seq->current_time = target_time;
 }
+
+void ss_sequencer_set_synthesizer(SS_Sequencer *seq, SS_Processor *proc) {
+	seq->proc = proc;
+}
