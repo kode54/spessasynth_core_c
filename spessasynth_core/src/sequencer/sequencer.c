@@ -240,6 +240,8 @@ static void end_fade(SS_Sequencer *seq) {
 	dispatch_master_volume(seq, seq->saved_master_volume);
 }
 
+static void dispatch_reset(SS_Sequencer *seq);
+
 void ss_sequencer_stop(SS_Sequencer *seq) {
 	seq->is_playing = false;
 	seq->is_paused = false;
@@ -270,7 +272,7 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 	seq->current_time = seconds;
 
 	/* Reset processor */
-	if(seq->proc) ss_processor_system_reset(seq->proc);
+	dispatch_reset(seq);
 
 	/* Fast-forward: process all events whose absolute time <= seconds without audio */
 	/* We use the tempo map to convert ticks → seconds. */
@@ -500,8 +502,6 @@ static bool ss_sequencer_next_song(SS_Sequencer *seq) {
 		seq->current_time = 0.0;
 		seq->one_tick_seconds = 0.0;
 		seq->loops_played = 1;
-		if(seq->proc)
-			ss_processor_system_reset(seq->proc);
 		/* Attach the new current song's embedded bank, if any. */
 		load_embedded_bank(seq, seq->songs[seq->current_song_index].midi);
 		return true;
@@ -778,3 +778,17 @@ try_again:
 void ss_sequencer_set_synthesizer(SS_Sequencer *seq, SS_Processor *proc) {
 	seq->proc = proc;
 }
+
+const uint8_t syx_reset_gm[] = { 0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7 };
+
+static void dispatch_reset(SS_Sequencer *seq) {
+	if(seq->proc)
+		ss_processor_system_reset(seq->proc);
+	if(seq->callbacks.midi_command) {
+		for(int i = 0; i < 4; i++) {
+			dispatch_port_select(seq, i, seq->base_time);
+			dispatch_midi(seq, syx_reset_gm, sizeof(syx_reset_gm), seq->base_time);
+		}
+	}
+}
+
