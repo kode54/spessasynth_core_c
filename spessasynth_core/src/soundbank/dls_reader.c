@@ -672,27 +672,34 @@ static void apply_conn_blocks(SS_Zone *zone, const DLS_ConnBlock *blocks,
 
 	/* ── Pass 4: DLS Level 1 corrections ───────────────────────────────── */
 	if(dls1) {
-		/* DLS1 only has modulation LFO; map its parameters to vibrato LFO
-		 * and convert modLfoToPitch → vibLfoToPitch so GS matrix stays correct. */
-		int16_t mod_delay = zone_get_gen(zone, SS_GEN_DELAY_MOD_LFO, -11931);
-		int16_t mod_freq = zone_get_gen(zone, SS_GEN_FREQ_MOD_LFO, -725);
-		zone_set_gen(zone, SS_GEN_DELAY_VIB_LFO, mod_delay);
-		zone_set_gen(zone, SS_GEN_FREQ_VIB_LFO, mod_freq);
+		/* DLS1 voices have only a modulation LFO — no dedicated vibrato LFO.
+		 * Mirror its delay/rate onto the SF2 vibrato LFO and move any pitch
+		 * excursion (static + modulated) from modLfoToPitch → vibLfoToPitch
+		 * so CC1/GS-matrix behavior stays consistent with the DLS1 intent. */
 
-		/* Move mod-lfo-to-pitch excursion to vibrato lfo */
-		int16_t mod_to_pitch = zone_get_gen(zone, SS_GEN_MOD_LFO_TO_PITCH, 0);
-		if(mod_to_pitch != 0) {
-			zone_set_gen(zone, SS_GEN_VIB_LFO_TO_PITCH, mod_to_pitch);
-			/* Zero out the mod LFO→pitch generator */
-			for(size_t i = 0; i < zone->gen_count; i++) {
-				if(zone->generators[i].type == SS_GEN_MOD_LFO_TO_PITCH) {
-					zone->generators[i].value = 0;
-					break;
-				}
+		/* Copy delayModLFO → delayVibLFO only if the articulation set it. */
+		for(size_t i = 0; i < zone->gen_count; i++) {
+			if(zone->generators[i].type == SS_GEN_DELAY_MOD_LFO) {
+				zone_set_gen(zone, SS_GEN_DELAY_VIB_LFO,
+				             zone->generators[i].value);
+				break;
+			}
+		}
+		/* Copy freqModLFO → freqVibLFO only if the articulation set it. */
+		for(size_t i = 0; i < zone->gen_count; i++) {
+			if(zone->generators[i].type == SS_GEN_FREQ_MOD_LFO) {
+				zone_set_gen(zone, SS_GEN_FREQ_VIB_LFO,
+				             zone->generators[i].value);
+				break;
 			}
 		}
 
-		/* Redirect any modulator targeting modLfoToPitch */
+		/* Move static modLfoToPitch → vibLfoToPitch and clear the source. */
+		int16_t mod_to_pitch = zone_get_gen(zone, SS_GEN_MOD_LFO_TO_PITCH, 0);
+		zone_set_gen(zone, SS_GEN_VIB_LFO_TO_PITCH, mod_to_pitch);
+		zone_set_gen(zone, SS_GEN_MOD_LFO_TO_PITCH, 0);
+
+		/* Redirect any modulator targeting modLfoToPitch. */
 		for(size_t i = 0; i < zone->mod_count; i++) {
 			if(zone->modulators[i].dest_enum == SS_GEN_MOD_LFO_TO_PITCH)
 				zone->modulators[i].dest_enum = SS_GEN_VIB_LFO_TO_PITCH;
