@@ -73,4 +73,14 @@ bool ss_midi_is_hmi(SS_File *file, size_t size);
  *  on malformed input. */
 bool ss_midi_parse_hmi(SS_MIDIFile *m, SS_File *file, size_t size);
 
+/** Detect a Loudness Sound System (LDS) tracker file.  Needs a ".lds"
+ *  filename extension since the format has no unambiguous magic. */
+bool ss_midi_is_lds(SS_File *file, size_t size, const char *file_name);
+
+/** Simulate an LDS tracker playback, translating per-tick state into
+ *  MIDI events.  Emits SMF format 1 at TPQN 35 (one MIDI tick per
+ *  70 Hz AdLib refresh) with a conductor track plus up to nine channel
+ *  tracks.  Returns false on malformed input. */
+bool ss_midi_parse_lds(SS_MIDIFile *m, SS_File *file, size_t size);
+
 #endif /* SS_MIDI_PARSERS_H */

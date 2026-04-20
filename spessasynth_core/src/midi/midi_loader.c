@@ -439,6 +439,9 @@ SS_MIDIFile *ss_midi_load(SS_File *file, const char *file_name) {
 	} else if(ss_midi_is_hmi(file, size)) {
 		/* HMI-MIDISONG */
 		ok = ss_midi_parse_hmi(m, file, size);
+	} else if(ss_midi_is_lds(file, size, file_name)) {
+		/* AdLib Loudness Sound System (LDS) tracker */
+		ok = ss_midi_parse_lds(m, file, size);
 	} else {
 		/* XMF: not implemented — treat as plain SMF.
 		 * Plain SMF: parse directly. */
