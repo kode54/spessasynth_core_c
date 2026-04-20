@@ -43,6 +43,11 @@ bool load_midi_file(SS_Sequencer *seq, const char *midiName) {
 		return false;
 	}
 
+	/* Filter it */
+	if(ss_midi_has_emidi(g_midiFile)) {
+		ss_midi_remove_emidi_non_gm(g_midiFile);
+	}
+
 	if(!ss_sequencer_load_midi(seq, g_midiFile)) {
 		fprintf(stderr, "Could not load MIDI file into sequencer\n");
 		return false;

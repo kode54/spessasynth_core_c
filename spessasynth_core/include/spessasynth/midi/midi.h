@@ -152,6 +152,42 @@ double ss_midi_ticks_to_seconds(const SS_MIDIFile *midi, size_t ticks);
 /** Rebuild internal caches (tempo map, loop, ports, name). Call after editing. */
 void ss_midi_flush(SS_MIDIFile *midi);
 
+/* ── EMIDI (Extended MIDI) classification and filtering ──────────────────── */
+
+/**
+ * EMIDI track-designation classification based on CC 110 values.
+ *
+ * SS_EMIDI_KIND_ANY   : the track has no CC 110 event; it is intended for
+ *                      any receiver (the default, standard-MIDI behavior).
+ * SS_EMIDI_KIND_GM    : the track carries at least one CC 110 designation
+ *                      and all such designations are GM-compatible
+ *                      (values 0, 1, or 127).
+ * SS_EMIDI_KIND_OTHER : the track contains a CC 110 designation with a
+ *                      value outside {0, 1, 127} — it is authored for a
+ *                      specific non-GM target (MT-32, LAPC, etc.).
+ */
+typedef enum {
+	SS_EMIDI_KIND_ANY = 0,
+	SS_EMIDI_KIND_GM = 1,
+	SS_EMIDI_KIND_OTHER = 2
+} SS_EMIDIKind;
+
+/** Classify a single track by its EMIDI CC 110 designations. */
+SS_EMIDIKind ss_midi_track_emidi_kind(const SS_MIDITrack *track);
+
+/** Returns true when any track in the file contains at least one EMIDI
+ *  track-designation event (CC 110), regardless of whether its target is
+ *  GM or not.  Useful to decide whether to run EMIDI filtering at all. */
+bool ss_midi_has_emidi(const SS_MIDIFile *midi);
+
+/** Drop tracks whose EMIDI CC 110 designation marks them as targeting a
+ *  non-GM synthesizer.  Tracks without CC 110 or with GM-compatible
+ *  designations (0/1/127) are preserved.  After calling this you should
+ *  invoke ss_midi_flush to refresh derived caches (duration, loop, etc.).
+ *
+ *  Returns the number of tracks removed. */
+size_t ss_midi_remove_emidi_non_gm(SS_MIDIFile *midi);
+
 #ifdef __cplusplus
 }
 #endif
