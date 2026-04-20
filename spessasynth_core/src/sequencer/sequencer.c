@@ -266,6 +266,7 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 
 	/* Rewind and replay non-note events up to target time */
 	song_rewind(song);
+	seq->base_time += seq->current_time - seconds;
 	seq->current_time = seconds;
 
 	/* Reset processor */
