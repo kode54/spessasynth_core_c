@@ -141,12 +141,14 @@ static bool midi_push_tempo(SS_MIDIFile *m, size_t ticks, double bpm) {
 	return true;
 }
 
-/* Sort tempo changes by tick descending (like TS: last → first) */
-static int tempo_cmp_desc(const void *a, const void *b) {
+/* Sort tempo changes by tick ascending.  ss_midi_ticks_to_seconds walks
+ * the array forward, advancing current_tick with each entry, so the
+ * array must be monotonically non-decreasing in tick order. */
+static int tempo_cmp_asc(const void *a, const void *b) {
 	const SS_TempoChange *ta = (const SS_TempoChange *)a;
 	const SS_TempoChange *tb = (const SS_TempoChange *)b;
-	if(tb->ticks > ta->ticks) return 1;
-	if(tb->ticks < ta->ticks) return -1;
+	if(ta->ticks > tb->ticks) return 1;
+	if(ta->ticks < tb->ticks) return -1;
 	return 0;
 }
 
@@ -155,10 +157,11 @@ double ss_midi_ticks_to_seconds(const SS_MIDIFile *m, size_t ticks_in) {
 	if(m->tempo_change_count == 0 || m->time_division == 0) return 0.0;
 	double total = 0.0;
 	double current_tempo = 60000000.0 / 500000.0; /* Default */
-	uint32_t current_tick = 0;
+	size_t current_tick = 0;
 	SS_TempoChange *tc;
 	size_t i;
 	for(i = 0, tc = m->tempo_changes; i < m->tempo_change_count && current_tick + ticks >= tc->ticks; i++, tc++) {
+		if(tc->ticks < current_tick) continue; /* safety: array should be ascending */
 		size_t delta = tc->ticks - current_tick;
 		total += (double)delta * 60.0 / (tc->tempo * (double)m->time_division);
 		current_tick += delta;
@@ -474,9 +477,9 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 	/* Run the four loop scanners now that last_voice_event_tick is known. */
 	scan_loops(m);
 
-	/* Sort tempo changes descending by tick (last → first) */
+	/* Sort tempo changes ascending by tick (first → last). */
 	qsort(m->tempo_changes, m->tempo_change_count,
-	      sizeof(m->tempo_changes[0]), tempo_cmp_desc);
+	      sizeof(m->tempo_changes[0]), tempo_cmp_asc);
 
 	/* Compute duration */
 	m->duration = ss_midi_ticks_to_seconds(m, m->last_voice_event_tick);

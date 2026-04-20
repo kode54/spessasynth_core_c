@@ -112,7 +112,7 @@ typedef struct {
 		uint32_t max;
 	} key_range;
 
-	SS_TempoChange *tempo_changes; /* reversed order: last to first */
+	SS_TempoChange *tempo_changes; /* sorted ascending by tick */
 	size_t tempo_change_count;
 	size_t tempo_change_capacity;
 
