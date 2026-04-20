@@ -65,6 +65,7 @@ int main(int argc, char *argv[]) {
 	deviceConfig.playback.channels = 2;
 	deviceConfig.sampleRate = 44100;
 	deviceConfig.dataCallback = AudioCallback;
+	deviceConfig.performanceProfile = ma_performance_profile_conservative;
 
 	// Initialize the audio system
 	if(ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS) {
