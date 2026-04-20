@@ -27,4 +27,12 @@ bool ss_midi_is_mus(SS_File *file, size_t size);
  *  tempo meta event.  Returns false on malformed input. */
 bool ss_midi_parse_mus(SS_MIDIFile *m, SS_File *file, size_t size);
 
+/** Detect a Microsoft DirectMusic Segment (MIDS) file. */
+bool ss_midi_is_mids(SS_File *file, size_t size);
+
+/** Parse a MIDS file into a single-track format-0 MIDI, emitting the
+ *  embedded tempo meta events and packed voice messages.
+ *  Returns false on malformed input. */
+bool ss_midi_parse_mids(SS_MIDIFile *m, SS_File *file, size_t size);
+
 #endif /* SS_MIDI_PARSERS_H */

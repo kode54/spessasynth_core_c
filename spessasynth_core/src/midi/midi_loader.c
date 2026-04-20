@@ -402,8 +402,14 @@ SS_MIDIFile *ss_midi_load(SS_File *file, const char *file_name) {
 
 	bool ok;
 	if(header[0] == 'R' && header[1] == 'I' && header[2] == 'F' && header[3] == 'F') {
-		/* RIFF-MIDI wrapper */
-		ok = ss_midi_parse_rmidi(m, file, size);
+		/* Disambiguate RIFF variants by inner 4CC */
+		if(ss_midi_is_mids(file, size)) {
+			/* Microsoft DirectMusic Segment */
+			ok = ss_midi_parse_mids(m, file, size);
+		} else {
+			/* RIFF-MIDI wrapper */
+			ok = ss_midi_parse_rmidi(m, file, size);
+		}
 	} else if(ss_midi_is_mus(file, size)) {
 		/* DOOM/Heretic MUS */
 		ok = ss_midi_parse_mus(m, file, size);
