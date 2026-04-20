@@ -129,13 +129,6 @@ static int find_first_event(const SS_SequencerSong *song,
 
 /* ── Create / free ───────────────────────────────────────────────────────── */
 
-/** Map a user-facing loop_count to the number of pending jumps.
- *  Returns -1 for infinite, otherwise max(0, count - 1). */
-static int initial_loops_remaining(int count) {
-	if(count < 0) return -1;
-	return (count > 1) ? (count - 1) : 0;
-}
-
 SS_Sequencer *ss_sequencer_create(SS_Processor *proc) {
 	SS_Sequencer *seq = (SS_Sequencer *)calloc(1, sizeof(SS_Sequencer));
 	if(!seq) return NULL;
@@ -143,7 +136,7 @@ SS_Sequencer *ss_sequencer_create(SS_Processor *proc) {
 	seq->playback_rate = 1.0;
 	seq->loop_count = 2;
 	seq->fade_seconds = 7.0;
-	seq->loops_remaining = initial_loops_remaining(seq->loop_count);
+	seq->loops_played = 1;
 	seq->saved_master_volume = 1.0f;
 	seq->current_song_index = ~0UL;
 	return seq;
@@ -158,7 +151,7 @@ SS_Sequencer *ss_sequencer_create_callbacks(const SS_SequencerCallbacks *cb) {
 	seq->playback_rate = 1.0;
 	seq->loop_count = 2;
 	seq->fade_seconds = 7.0;
-	seq->loops_remaining = initial_loops_remaining(seq->loop_count);
+	seq->loops_played = 1;
 	seq->saved_master_volume = 1.0f;
 	seq->current_song_index = ~0UL;
 	return seq;
@@ -198,8 +191,7 @@ bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 		seq->base_time = 0.0;
 		seq->current_time = 0.0;
 		seq->finished = false;
-		seq->loops_remaining = initial_loops_remaining(seq->loop_count);
-		seq->loops_played = 0;
+		seq->loops_played = 1;
 		seq->fading = false;
 		/* This song is now current — attach its embedded bank, if any. */
 		load_embedded_bank(seq, midi);
@@ -254,8 +246,7 @@ void ss_sequencer_stop(SS_Sequencer *seq) {
 	seq->base_time = 0.0;
 	seq->current_time = 0.0;
 	end_fade(seq);
-	seq->loops_remaining = initial_loops_remaining(seq->loop_count);
-	seq->loops_played = 0;
+	seq->loops_played = 1;
 	SS_SequencerSong *song = current_song(seq);
 	if(song) song_rewind(song);
 	if(seq->proc) {
@@ -269,8 +260,9 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 	if(!song) return;
 	SS_MIDIFile *midi = song->midi;
 
-	/* Manual seek cancels any active fade. */
+	/* Manual seek cancels any active fade and restarts the loop counter. */
 	end_fade(seq);
+	seq->loops_played = 1;
 
 	/* Rewind and replay non-note events up to target time */
 	song_rewind(song);
@@ -504,8 +496,7 @@ static bool ss_sequencer_next_song(SS_Sequencer *seq) {
 		seq->base_time += seq->current_time;
 		seq->current_time = 0.0;
 		seq->one_tick_seconds = 0.0;
-		seq->loops_remaining = initial_loops_remaining(seq->loop_count);
-		seq->loops_played = 0;
+		seq->loops_played = 1;
 		if(seq->proc)
 			ss_processor_system_reset(seq->proc);
 		/* Attach the new current song's embedded bank, if any. */
@@ -517,22 +508,23 @@ static bool ss_sequencer_next_song(SS_Sequencer *seq) {
 
 /* ── Public configuration and manual advance ─────────────────────────────── */
 
+/* Forward decl of the fade starter. */
+static void begin_fade(SS_Sequencer *seq);
+
 void ss_sequencer_set_loop_count(SS_Sequencer *seq, int count) {
 	if(!seq) return;
 	seq->loop_count = count;
-	/* Recompute the live jump counter from the new loop_count accounting
-	 * for the initial play and any jumps already performed, so mid-song
-	 * changes from infinite to finite still trigger the fade correctly. */
 	if(count < 0) {
-		seq->loops_remaining = -1;
 		/* Switching to infinite cancels any pending fade so the song
 		 * keeps playing at full volume. */
 		end_fade(seq);
-	} else {
-		int jumps_target = (count > 1) ? (count - 1) : 0;
-		int jumps_left = jumps_target - seq->loops_played;
-		seq->loops_remaining = (jumps_left > 0) ? jumps_left : 0;
+		return;
 	}
+	/* Finite target.  If the user requested a loop count at or below the
+	 * playthrough we're already on, start the fade immediately — even
+	 * mid-loop, without waiting for the next loop-end marker. */
+	if(count >= 1 && seq->loops_played >= count && !seq->fading)
+		begin_fade(seq);
 }
 
 void ss_sequencer_set_fade_seconds(SS_Sequencer *seq, double seconds) {
@@ -714,27 +706,39 @@ try_again:
 		song->event_indexes[ti]++;
 		process_event(seq, midi, e, ti);
 
-		/* Loop-jump check at the MIDI loop marker.  When fading we keep
-		 * looping the section so the song continues to play events at
-		 * diminishing volume rather than going to silence after a tail.
-		 * When finite loops run out we start the fade here and then
-		 * continue jumping until the fade timer elapses. */
+		/* Loop-jump check at the MIDI loop marker.
+		 *
+		 * loops_played counts upward starting at 1 on the initial pass.
+		 * Each time we reach the loop-end marker we've finished one more
+		 * playthrough of the loop body; if the sequencer keeps going,
+		 * increment loops_played and jump.
+		 *
+		 * Finite loop_count: we want loops_played to reach loop_count
+		 * exactly before the fade kicks in.  When incrementing would
+		 * take loops_played past loop_count we first start the fade and
+		 * then keep jumping — that way the music keeps sounding all the
+		 * way through the fade instead of trailing into silence.
+		 *
+		 * loop_count <= 1: no looping at all; let the song play through.
+		 * loop_count < 0:  infinite — always jump, never fade. */
 		if(has_markers && e->ticks >= midi->loop.end) {
-			bool do_jump = infinite;
-			if(!infinite) {
-				if(seq->fading) {
-					do_jump = true;
-				} else if(seq->loops_remaining > 0) {
-					seq->loops_remaining--;
-					do_jump = true;
-				} else if(seq->loop_count >= 2) {
-					/* Final configured iteration complete — start the
-					 * fade and keep looping. */
+			bool do_jump = false;
+			if(infinite || seq->fading) {
+				/* Infinite looping, or fade-in-progress where we keep
+				 * jumping so the music continues to play rather than
+				 * trailing into silence after the final loop body. */
+				do_jump = true;
+			} else if(seq->loop_count >= 2) {
+				/* Finite target.  Incrementing loops_played brings it to
+				 * the count of the playthrough we're about to begin;
+				 * when that hits loop_count we are starting the final
+				 * iteration, which is also the fade iteration. */
+				if(seq->loops_played + 1 >= seq->loop_count)
 					begin_fade(seq);
-					do_jump = true;
-				}
-				/* loop_count < 2 (i.e. 0 or 1): no looping at all. */
+				do_jump = true;
 			}
+			/* loop_count in {0, 1}: looping disabled; fall through and
+			 * let the song play out. */
 			if(do_jump) {
 				seq->loops_played++;
 				double loop_end_time = ss_midi_ticks_to_seconds(midi,

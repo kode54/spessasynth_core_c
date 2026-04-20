@@ -74,18 +74,23 @@ typedef struct {
 	bool loop;
 
 	/* ── Looping & post-loop fade ───────────────────────────────────────── */
-	/* loop_count is the total number of times the looped section plays,
-	 *   counting the initial playthrough.  -1 = loop forever;
-	 *   0 or 1 = no looping (single playthrough); N >= 2 = N plays of
-	 *   the loop body, i.e. (N-1) jumps at the MIDI loop marker.
-	 * fade_seconds is the post-loop fade duration applied when a finite
-	 *   loop_count is exhausted (default 7.0 s).
+	/* loop_count is the user-requested number of playthroughs.
+	 *   -1  loop forever (no fade; loops_played counts up indefinitely);
+	 *   0 or 1  no looping — play the song once straight through;
+	 *   N>=2  target N playthroughs of the loop body.  Fade-out begins the
+	 *         moment loops_played reaches loop_count (i.e. at the start of
+	 *         the Nth playthrough).
+	 * fade_seconds is the post-loop fade duration (default 7.0 s).
 	 * Infinite looping without loop markers rewinds the whole file. */
 	int loop_count;
 	double fade_seconds;
 
-	/* Runtime loop/fade state (reset on song advance / seek / stop). */
-	int loops_remaining;
+	/* Runtime loop/fade state.  loops_played counts upward starting at 1
+	 * (the initial playthrough) and increments each time the sequencer
+	 * jumps at the MIDI loop-end marker.  Fade begins when loop_count is
+	 * finite and loops_played >= loop_count.  Setting loop_count back to
+	 * -1 cancels any in-progress fade.  Reset to 1 on song advance, seek,
+	 * and stop. */
 	int loops_played;
 	bool fading;
 	double fade_start_time;
@@ -126,12 +131,16 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds);
 
 /** Configure how many times the looped section plays (counting the
  *  initial pass).  Interpretation:
- *   -1    loop forever.  If the MIDI has no loop markers, rewind and
- *         play the whole file again when it reaches the end; keep
- *         running until manually advanced or stopped.
+ *   -1    loop forever; loops_played keeps counting upward.  Setting
+ *         loop_count back to -1 while a fade is in progress cancels
+ *         the fade and restores the master volume.
  *   0, 1  do not loop; play the song once straight through.
- *   N>=2  play the loop body N times (i.e. N-1 jumps at the markers),
- *         then continue playing to the end of the file while fading out.
+ *   N>=2  target N playthroughs of the loop body.  The fade begins
+ *         the moment the running loops_played count reaches N; the
+ *         sequencer keeps jumping at the loop marker during the fade
+ *         so the music keeps sounding rather than trailing into silence.
+ *   Reducing loop_count mid-song below the current loops_played starts
+ *   the fade immediately.
  *  Default: 2. */
 void ss_sequencer_set_loop_count(SS_Sequencer *seq, int count);
 
