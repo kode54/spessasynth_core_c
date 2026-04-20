@@ -62,4 +62,15 @@ bool ss_midi_is_hmp(SS_File *file, size_t size);
  *  SysEx).  Returns false on malformed input. */
 bool ss_midi_parse_hmp(SS_MIDIFile *m, SS_File *file, size_t size);
 
+/** Detect an HMI-MIDISONG file. */
+bool ss_midi_is_hmi(SS_File *file, size_t size);
+
+/** Parse an HMI-MIDISONG file into an SMF format-1 MIDI.  Track 0 is a
+ *  conductor holding the default tempo and any loopStart/loopEnd markers
+ *  extracted from HMI's 0xFE 0x14/0x15 sub-events.  Subsequent tracks
+ *  carry the decoded event streams (MIDI VLQ delta, running status,
+ *  note-on duration synthesized into matching note-offs).  Returns false
+ *  on malformed input. */
+bool ss_midi_parse_hmi(SS_MIDIFile *m, SS_File *file, size_t size);
+
 #endif /* SS_MIDI_PARSERS_H */
