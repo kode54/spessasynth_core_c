@@ -1257,8 +1257,6 @@ void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, dou
 void ss_processor_system_reset(SS_Processor *proc) {
 	if(!proc) return;
 
-	double t = proc->current_synth_time;
-
 	for(int i = 0; i < proc->channel_count; i++) {
 		SS_MIDIChannel *ch = proc->midi_channels[i];
 		if(!ch) continue;
@@ -1307,7 +1305,6 @@ void ss_processor_system_reset(SS_Processor *proc) {
 			proc->midi_channels[i]->insertion_enabled = false;
 	}
 
-	(void)t;
 	proc_emit(proc, SS_EVENT_STOP_ALL, -1, 0, 0);
 }
 
