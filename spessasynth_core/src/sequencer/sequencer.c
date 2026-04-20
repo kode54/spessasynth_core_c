@@ -772,6 +772,7 @@ try_again:
 				if(infinite && !has_markers) {
 					loop_rewind_to_tick(seq, 0, target_time);
 					target_time -= current_time;
+					current_time = 0;
 					continue;
 				}
 				if(seq->fading) break;
