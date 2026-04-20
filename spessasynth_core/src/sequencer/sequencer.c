@@ -136,7 +136,7 @@ SS_Sequencer *ss_sequencer_create(SS_Processor *proc) {
 	seq->playback_rate = 1.0;
 	seq->loop_count = 1;
 	seq->fade_seconds = 7.0;
-	seq->loops_played = 1;
+	seq->loops_played = 0;
 	seq->saved_master_volume = 1.0f;
 	seq->current_song_index = ~0UL;
 	return seq;
@@ -151,7 +151,7 @@ SS_Sequencer *ss_sequencer_create_callbacks(const SS_SequencerCallbacks *cb) {
 	seq->playback_rate = 1.0;
 	seq->loop_count = 1;
 	seq->fade_seconds = 7.0;
-	seq->loops_played = 1;
+	seq->loops_played = 0;
 	seq->saved_master_volume = 1.0f;
 	seq->current_song_index = ~0UL;
 	return seq;
@@ -191,7 +191,7 @@ bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 		seq->base_time = 0.0;
 		seq->current_time = 0.0;
 		seq->finished = false;
-		seq->loops_played = 1;
+		seq->loops_played = 0;
 		seq->fading = false;
 		/* This song is now current — attach its embedded bank, if any. */
 		load_embedded_bank(seq, midi);
@@ -247,7 +247,7 @@ void ss_sequencer_stop(SS_Sequencer *seq) {
 	seq->base_time = 0.0;
 	seq->current_time = 0.0;
 	end_fade(seq);
-	seq->loops_played = 1;
+	seq->loops_played = 0;
 	SS_SequencerSong *song = current_song(seq);
 	if(song) song_rewind(song);
 	if(seq->proc) {
@@ -263,7 +263,7 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 
 	/* Manual seek cancels any active fade and restarts the loop counter. */
 	end_fade(seq);
-	seq->loops_played = 1;
+	seq->loops_played = 0;
 
 	/* Rewind and replay non-note events up to target time */
 	song_rewind(song);
@@ -500,7 +500,7 @@ static bool ss_sequencer_next_song(SS_Sequencer *seq) {
 		seq->base_time += seq->current_time;
 		seq->current_time = 0.0;
 		seq->one_tick_seconds = 0.0;
-		seq->loops_played = 1;
+		seq->loops_played = 0;
 		/* Attach the new current song's embedded bank, if any. */
 		load_embedded_bank(seq, seq->songs[seq->current_song_index].midi);
 		return true;
@@ -525,7 +525,7 @@ void ss_sequencer_set_loop_count(SS_Sequencer *seq, int count) {
 	/* Finite target.  If the user requested a loop count at or below the
 	 * playthrough we're already on, start the fade immediately — even
 	 * mid-loop, without waiting for the next loop-end marker. */
-	if(count >= 1 && seq->loops_played >= count && !seq->fading)
+	if(count >= 1 && seq->loops_played > count && !seq->fading)
 		begin_fade(seq);
 }
 
@@ -687,6 +687,7 @@ try_again:
 				double current_time = seq->current_time;
 				loop_rewind_to_tick(seq, 0, target_time);
 				target_time -= current_time;
+				seq->loops_played++;
 				continue;
 			}
 			if(seq->fading) {
@@ -746,9 +747,11 @@ try_again:
 				seq->loops_played++;
 				double loop_end_time = ss_midi_ticks_to_seconds(midi,
 				                                                midi->loop.end);
+				double loop_start_time = ss_midi_ticks_to_seconds(midi,
+				                                                  midi->loop.start);
 				loop_rewind_to_tick(seq, midi->loop.start, loop_end_time);
-				target_time -= loop_end_time - midi->loop.start;
-				return;
+				target_time -= loop_end_time - loop_start_time;
+				continue;
 			}
 		}
 
