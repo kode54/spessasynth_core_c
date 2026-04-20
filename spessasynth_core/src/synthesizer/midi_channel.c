@@ -644,7 +644,7 @@ void ss_channel_note_off(SS_MIDIChannel *ch, int note, double time) {
 		}
 	}
 
-	bool sustained = ch->midi_controllers[64] >= 64; /* CC64 sustain pedal */
+	bool sustained = ch->midi_controllers[64] >= 64 << 7; /* CC64 sustain pedal */
 	for(size_t i = 0; i < ch->voice_count; i++) {
 		SS_Voice *v = ch->voices[i];
 		if(!v->is_active || v->is_in_release) continue;
