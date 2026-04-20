@@ -27,7 +27,7 @@
  *
  *       // Create processor + sequencer
  *       SS_Processor *proc = ss_processor_create(44100, NULL);
- *       ss_processor_load_soundbank(proc, bank, "primary");
+ *       ss_processor_load_soundbank(proc, bank, "primary", false);
  *       SS_Sequencer *seq = ss_sequencer_create(proc);
  *       ss_sequencer_load_midi(seq, midi);
  *       ss_sequencer_play(seq);

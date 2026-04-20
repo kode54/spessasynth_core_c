@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	if(!ss_processor_load_soundbank(g_processor, g_soundBank, "theBank", 0)) {
+	if(!ss_processor_load_soundbank(g_processor, g_soundBank, "theBank", 0, false)) {
 		fprintf(stderr, "Could not add the bank to the synthesizer\n");
 		return 1;
 	}

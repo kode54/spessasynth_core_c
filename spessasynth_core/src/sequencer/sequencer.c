@@ -69,7 +69,7 @@ static void load_embedded_bank(SS_Sequencer *seq, SS_MIDIFile *midi) {
 
 	if(!ss_processor_load_soundbank(seq->proc, bank,
 	                                SS_SEQ_EMBEDDED_BANK_ID,
-	                                midi->bank_offset)) {
+	                                midi->bank_offset, true)) {
 		ss_soundbank_free(bank);
 	}
 }

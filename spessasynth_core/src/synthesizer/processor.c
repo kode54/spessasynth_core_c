@@ -169,7 +169,8 @@ SS_SoundBank *ss_processor_get_soundbank(SS_Processor *proc, const char *id) {
 }
 
 bool ss_processor_load_soundbank(SS_Processor *proc,
-                                 SS_SoundBank *bank, const char *id, int offset) {
+                                 SS_SoundBank *bank, const char *id, int offset,
+                                 bool insert) {
 	if(!bank || !id) return false;
 
 	/* Replace if same ID already exists */
@@ -189,7 +190,21 @@ bool ss_processor_load_soundbank(SS_Processor *proc,
 
 	if(proc->soundbank_count >= SS_MAX_SOUNDBANKS) return false;
 
-	int idx = proc->soundbank_count++;
+	int idx;
+	if(insert) {
+		if(proc->soundbank_count > 0) {
+			/* Move the array forward */
+			for(int i = proc->soundbank_count; i > 0; i--) {
+				proc->soundbanks[i] = proc->soundbanks[i - 1];
+				memcpy(proc->soundbank_ids[i], proc->soundbank_ids[i - 1], sizeof(proc->soundbank_ids[0]));
+				proc->soundbank_offsets[i] = proc->soundbank_offsets[i - 1];
+			}
+		}
+		proc->soundbank_count++;
+		idx = 0;
+	} else {
+		idx = proc->soundbank_count++;
+	}
 	proc->soundbanks[idx] = bank;
 	if(offset >= 0 && offset <= 65535) {
 		proc->soundbank_offsets[idx] = (uint16_t)offset;
@@ -209,9 +224,11 @@ bool ss_processor_remove_soundbank(SS_Processor *proc, const char *id, bool dont
 			/* Compact the arrays */
 			int last = proc->soundbank_count - 1;
 			if(i != last) {
-				proc->soundbanks[i] = proc->soundbanks[last];
-				memcpy(proc->soundbank_ids[i], proc->soundbank_ids[last],
-				       sizeof(proc->soundbank_ids[0]));
+				for(int ii = i + 1; ii <= last; ii++) {
+					proc->soundbanks[ii - 1] = proc->soundbanks[ii];
+					memcpy(proc->soundbank_ids[ii - 1], proc->soundbank_ids[ii],
+					       sizeof(proc->soundbank_ids[0]));
+				}
 			}
 			proc->soundbanks[last] = NULL;
 			proc->soundbank_count--;

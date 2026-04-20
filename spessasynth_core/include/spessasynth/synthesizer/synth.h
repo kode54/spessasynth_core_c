@@ -497,6 +497,8 @@ typedef struct SS_Processor {
  * Actually, there is no guarantee what will happen if you do either of the above things
  * in practice, calling functions simultaneously. Undefined behavior! It's not designed
  * to expect the functions to overlap with each other. It may just explode spectacularly!
+ *
+ * The insert variable declares that the bank should be inserted at the top of the list.
  */
 SS_Processor *ss_processor_create(uint32_t sample_rate,
                                   const SS_ProcessorOptions *opts);
@@ -504,7 +506,8 @@ void ss_processor_free(SS_Processor *proc);
 
 SS_SoundBank *ss_processor_get_soundbank(SS_Processor *proc, const char *id);
 bool ss_processor_load_soundbank(SS_Processor *proc,
-                                 SS_SoundBank *bank, const char *id, int offset);
+                                 SS_SoundBank *bank, const char *id, int offset,
+                                 bool insert);
 bool ss_processor_remove_soundbank(SS_Processor *proc, const char *id, bool dontfree);
 
 /**
