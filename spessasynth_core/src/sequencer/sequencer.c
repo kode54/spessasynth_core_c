@@ -129,12 +129,22 @@ static int find_first_event(const SS_SequencerSong *song,
 
 /* ── Create / free ───────────────────────────────────────────────────────── */
 
+/** Map a user-facing loop_count to the number of pending jumps.
+ *  Returns -1 for infinite, otherwise max(0, count - 1). */
+static int initial_loops_remaining(int count) {
+	if(count < 0) return -1;
+	return (count > 1) ? (count - 1) : 0;
+}
+
 SS_Sequencer *ss_sequencer_create(SS_Processor *proc) {
 	SS_Sequencer *seq = (SS_Sequencer *)calloc(1, sizeof(SS_Sequencer));
 	if(!seq) return NULL;
 	seq->proc = proc;
 	seq->playback_rate = 1.0;
-	seq->loop_count = 0;
+	seq->loop_count = 2;
+	seq->fade_seconds = 7.0;
+	seq->loops_remaining = initial_loops_remaining(seq->loop_count);
+	seq->saved_master_volume = 1.0f;
 	seq->current_song_index = ~0UL;
 	return seq;
 }
@@ -173,6 +183,9 @@ bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 		seq->base_time = 0.0;
 		seq->current_time = 0.0;
 		seq->finished = false;
+		seq->loops_remaining = initial_loops_remaining(seq->loop_count);
+		seq->loops_played = 0;
+		seq->fading = false;
 		/* This song is now current — attach its embedded bank, if any. */
 		load_embedded_bank(seq, midi);
 	}
@@ -202,11 +215,23 @@ void ss_sequencer_pause(SS_Sequencer *seq) {
 	seq->is_paused = true;
 }
 
+/** Drop any active fade and restore the master volume the user had
+ *  set before the fade started. */
+static void end_fade(SS_Sequencer *seq) {
+	if(!seq->fading) return;
+	seq->fading = false;
+	if(seq->proc)
+		seq->proc->master_params.master_volume = seq->saved_master_volume;
+}
+
 void ss_sequencer_stop(SS_Sequencer *seq) {
 	seq->is_playing = false;
 	seq->is_paused = false;
 	seq->base_time = 0.0;
 	seq->current_time = 0.0;
+	end_fade(seq);
+	seq->loops_remaining = initial_loops_remaining(seq->loop_count);
+	seq->loops_played = 0;
 	SS_SequencerSong *song = current_song(seq);
 	if(song) song_rewind(song);
 	if(seq->proc) {
@@ -219,6 +244,9 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 	SS_SequencerSong *song = current_song(seq);
 	if(!song) return;
 	SS_MIDIFile *midi = song->midi;
+
+	/* Manual seek cancels any active fade. */
+	end_fade(seq);
 
 	/* Rewind and replay non-note events up to target time */
 	song_rewind(song);
@@ -396,12 +424,15 @@ static void process_event(SS_Sequencer *seq, SS_MIDIFile *midi,
 static bool ss_sequencer_next_song(SS_Sequencer *seq) {
 	/* Detach the outgoing song's embedded bank before advancing. */
 	unload_embedded_bank(seq);
+	end_fade(seq);
 
 	seq->current_song_index++;
 	if((size_t)seq->current_song_index < seq->song_count) {
 		seq->base_time += seq->current_time;
 		seq->current_time = 0.0;
 		seq->one_tick_seconds = 0.0;
+		seq->loops_remaining = initial_loops_remaining(seq->loop_count);
+		seq->loops_played = 0;
 		if(seq->proc)
 			ss_processor_system_reset(seq->proc);
 		/* Attach the new current song's embedded bank, if any. */
@@ -411,7 +442,130 @@ static bool ss_sequencer_next_song(SS_Sequencer *seq) {
 	return false;
 }
 
+/* ── Public configuration and manual advance ─────────────────────────────── */
+
+void ss_sequencer_set_loop_count(SS_Sequencer *seq, int count) {
+	if(!seq) return;
+	seq->loop_count = count;
+	/* Recompute the live jump counter from the new loop_count accounting
+	 * for the initial play and any jumps already performed, so mid-song
+	 * changes from infinite to finite still trigger the fade correctly. */
+	if(count < 0) {
+		seq->loops_remaining = -1;
+		/* Switching to infinite cancels any pending fade so the song
+		 * keeps playing at full volume. */
+		end_fade(seq);
+	} else {
+		int jumps_target = (count > 1) ? (count - 1) : 0;
+		int jumps_left = jumps_target - seq->loops_played;
+		seq->loops_remaining = (jumps_left > 0) ? jumps_left : 0;
+	}
+}
+
+void ss_sequencer_set_fade_seconds(SS_Sequencer *seq, double seconds) {
+	if(!seq) return;
+	if(seconds < 0.0) seconds = 0.0;
+	seq->fade_seconds = seconds;
+}
+
+void ss_sequencer_next(SS_Sequencer *seq) {
+	if(!seq) return;
+	if(!ss_sequencer_next_song(seq)) {
+		/* No further song to move to; let the next tick finish up. */
+		seq->finished = true;
+		seq->is_playing = false;
+	}
+}
+
 /* ── ss_sequencer_tick ────────────────────────────────────────────────────── */
+
+/** Kick off a post-loop fade-out at the current absolute time. */
+static void begin_fade(SS_Sequencer *seq) {
+	if(seq->fading) return;
+	seq->fading = true;
+	seq->fade_start_time = seq->base_time + seq->current_time;
+	seq->saved_master_volume = seq->proc ? seq->proc->master_params.master_volume : 1.0f;
+}
+
+/** Rewind the current song's event indexes to the first event at or
+ *  after target_tick and recompute one_tick_seconds from the tempo map
+ *  (picks the latest SET_TEMPO at tick <= target_tick across all
+ *  tracks).  Does NOT call ss_processor_system_reset — any reset that
+ *  needs to happen on a loop jump should be encoded in the MIDI itself
+ *  within the loop range, where it will re-fire as events dispatch. */
+static void loop_rewind_to_tick(SS_Sequencer *seq, size_t target_tick,
+                                double prev_song_time) {
+	SS_SequencerSong *song = current_song(seq);
+	if(!song) return;
+	SS_MIDIFile *midi = song->midi;
+
+	/* Recompute tempo so the loop iteration starts at the right speed
+	 * even when the loop body has no tempo meta at its head. */
+	double one_tick_sec = (midi->time_division > 0) ? (60.0 / (120.0 * (double)midi->time_division)) : (60.0 / (120.0 * 480.0));
+	size_t best_tick = 0;
+	bool found = false;
+	for(size_t ti = 0; ti < midi->track_count; ti++) {
+		const SS_MIDITrack *t = &midi->tracks[ti];
+		for(size_t ei = 0; ei < t->event_count; ei++) {
+			const SS_MIDIMessage *e = &t->events[ei];
+			if(e->ticks > target_tick) break;
+			if(e->status_byte == SS_META_SET_TEMPO && e->data_length >= 3) {
+				if(!found || e->ticks >= best_tick) {
+					best_tick = e->ticks;
+					if(midi->time_division > 0) {
+						uint32_t us = ((uint32_t)e->data[0] << 16) |
+						              ((uint32_t)e->data[1] << 8) | e->data[2];
+						double bpm = (us > 0) ? (60000000.0 / (double)us) : 120.0;
+						one_tick_sec = 60.0 / (bpm * (double)midi->time_division);
+					}
+					found = true;
+				}
+			}
+		}
+	}
+	seq->one_tick_seconds = one_tick_sec;
+
+	/* Rewind each track to the first event at or after target_tick. */
+	for(size_t ti = 0; ti < song->track_count; ti++) {
+		const SS_MIDITrack *t = &midi->tracks[ti];
+		size_t idx = 0;
+		while(idx < t->event_count && t->events[idx].ticks < target_tick) idx++;
+		song->event_indexes[ti] = idx;
+	}
+
+	double new_song_time = ss_midi_ticks_to_seconds(midi, target_tick);
+
+	/* The synthesizer has been running forward the entire time.  Fold
+	 * the song-time we just skipped backwards into base_time so the
+	 * absolute timestamps queued for the processor (base + current)
+	 * remain monotonically non-decreasing across the jump. */
+	if(prev_song_time > new_song_time)
+		seq->base_time += prev_song_time - new_song_time;
+
+	seq->current_time = new_song_time;
+}
+
+/** Ramp the master volume toward zero.  Returns true if the fade has
+ *  completed (caller should advance the song). */
+static bool apply_fade(SS_Sequencer *seq, double abs_time) {
+	if(!seq->fading) return false;
+	if(seq->fade_seconds <= 0.0) {
+		if(seq->proc) seq->proc->master_params.master_volume = 0.0f;
+		return true;
+	}
+	double elapsed = abs_time - seq->fade_start_time;
+	if(elapsed < 0.0) elapsed = 0.0;
+	double progress = elapsed / seq->fade_seconds;
+	if(progress >= 1.0) {
+		if(seq->proc) seq->proc->master_params.master_volume = 0.0f;
+		return true;
+	}
+	if(seq->proc) {
+		float gain = (float)(1.0 - progress);
+		seq->proc->master_params.master_volume = seq->saved_master_volume * gain;
+	}
+	return false;
+}
 
 void ss_sequencer_tick(SS_Sequencer *seq, uint32_t sample_count) {
 	if(!seq->is_playing || seq->is_paused || seq->finished) return;
@@ -428,22 +582,42 @@ try_again:
 	/* Advance current_time by the rendered quantum */
 	double dt = (seq->proc && seq->proc->sample_rate > 0) ? (double)sample_count / (double)seq->proc->sample_rate : (double)sample_count / 44100.0;
 	dt *= seq->playback_rate;
-
 	double target_time = seq->current_time + dt;
+
+	/* Apply fade for this block up-front.  If the fade has run its
+	 * course we advance the song immediately and retry. */
+	if(seq->fading && apply_fade(seq, seq->base_time + target_time)) {
+		end_fade(seq);
+		if(ss_sequencer_next_song(seq)) goto try_again;
+		seq->finished = true;
+		seq->is_playing = false;
+		return;
+	}
 
 	/* Seed one_tick_seconds from the MIDI tempo map if not yet set */
 	if(seq->one_tick_seconds <= 0.0 && midi->time_division > 0) {
 		seq->one_tick_seconds = 60.0 / (120.0 * (double)midi->time_division);
 	}
 
+	const bool has_markers = midi->loop.end > 0;
+	const bool infinite = seq->loop_count < 0;
+
 	/* Dispatch all events whose time <= target_time */
 	while(1) {
 		int ti = find_first_event(song, midi);
 		if(ti < 0) {
-			/* Try the next song */
-			if(ss_sequencer_next_song(seq))
-				goto try_again;
-			/* All tracks exhausted */
+			/* End of events.  Behavior depends on loop config: */
+			if(infinite && !has_markers) {
+				/* Infinite + no markers: loop the whole file. */
+				loop_rewind_to_tick(seq, 0, target_time);
+				continue;
+			}
+			if(seq->fading) {
+				/* Let the fade timer finish even after the track runs
+				 * out so we never cut off mid-fade. */
+				break;
+			}
+			if(ss_sequencer_next_song(seq)) goto try_again;
 			seq->finished = true;
 			seq->is_playing = false;
 			break;
@@ -458,23 +632,46 @@ try_again:
 		song->event_indexes[ti]++;
 		process_event(seq, midi, e, ti);
 
-		/* Check loop */
-		if(seq->loop_count != 0 && midi->loop.end > 0 &&
-		   e->ticks >= midi->loop.end) {
-			if(seq->loop_count > 0) seq->loop_count--;
-			seq->loops_played++;
-			/* Rewind to loop start */
-			double loop_start_time = ss_midi_ticks_to_seconds(midi, midi->loop.start);
-			ss_sequencer_set_time(seq, loop_start_time);
-			return;
+		/* Loop-jump check at the MIDI loop marker.  When fading we keep
+		 * looping the section so the song continues to play events at
+		 * diminishing volume rather than going to silence after a tail.
+		 * When finite loops run out we start the fade here and then
+		 * continue jumping until the fade timer elapses. */
+		if(has_markers && e->ticks >= midi->loop.end) {
+			bool do_jump = infinite;
+			if(!infinite) {
+				if(seq->fading) {
+					do_jump = true;
+				} else if(seq->loops_remaining > 0) {
+					seq->loops_remaining--;
+					do_jump = true;
+				} else if(seq->loop_count >= 2) {
+					/* Final configured iteration complete — start the
+					 * fade and keep looping. */
+					begin_fade(seq);
+					do_jump = true;
+				}
+				/* loop_count < 2 (i.e. 0 or 1): no looping at all. */
+			}
+			if(do_jump) {
+				seq->loops_played++;
+				double loop_end_time = ss_midi_ticks_to_seconds(midi,
+				                                                midi->loop.end);
+				loop_rewind_to_tick(seq, midi->loop.start, loop_end_time);
+				return;
+			}
 		}
 
-		/* Check end-of-sequence */
+		/* End-of-sequence check (for tracks without a loop.end). */
 		if(e->ticks >= midi->last_voice_event_tick) {
 			int next_ti = find_first_event(song, midi);
 			if(next_ti < 0) {
-				if(ss_sequencer_next_song(seq))
-					goto try_again;
+				if(infinite && !has_markers) {
+					loop_rewind_to_tick(seq, 0, target_time);
+					continue;
+				}
+				if(seq->fading) break;
+				if(ss_sequencer_next_song(seq)) goto try_again;
 				seq->finished = true;
 				seq->is_playing = false;
 				break;
