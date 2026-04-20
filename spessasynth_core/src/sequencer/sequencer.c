@@ -305,7 +305,9 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 		 * and pressure so the seek is silent. */
 		if(sb >= 0x80 && sb < 0xF0) {
 			uint8_t type = sb & 0xF0;
-			if(type == 0xB0 || type == 0xC0 || type == 0xE0)
+			if(type == 0x90 && e->data_length >= 2 && e->data[1] == 0)
+				dispatch_voice_event(seq, midi, e, ev_time);
+			else if(type == 0x80 || type == 0xB0 || type == 0xC0 || type == 0xE0)
 				dispatch_voice_event(seq, midi, e, ev_time);
 		} else if(sb == 0xF0) {
 			dispatch_sysex_event(seq, midi, e, ev_time);
