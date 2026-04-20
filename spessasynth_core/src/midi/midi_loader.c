@@ -136,21 +136,21 @@ static bool midi_push_tempo(SS_MIDIFile *m, size_t ticks, double bpm) {
 		m->tempo_changes = tmp;
 		m->tempo_change_capacity = nc;
 	}
-	m->tempo_changes[m->tempo_change_count].ticks = ticks;
-	m->tempo_changes[m->tempo_change_count].tempo = bpm;
+	size_t i;
+	for(i = m->tempo_change_count; i > 0; i--) {
+		SS_TempoChange *tc = &m->tempo_changes[i - 1];
+		if(tc->ticks <= ticks) break;
+	}
+	if(i < m->tempo_change_count) {
+		/* Insert the event */
+		for(size_t ii = m->tempo_change_count; ii > i; ii--) {
+			m->tempo_changes[ii] = m->tempo_changes[ii - 1];
+		}
+	}
+	m->tempo_changes[i].ticks = ticks;
+	m->tempo_changes[i].tempo = bpm;
 	m->tempo_change_count++;
 	return true;
-}
-
-/* Sort tempo changes by tick ascending.  ss_midi_ticks_to_seconds walks
- * the array forward, advancing current_tick with each entry, so the
- * array must be monotonically non-decreasing in tick order. */
-static int tempo_cmp_asc(const void *a, const void *b) {
-	const SS_TempoChange *ta = (const SS_TempoChange *)a;
-	const SS_TempoChange *tb = (const SS_TempoChange *)b;
-	if(ta->ticks > tb->ticks) return 1;
-	if(ta->ticks < tb->ticks) return -1;
-	return 0;
 }
 
 size_t ss_seconds_to_midi_tick(const SS_MIDIFile *m, double seconds_in) {
@@ -496,10 +496,6 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 
 	/* Run the four loop scanners now that last_voice_event_tick is known. */
 	scan_loops(m);
-
-	/* Sort tempo changes ascending by tick (first → last). */
-	qsort(m->tempo_changes, m->tempo_change_count,
-	      sizeof(m->tempo_changes[0]), tempo_cmp_asc);
 
 	/* Compute duration */
 	m->duration = ss_midi_ticks_to_seconds(m, m->last_voice_event_tick);
