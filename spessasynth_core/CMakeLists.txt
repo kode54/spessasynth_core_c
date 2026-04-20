@@ -19,6 +19,8 @@ set(SS_SOURCES
     src/utils/wav_writer.c
     src/midi/midi_loader.c
     src/midi/midi_writer.c
+    src/midi/parsers/smf.c
+    src/midi/parsers/rmidi.c
     src/soundbank/soundbank.c
     src/soundbank/dls_reader.c
     src/soundbank/soundfont_reader.c
