@@ -43,4 +43,14 @@ bool ss_midi_is_xmi(SS_File *file, size_t size);
  *  Returns false on malformed input. */
 bool ss_midi_parse_xmi(SS_MIDIFile *m, SS_File *file, size_t size);
 
+/** Detect a General MIDI Format (GMF) file. */
+bool ss_midi_is_gmf(SS_File *file, size_t size);
+
+/** Parse a GMF file into a two-track format-0 MIDI: a conductor track
+ *  holding the tempo meta and a Roland GS-style reset SysEx, and an
+ *  event track parsed from the raw MIDI stream after the 7-byte header.
+ *  Pitch-wheel events are dropped per the reference port's convention.
+ *  Returns false on malformed input. */
+bool ss_midi_parse_gmf(SS_MIDIFile *m, SS_File *file, size_t size);
+
 #endif /* SS_MIDI_PARSERS_H */
