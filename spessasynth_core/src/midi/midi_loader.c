@@ -161,7 +161,6 @@ double ss_midi_ticks_to_seconds(const SS_MIDIFile *m, size_t ticks_in) {
 	SS_TempoChange *tc;
 	size_t i;
 	for(i = 0, tc = m->tempo_changes; i < m->tempo_change_count && current_tick + ticks >= tc->ticks; i++, tc++) {
-		if(tc->ticks < current_tick) continue; /* safety: array should be ascending */
 		size_t delta = tc->ticks - current_tick;
 		total += (double)delta * 60.0 / (tc->tempo * (double)m->time_division);
 		current_tick += delta;
