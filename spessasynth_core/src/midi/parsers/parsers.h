@@ -53,4 +53,13 @@ bool ss_midi_is_gmf(SS_File *file, size_t size);
  *  Returns false on malformed input. */
 bool ss_midi_parse_gmf(SS_MIDIFile *m, SS_File *file, size_t size);
 
+/** Detect an HMI Sound Operating System (HMIMIDIP / HMIMIDIR) file. */
+bool ss_midi_is_hmp(SS_File *file, size_t size);
+
+/** Parse an HMP file into an SMF format-1 MIDI.  Track 0 is a conductor
+ *  seeded with the HMP default tempo; subsequent tracks are parsed from
+ *  the HMP event stream (LE 7-bit-group deltas, no running status, no
+ *  SysEx).  Returns false on malformed input. */
+bool ss_midi_parse_hmp(SS_MIDIFile *m, SS_File *file, size_t size);
+
 #endif /* SS_MIDI_PARSERS_H */

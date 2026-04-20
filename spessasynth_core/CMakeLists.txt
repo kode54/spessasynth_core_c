@@ -25,6 +25,7 @@ set(SS_SOURCES
     src/midi/parsers/mids.c
     src/midi/parsers/xmi.c
     src/midi/parsers/gmf.c
+    src/midi/parsers/hmp.c
     src/soundbank/soundbank.c
     src/soundbank/dls_reader.c
     src/soundbank/soundfont_reader.c

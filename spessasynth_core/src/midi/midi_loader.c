@@ -433,6 +433,9 @@ SS_MIDIFile *ss_midi_load(SS_File *file, const char *file_name) {
 	} else if(ss_midi_is_gmf(file, size)) {
 		/* General MIDI Format (GMF) */
 		ok = ss_midi_parse_gmf(m, file, size);
+	} else if(ss_midi_is_hmp(file, size)) {
+		/* HMI Sound Operating System (HMP) */
+		ok = ss_midi_parse_hmp(m, file, size);
 	} else {
 		/* XMF: not implemented — treat as plain SMF.
 		 * Plain SMF: parse directly. */
