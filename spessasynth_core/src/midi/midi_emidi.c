@@ -70,17 +70,6 @@ bool ss_midi_has_emidi(const SS_MIDIFile *midi) {
 
 /* ── Filtering: drop non-GM tracks in place ──────────────────────────────── */
 
-static void track_free_contents(SS_MIDITrack *t) {
-	if(!t) return;
-	if(t->events) {
-		for(size_t i = 0; i < t->event_count; i++)
-			free(t->events[i].data);
-		free(t->events);
-	}
-	memset(t, 0, sizeof(*t));
-	t->port = -1;
-}
-
 size_t ss_midi_remove_emidi_non_gm(SS_MIDIFile *midi) {
 	if(!midi || midi->track_count == 0) return 0;
 
@@ -88,7 +77,7 @@ size_t ss_midi_remove_emidi_non_gm(SS_MIDIFile *midi) {
 	size_t dropped = 0;
 	for(size_t in = 0; in < midi->track_count; in++) {
 		if(ss_midi_track_emidi_kind(&midi->tracks[in]) == SS_EMIDI_KIND_OTHER) {
-			track_free_contents(&midi->tracks[in]);
+			ss_midi_track_clear(&midi->tracks[in]);
 			dropped++;
 			continue;
 		}

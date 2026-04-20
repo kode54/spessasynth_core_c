@@ -43,7 +43,7 @@ typedef struct {
 } SS_MIDITrack;
 
 SS_MIDITrack *ss_midi_track_new(void);
-void ss_midi_track_free(SS_MIDITrack *track);
+void ss_midi_track_clear(SS_MIDITrack *track);
 bool ss_midi_track_push_event(SS_MIDITrack *track, SS_MIDIMessage msg);
 void ss_midi_track_delete_event(SS_MIDITrack *track, size_t index);
 

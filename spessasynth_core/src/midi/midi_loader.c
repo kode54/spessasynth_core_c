@@ -33,14 +33,15 @@ SS_MIDITrack *ss_midi_track_new(void) {
 	return (SS_MIDITrack *)calloc(1, sizeof(SS_MIDITrack));
 }
 
-void ss_midi_track_free(SS_MIDITrack *t) {
+void ss_midi_track_clear(SS_MIDITrack *t) {
 	if(!t) return;
 	if(t->events) {
 		for(size_t i = 0; i < t->event_count; i++)
 			free(t->events[i].data);
 	}
 	free(t->events);
-	free(t);
+	memset(t, 0, sizeof(*t));
+	t->port = -1;
 }
 
 bool ss_midi_track_push_event(SS_MIDITrack *t, SS_MIDIMessage msg) {
@@ -114,7 +115,7 @@ void ss_rmidi_info_free(SS_RMIDIInfo *info) {
 void ss_midi_free(SS_MIDIFile *m) {
 	if(!m) return;
 	for(size_t i = 0; i < m->track_count; i++)
-		ss_midi_track_free(&m->tracks[i]);
+		ss_midi_track_clear(&m->tracks[i]);
 	free(m->tracks);
 	free(m->tempo_changes);
 	free(m->port_channel_offset_map);
