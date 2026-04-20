@@ -692,7 +692,7 @@ try_again:
 				/* Infinite + no markers: loop the whole file. */
 				loop_rewind_to_tick(seq, 0, target_time);
 				target_time -= current_time;
-				current_time = seq->current_time;
+				current_time = 0;
 				seq->loops_played++;
 				continue;
 			}
@@ -770,7 +770,6 @@ try_again:
 			int next_ti = find_first_event(song, midi);
 			if(next_ti < 0) {
 				if(infinite && !has_markers) {
-					double current_time = seq->current_time;
 					loop_rewind_to_tick(seq, 0, target_time);
 					target_time -= current_time;
 					continue;
