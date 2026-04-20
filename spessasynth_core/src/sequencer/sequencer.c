@@ -189,6 +189,7 @@ bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 	if(seq->current_song_index == ~0UL) {
 		seq->current_song_index = 0;
 		seq->base_time = 0.0;
+		seq->current_tick = 0;
 		seq->current_time = 0.0;
 		seq->finished = false;
 		seq->loops_played = 0;
@@ -245,6 +246,7 @@ void ss_sequencer_stop(SS_Sequencer *seq) {
 	seq->is_playing = false;
 	seq->is_paused = false;
 	seq->base_time = 0.0;
+	seq->current_tick = 0;
 	seq->current_time = 0.0;
 	end_fade(seq);
 	seq->loops_played = 0;
@@ -269,6 +271,7 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 	song_rewind(song);
 	seq->base_time += seq->current_time - seconds;
 	seq->current_time = seconds;
+	seq->current_tick = ss_seconds_to_midi_tick(midi, seconds);
 
 	/* Reset processor */
 	dispatch_reset(seq);
@@ -498,6 +501,7 @@ static bool ss_sequencer_next_song(SS_Sequencer *seq) {
 		end_fade(seq);
 
 		seq->base_time += seq->current_time;
+		seq->current_tick = 0;
 		seq->current_time = 0.0;
 		seq->one_tick_seconds = 0.0;
 		seq->loops_played = 0;
@@ -612,6 +616,7 @@ static void loop_rewind_to_tick(SS_Sequencer *seq, size_t target_tick,
 	if(prev_song_time > new_song_time)
 		seq->base_time += prev_song_time - new_song_time;
 
+	seq->current_tick = target_tick;
 	seq->current_time = new_song_time;
 }
 
@@ -659,6 +664,7 @@ try_again:
 	double dt = (double)sample_count / (double)sr;
 	dt *= seq->playback_rate;
 	double target_time = seq->current_time + dt;
+	double current_time = seq->current_time;
 
 	/* Apply fade for this block up-front.  If the fade has run its
 	 * course we advance the song immediately and retry. */
@@ -684,9 +690,9 @@ try_again:
 			/* End of events.  Behavior depends on loop config: */
 			if(infinite && !has_markers) {
 				/* Infinite + no markers: loop the whole file. */
-				double current_time = seq->current_time;
 				loop_rewind_to_tick(seq, 0, target_time);
 				target_time -= current_time;
+				current_time = seq->current_time;
 				seq->loops_played++;
 				continue;
 			}
@@ -703,9 +709,13 @@ try_again:
 
 		size_t ei = song->event_indexes[ti];
 		SS_MIDIMessage *e = &midi->tracks[ti].events[ei];
-		double ev_time = (double)e->ticks * seq->one_tick_seconds;
+		double delta_time = (double)(e->ticks - seq->current_tick) * seq->one_tick_seconds;
+		double ev_time = delta_time + current_time;
 
 		if(ev_time > target_time) break;
+
+		current_time = ev_time;
+		seq->current_tick = e->ticks;
 
 		song->event_indexes[ti]++;
 		process_event(seq, midi, e, ti);
@@ -773,6 +783,7 @@ try_again:
 			}
 		}
 	}
+	seq->current_tick = ss_seconds_to_midi_tick(midi, target_time);
 	seq->current_time = target_time;
 }
 

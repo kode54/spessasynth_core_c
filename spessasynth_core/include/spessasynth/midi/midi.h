@@ -149,6 +149,9 @@ bool ss_midi_write(const SS_MIDIFile *midi, SS_File *file);
 /** Convert MIDI ticks to seconds using the embedded tempo map. */
 double ss_midi_ticks_to_seconds(const SS_MIDIFile *midi, size_t ticks);
 
+/** Convert seconds to absolute MIDI ticks using the embedded tempo map. */
+size_t ss_seconds_to_midi_tick(const SS_MIDIFile *m, double seconds);
+
 /** Rebuild internal caches (tempo map, loop, ports, name). Call after editing. */
 void ss_midi_flush(SS_MIDIFile *midi);
 

@@ -66,6 +66,7 @@ typedef struct {
 	size_t current_song_index;
 
 	double base_time; /* absolute time */
+	size_t current_tick; /* absolute timestamp */
 	double current_time; /* seconds, same units as proc->current_synth_time */
 	double playback_rate; /* 1.0 = normal */
 	double one_tick_seconds; /* current tempo ratio */

@@ -153,6 +153,26 @@ static int tempo_cmp_asc(const void *a, const void *b) {
 	return 0;
 }
 
+size_t ss_seconds_to_midi_tick(const SS_MIDIFile *m, double seconds_in) {
+	double total = 0.0;
+	double current_tempo = 60000000.0 / 500000.0; /* Default */
+	size_t current_tick = 0;
+	SS_TempoChange *tc;
+	size_t i;
+	if(m->tempo_change_count > 0 && m->time_division > 0) {
+		for(i = 0, tc = m->tempo_changes; i < m->tempo_change_count; i++, tc++) {
+			size_t delta = tc->ticks - current_tick;
+			double delta_time = (double)delta * 60.0 / (current_tempo * (double)m->time_division);
+			if(total + delta_time > seconds_in) break;
+			total += delta_time;
+			current_tick += delta;
+			current_tempo = tc->tempo;
+		}
+	}
+	size_t delta = (size_t)((seconds_in - total) / 60.0 * (current_tempo * (double)m->time_division));
+	return current_tick + delta;
+}
+
 double ss_midi_ticks_to_seconds(const SS_MIDIFile *m, size_t ticks_in) {
 	size_t ticks = ticks_in;
 	if(m->tempo_change_count == 0 || m->time_division == 0) return 0.0;
