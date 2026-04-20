@@ -149,6 +149,21 @@ SS_Sequencer *ss_sequencer_create(SS_Processor *proc) {
 	return seq;
 }
 
+SS_Sequencer *ss_sequencer_create_callbacks(const SS_SequencerCallbacks *cb) {
+	if(!cb) return NULL;
+	SS_Sequencer *seq = (SS_Sequencer *)calloc(1, sizeof(SS_Sequencer));
+	if(!seq) return NULL;
+	seq->proc = NULL;
+	seq->callbacks = *cb;
+	seq->playback_rate = 1.0;
+	seq->loop_count = 2;
+	seq->fade_seconds = 7.0;
+	seq->loops_remaining = initial_loops_remaining(seq->loop_count);
+	seq->saved_master_volume = 1.0f;
+	seq->current_song_index = ~0UL;
+	return seq;
+}
+
 void ss_sequencer_free(SS_Sequencer *seq) {
 	if(!seq) return;
 	ss_sequencer_clear(seq);
@@ -215,13 +230,22 @@ void ss_sequencer_pause(SS_Sequencer *seq) {
 	seq->is_paused = true;
 }
 
+/* Forward declarations of the MIDI-dispatch sink helpers defined lower
+ * in this file.  They're used by the fade/stop/tick paths above. */
+static void dispatch_midi(SS_Sequencer *seq, const uint8_t *data,
+                          size_t length, double timestamp);
+static void dispatch_master_volume(SS_Sequencer *seq, float value);
+static void dispatch_voice_event(SS_Sequencer *seq, const SS_MIDIFile *midi,
+                                 const SS_MIDIMessage *e, double t);
+static void dispatch_sysex_event(SS_Sequencer *seq, const SS_MIDIFile *midi,
+                                 const SS_MIDIMessage *e, double t);
+
 /** Drop any active fade and restore the master volume the user had
  *  set before the fade started. */
 static void end_fade(SS_Sequencer *seq) {
 	if(!seq->fading) return;
 	seq->fading = false;
-	if(seq->proc)
-		seq->proc->master_params.master_volume = seq->saved_master_volume;
+	dispatch_master_volume(seq, seq->saved_master_volume);
 }
 
 void ss_sequencer_stop(SS_Sequencer *seq) {
@@ -285,42 +309,14 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 				one_tick_sec = 60.0 / (bpm * (double)midi->time_division);
 		}
 
-		/* Non-note voice events */
-		if(sb >= 0x80 && sb < 0xF0 && seq->proc) {
+		/* Replay CC / Program / Pitch wheel / SysEx only; skip notes
+		 * and pressure so the seek is silent. */
+		if(sb >= 0x80 && sb < 0xF0) {
 			uint8_t type = sb & 0xF0;
-			int ch = effective_channel(midi, e);
-			uint8_t syx[2];
-			syx[0] = 0xf5;
-			syx[1] = (ch >> 4) + 1;
-			ss_processor_sysex(seq->proc, syx, 2, ev_time);
-			ch &= 0xf;
-			switch(type) {
-				case 0xB0: /* CC */
-					if(e->data_length >= 2)
-						ss_processor_control_change(seq->proc, ch,
-						                            e->data[0], e->data[1],
-						                            ev_time);
-					break;
-				case 0xC0: /* Program */
-					if(e->data_length >= 1)
-						ss_processor_program_change(seq->proc, ch,
-						                            e->data[0], ev_time);
-					break;
-				case 0xE0: /* Pitch wheel */
-					if(e->data_length >= 2)
-						ss_processor_pitch_wheel(seq->proc, ch,
-						                         (e->data[1] << 7) | e->data[0],
-						                         -1, ev_time);
-					break;
-					/* Notes are skipped during seek */
-			}
-		} else if(sb == 0xF0 && seq->proc && e->data_length > 0) {
-			int port = effective_port(midi, e);
-			uint8_t syx[2];
-			syx[0] = 0xf5;
-			syx[1] = port + 1;
-			ss_processor_sysex(seq->proc, syx, 2, ev_time);
-			ss_processor_sysex(seq->proc, e->data, e->data_length, ev_time);
+			if(type == 0xB0 || type == 0xC0 || type == 0xE0)
+				dispatch_voice_event(seq, midi, e, ev_time);
+		} else if(sb == 0xF0) {
+			dispatch_sysex_event(seq, midi, e, ev_time);
 		}
 	}
 
@@ -335,11 +331,134 @@ double ss_sequencer_get_time(const SS_Sequencer *seq) {
 	return seq->current_time;
 }
 
+/* ── MIDI dispatch sink ──────────────────────────────────────────────────── */
+
+/**
+ * Route a raw MIDI command to the active sink.  data must start with
+ * the status byte; for SysEx it is 0xF0 followed by the payload and
+ * terminating 0xF7.  length counts every byte.
+ *
+ * When callbacks are configured, the buffer is passed verbatim.  When
+ * driving the built-in SS_Processor, 0xF0 SysExes are passed to
+ * ss_processor_sysex with the leading 0xF0 stripped (the existing
+ * contract), while channel voice messages are dispatched via the
+ * typed ss_processor_* calls.  Other system-common status bytes
+ * (0xF5 port-select and friends) are passed raw to ss_processor_sysex.
+ */
+static void dispatch_midi(SS_Sequencer *seq, const uint8_t *data,
+                          size_t length, double timestamp) {
+	if(!data || length == 0) return;
+
+	if(seq->callbacks.midi_command) {
+		seq->callbacks.midi_command(seq->callbacks.context, data, length,
+		                            timestamp);
+		return;
+	}
+	if(!seq->proc) return;
+
+	uint8_t sb = data[0];
+	if(sb == 0xF0) {
+		if(length >= 2)
+			ss_processor_sysex(seq->proc, data + 1, length - 1, timestamp);
+		return;
+	}
+	if(sb >= 0xF1) {
+		ss_processor_sysex(seq->proc, data, length, timestamp);
+		return;
+	}
+
+	uint8_t type = sb & 0xF0;
+	int ch = sb & 0x0F;
+	switch(type) {
+		case 0x80:
+			if(length >= 2)
+				ss_processor_note_off(seq->proc, ch, data[1], timestamp);
+			break;
+		case 0x90:
+			if(length >= 3) {
+				if(data[2] > 0)
+					ss_processor_note_on(seq->proc, ch, data[1], data[2], timestamp);
+				else
+					ss_processor_note_off(seq->proc, ch, data[1], timestamp);
+			}
+			break;
+		case 0xA0:
+			if(length >= 3)
+				ss_processor_poly_pressure(seq->proc, ch, data[1], data[2],
+				                           timestamp);
+			break;
+		case 0xB0:
+			if(length >= 3)
+				ss_processor_control_change(seq->proc, ch, data[1], data[2],
+				                            timestamp);
+			break;
+		case 0xC0:
+			if(length >= 2)
+				ss_processor_program_change(seq->proc, ch, data[1], timestamp);
+			break;
+		case 0xD0:
+			if(length >= 2)
+				ss_processor_channel_pressure(seq->proc, ch, data[1], timestamp);
+			break;
+		case 0xE0:
+			if(length >= 3)
+				ss_processor_pitch_wheel(seq->proc, ch,
+				                         (data[2] << 7) | data[1], -1, timestamp);
+			break;
+	}
+}
+
+/** Route a master-volume change to the active sink. */
+static void dispatch_master_volume(SS_Sequencer *seq, float value) {
+	if(seq->callbacks.set_master_volume)
+		seq->callbacks.set_master_volume(seq->callbacks.context, value);
+	if(seq->proc)
+		seq->proc->master_params.master_volume = value;
+}
+
+/** Build the port-select SysEx and dispatch it ahead of a voice event. */
+static void dispatch_port_select(SS_Sequencer *seq, int port, double t) {
+	uint8_t syx[2] = { 0xF5, (uint8_t)((port & 0x0F) + 1) };
+	dispatch_midi(seq, syx, 2, t);
+}
+
+/** Dispatch a voice event (non-meta, non-SysEx) via the sink. */
+static void dispatch_voice_event(SS_Sequencer *seq, const SS_MIDIFile *midi,
+                                 const SS_MIDIMessage *e, double t) {
+	int eff = effective_channel(midi, e);
+	dispatch_port_select(seq, eff >> 4, t);
+	int ch = eff & 0x0F;
+
+	uint8_t buf[3];
+	buf[0] = (uint8_t)((e->status_byte & 0xF0) | ch);
+	size_t len = 1;
+	for(size_t i = 0; i < e->data_length && len < 3; i++)
+		buf[len++] = e->data[i];
+	dispatch_midi(seq, buf, len, t);
+}
+
+/** Dispatch a SysEx event via the sink, re-prepending the 0xF0 status. */
+static void dispatch_sysex_event(SS_Sequencer *seq, const SS_MIDIFile *midi,
+                                 const SS_MIDIMessage *e, double t) {
+	if(e->data_length == 0) return;
+	int port = effective_port(midi, e);
+	dispatch_port_select(seq, port, t);
+
+	/* Our SS_MIDIMessage stores the SysEx body without the leading 0xF0,
+	 * but the callback contract (and MIDI byte-stream convention) wants
+	 * it.  Prepend into a temp buffer. */
+	uint8_t *buf = (uint8_t *)malloc(e->data_length + 1);
+	if(!buf) return;
+	buf[0] = 0xF0;
+	memcpy(buf + 1, e->data, e->data_length);
+	dispatch_midi(seq, buf, e->data_length + 1, t);
+	free(buf);
+}
+
 /* ── Process a single MIDI event ─────────────────────────────────────────── */
 
 static void process_event(SS_Sequencer *seq, SS_MIDIFile *midi,
                           SS_MIDIMessage *e, int track_index) {
-	if(!seq->proc) return;
 	(void)track_index;
 
 	uint8_t sb = e->status_byte;
@@ -347,59 +466,13 @@ static void process_event(SS_Sequencer *seq, SS_MIDIFile *midi,
 
 	/* Voice event */
 	if(sb >= 0x80 && sb < 0xF0) {
-		uint8_t type = sb & 0xF0;
-		int ch = effective_channel(midi, e);
-		uint8_t syx[2];
-		syx[0] = 0xf5;
-		syx[1] = (ch >> 4) + 1;
-		ss_processor_sysex(seq->proc, syx, 2, t);
-		ch &= 0xf;
-		switch(type) {
-			case 0x90: /* note on */
-				if(e->data_length >= 2) {
-					if(e->data[1] > 0)
-						ss_processor_note_on(seq->proc, ch, e->data[0], e->data[1], t);
-					else
-						ss_processor_note_off(seq->proc, ch, e->data[0], t);
-				}
-				break;
-			case 0x80: /* note off */
-				if(e->data_length >= 1)
-					ss_processor_note_off(seq->proc, ch, e->data[0], t);
-				break;
-			case 0xB0: /* CC */
-				if(e->data_length >= 2)
-					ss_processor_control_change(seq->proc, ch, e->data[0], e->data[1], t);
-				break;
-			case 0xC0: /* program */
-				if(e->data_length >= 1)
-					ss_processor_program_change(seq->proc, ch, e->data[0], t);
-				break;
-			case 0xE0: /* pitch wheel */
-				if(e->data_length >= 2)
-					ss_processor_pitch_wheel(seq->proc, ch,
-					                         (e->data[1] << 7) | e->data[0], -1, t);
-				break;
-			case 0xA0: /* poly pressure */
-				if(e->data_length >= 2)
-					ss_processor_poly_pressure(seq->proc, ch, e->data[0], e->data[1], t);
-				break;
-			case 0xD0: /* channel pressure */
-				if(e->data_length >= 1)
-					ss_processor_channel_pressure(seq->proc, ch, e->data[0], t);
-				break;
-		}
+		dispatch_voice_event(seq, midi, e, t);
 		return;
 	}
 
 	/* SysEx */
-	if(sb == 0xF0 && e->data_length > 0) {
-		int port = effective_port(midi, e);
-		uint8_t syx[2];
-		syx[0] = 0xf5;
-		syx[1] = port + 1;
-		ss_processor_sysex(seq->proc, syx, 2, t);
-		ss_processor_sysex(seq->proc, e->data, e->data_length, t);
+	if(sb == 0xF0) {
+		dispatch_sysex_event(seq, midi, e, t);
 		return;
 	}
 
@@ -484,6 +557,9 @@ static void begin_fade(SS_Sequencer *seq) {
 	if(seq->fading) return;
 	seq->fading = true;
 	seq->fade_start_time = seq->base_time + seq->current_time;
+	/* Remember the master volume the synth currently holds so we can
+	 * fade relative to it and restore on fade-cancel.  Callback-mode
+	 * has no introspection hook, so we assume the nominal 1.0. */
 	seq->saved_master_volume = seq->proc ? seq->proc->master_params.master_volume : 1.0f;
 }
 
@@ -550,20 +626,18 @@ static void loop_rewind_to_tick(SS_Sequencer *seq, size_t target_tick,
 static bool apply_fade(SS_Sequencer *seq, double abs_time) {
 	if(!seq->fading) return false;
 	if(seq->fade_seconds <= 0.0) {
-		if(seq->proc) seq->proc->master_params.master_volume = 0.0f;
+		dispatch_master_volume(seq, 0.0f);
 		return true;
 	}
 	double elapsed = abs_time - seq->fade_start_time;
 	if(elapsed < 0.0) elapsed = 0.0;
 	double progress = elapsed / seq->fade_seconds;
 	if(progress >= 1.0) {
-		if(seq->proc) seq->proc->master_params.master_volume = 0.0f;
+		dispatch_master_volume(seq, 0.0f);
 		return true;
 	}
-	if(seq->proc) {
-		float gain = (float)(1.0 - progress);
-		seq->proc->master_params.master_volume = seq->saved_master_volume * gain;
-	}
+	float gain = (float)(1.0 - progress);
+	dispatch_master_volume(seq, seq->saved_master_volume * gain);
 	return false;
 }
 
@@ -579,8 +653,16 @@ try_again:
 	}
 	SS_MIDIFile *midi = song->midi;
 
-	/* Advance current_time by the rendered quantum */
-	double dt = (seq->proc && seq->proc->sample_rate > 0) ? (double)sample_count / (double)seq->proc->sample_rate : (double)sample_count / 44100.0;
+	/* Advance current_time by the rendered quantum.  Sample rate comes
+	 * from the built-in processor in proc mode, or from the caller's
+	 * SS_SequencerCallbacks in callback mode; fall back to 44100. */
+	uint32_t sr = 0;
+	if(seq->proc && seq->proc->sample_rate > 0)
+		sr = seq->proc->sample_rate;
+	else if(seq->callbacks.sample_rate > 0)
+		sr = seq->callbacks.sample_rate;
+	if(sr == 0) sr = 44100;
+	double dt = (double)sample_count / (double)sr;
 	dt *= seq->playback_rate;
 	double target_time = seq->current_time + dt;
 

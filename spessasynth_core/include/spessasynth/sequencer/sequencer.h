@@ -22,6 +22,41 @@ typedef struct {
 	size_t track_count;
 } SS_SequencerSong;
 
+/**
+ * Callback interface for driving an external synthesizer from the
+ * sequencer instead of the built-in SS_Processor.  Every callback is
+ * optional; a NULL entry silently disables that hook.
+ *
+ * Lifetime: the struct contents are copied into the sequencer at
+ * ss_sequencer_create_callbacks time, so the struct itself does not
+ * need to outlive the call.  The context pointer is stored and passed
+ * back to every callback unchanged.
+ */
+typedef struct {
+	/** Sample rate of the caller's custom synth.  Used by
+	 *  ss_sequencer_tick to convert sample_count into a time delta.
+	 *  Falls back to 44100 if zero. */
+	uint32_t sample_rate;
+
+	/** Dispatch one MIDI command.  data begins with the status byte
+	 *  (e.g. 0x9n for note-on, 0xF0 for SysEx, 0xF5 for the internal
+	 *  port-select message the sequencer emits ahead of each voice
+	 *  event on multi-port files).  length is the total command
+	 *  length in bytes, including the status byte and any payload
+	 *  (including the trailing 0xF7 on SysEx).  timestamp is the
+	 *  absolute time in seconds from the start of playback. */
+	void (*midi_command)(void *ctx, const uint8_t *data, size_t length,
+	                     double timestamp);
+
+	/** Called during the post-loop fade (and on fade-cancel) to
+	 *  request a master-volume change.  value is 0..1.  The external
+	 *  synth should scale its rendered output by this factor. */
+	void (*set_master_volume)(void *ctx, float value);
+
+	/** Opaque context passed back to every callback. */
+	void *context;
+} SS_SequencerCallbacks;
+
 typedef struct {
 	SS_Processor *proc; /* non-owning */
 
@@ -58,9 +93,22 @@ typedef struct {
 
 	bool preload; /* true once initial events have been sent */
 	bool finished;
+
+	/* When non-NULL midi_command is supplied, events are dispatched
+	 * through the callbacks instead of SS_Processor.  proc is NULL
+	 * in that mode and the callback's sample_rate is used for timing. */
+	SS_SequencerCallbacks callbacks;
 } SS_Sequencer;
 
+/** Create a sequencer that drives the built-in SS_Processor. */
 SS_Sequencer *ss_sequencer_create(SS_Processor *proc);
+
+/** Create a sequencer that drives an external synthesizer via the
+ *  callback table.  The caller is responsible for rendering audio
+ *  using the dispatched MIDI commands; ss_sequencer_tick still needs
+ *  to be called once per rendered quantum to advance song time. */
+SS_Sequencer *ss_sequencer_create_callbacks(const SS_SequencerCallbacks *cb);
+
 void ss_sequencer_free(SS_Sequencer *seq);
 
 /** Load a single MIDI file into the song list. */
