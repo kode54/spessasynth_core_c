@@ -52,6 +52,20 @@ bool ss_midi_track_push_event(SS_MIDITrack *t, SS_MIDIMessage msg) {
 		t->events = tmp;
 		t->event_capacity = nc;
 	}
+	size_t i;
+	for(i = t->event_count; i > 0; i--) {
+		SS_MIDIMessage *m = &t->events[i - 1];
+		if(m->ticks <= msg.ticks) break;
+	}
+	if(i < t->event_count) {
+		/* Insert the event */
+		for(size_t ii = t->event_count; ii > i; ii--) {
+			t->events[ii] = t->events[ii - 1];
+		}
+		t->events[i] = msg;
+		t->event_count++;
+		return true;
+	}
 	t->events[t->event_count++] = msg;
 	return true;
 }
