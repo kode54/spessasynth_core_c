@@ -686,7 +686,9 @@ try_again:
 			/* End of events.  Behavior depends on loop config: */
 			if(infinite && !has_markers) {
 				/* Infinite + no markers: loop the whole file. */
+				double current_time = seq->current_time;
 				loop_rewind_to_tick(seq, 0, target_time);
+				target_time -= current_time;
 				continue;
 			}
 			if(seq->fading) {
@@ -747,6 +749,7 @@ try_again:
 				double loop_end_time = ss_midi_ticks_to_seconds(midi,
 				                                                midi->loop.end);
 				loop_rewind_to_tick(seq, midi->loop.start, loop_end_time);
+				target_time -= loop_end_time - midi->loop.start;
 				return;
 			}
 		}
@@ -756,7 +759,9 @@ try_again:
 			int next_ti = find_first_event(song, midi);
 			if(next_ti < 0) {
 				if(infinite && !has_markers) {
+					double current_time = seq->current_time;
 					loop_rewind_to_tick(seq, 0, target_time);
+					target_time -= current_time;
 					continue;
 				}
 				if(seq->fading) break;
