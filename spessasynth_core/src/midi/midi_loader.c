@@ -198,6 +198,144 @@ static void str_lower_trim(const char *src, size_t len,
 	dst[j] = '\0';
 }
 
+/* ── Loop scanning ───────────────────────────────────────────────────────── */
+
+/* Ported from midi_processing's midi_container::scan_for_loops.  Runs the
+ * four independent loop-marker scanners (Touhou, RPG Maker, XMI, Marker)
+ * and takes the outermost surviving start/end across them.  Must be
+ * called after m->last_voice_event_tick has been computed so the sanity
+ * check at the end can compare against song end. */
+
+#define LOOP_UNSET ((size_t)-1)
+
+static bool is_cc(const SS_MIDIMessage *e) {
+	return (e->status_byte & 0xF0) == 0xB0 && e->data_length >= 2;
+}
+
+static void scan_loops(SS_MIDIFile *m) {
+	size_t loop_start = LOOP_UNSET;
+	size_t loop_end = LOOP_UNSET;
+
+	/* Pre-pass: does any track carry EMIDI (CC 110) designations?  If
+	 * so, RPG Maker CC 111 markers are not trustworthy loops. */
+	bool any_emidi = false;
+	for(size_t ti = 0; ti < m->track_count && !any_emidi; ti++) {
+		const SS_MIDITrack *t = &m->tracks[ti];
+		for(size_t ei = 0; ei < t->event_count; ei++) {
+			const SS_MIDIMessage *e = &t->events[ei];
+			if(is_cc(e) && e->data[0] == 110) {
+				any_emidi = true;
+				break;
+			}
+		}
+	}
+
+	/* Scan 1 — Touhou (format 0 only): CC 2 = start, CC 4 = end.  A
+	 * non-zero value on either voids the entire Touhou result. */
+	if(m->format == 0) {
+		size_t t_start = LOOP_UNSET;
+		size_t t_end = LOOP_UNSET;
+		bool errored = false;
+		for(size_t ti = 0; ti < m->track_count && !errored; ti++) {
+			const SS_MIDITrack *t = &m->tracks[ti];
+			for(size_t ei = 0; ei < t->event_count && !errored; ei++) {
+				const SS_MIDIMessage *e = &t->events[ei];
+				if(!is_cc(e)) continue;
+				if(e->data[0] == 2) {
+					if(e->data[1] != 0) {
+						errored = true;
+						break;
+					}
+					t_start = e->ticks;
+				} else if(e->data[0] == 4) {
+					if(e->data[1] != 0) {
+						errored = true;
+						break;
+					}
+					t_end = e->ticks;
+				}
+			}
+		}
+		if(!errored) {
+			if(t_start != LOOP_UNSET &&
+			   (loop_start == LOOP_UNSET || t_start < loop_start))
+				loop_start = t_start;
+			if(t_end != LOOP_UNSET &&
+			   (loop_end == LOOP_UNSET || t_end > loop_end))
+				loop_end = t_end;
+		}
+	}
+
+	/* Scan 2 — RPG Maker: CC 111 = start.  Disabled when EMIDI is
+	 * present anywhere in the file. */
+	if(!any_emidi) {
+		for(size_t ti = 0; ti < m->track_count; ti++) {
+			const SS_MIDITrack *t = &m->tracks[ti];
+			for(size_t ei = 0; ei < t->event_count; ei++) {
+				const SS_MIDIMessage *e = &t->events[ei];
+				if(!is_cc(e) || e->data[0] != 111) continue;
+				if(loop_start == LOOP_UNSET || e->ticks < loop_start)
+					loop_start = e->ticks;
+			}
+		}
+	}
+
+	/* Scan 3 — XMI / EMIDI: CC 0x74/0x76 = start, CC 0x75/0x77 = end. */
+	for(size_t ti = 0; ti < m->track_count; ti++) {
+		const SS_MIDITrack *t = &m->tracks[ti];
+		for(size_t ei = 0; ei < t->event_count; ei++) {
+			const SS_MIDIMessage *e = &t->events[ei];
+			if(!is_cc(e)) continue;
+			uint8_t cc = e->data[0];
+			if(cc == 0x74 || cc == 0x76) {
+				if(loop_start == LOOP_UNSET || e->ticks < loop_start)
+					loop_start = e->ticks;
+			} else if(cc == 0x75 || cc == 0x77) {
+				if(loop_end == LOOP_UNSET || e->ticks > loop_end)
+					loop_end = e->ticks;
+			}
+		}
+	}
+
+	/* Scan 4 — Marker meta events: "loopStart" / "loopEnd" (case
+	 * insensitive).  "start" is also accepted as a loop-start alias. */
+	for(size_t ti = 0; ti < m->track_count; ti++) {
+		const SS_MIDITrack *t = &m->tracks[ti];
+		for(size_t ei = 0; ei < t->event_count; ei++) {
+			const SS_MIDIMessage *e = &t->events[ei];
+			if(e->status_byte != SS_META_MARKER) continue;
+			char lower[64];
+			str_lower_trim((const char *)e->data,
+			               e->data_length < 63 ? e->data_length : 63,
+			               lower, sizeof(lower));
+			if(strcmp(lower, "loopstart") == 0 || strcmp(lower, "start") == 0) {
+				if(loop_start == LOOP_UNSET || e->ticks < loop_start)
+					loop_start = e->ticks;
+			} else if(strcmp(lower, "loopend") == 0) {
+				if(loop_end == LOOP_UNSET || e->ticks > loop_end)
+					loop_end = e->ticks;
+			}
+		}
+	}
+
+	/* Sanity: degenerate loops (empty range, or "loop start" sitting on
+	 * the song's final tick) get dropped entirely. */
+	if(loop_start != LOOP_UNSET) {
+		if(loop_start == loop_end ||
+		   loop_start == m->last_voice_event_tick) {
+			loop_start = LOOP_UNSET;
+			loop_end = LOOP_UNSET;
+		}
+	}
+
+	/* Fallback: start-only loops extend to the last voice event. */
+	if(loop_start != LOOP_UNSET && loop_end == LOOP_UNSET)
+		loop_end = m->last_voice_event_tick;
+
+	m->loop.start = (loop_start != LOOP_UNSET) ? loop_start : 0;
+	m->loop.end = (loop_end != LOOP_UNSET) ? loop_end : 0;
+}
+
 /* ── parseInternal — builds tempo map, loop, duration, key range ─────────── */
 
 static void midi_parse_internal(SS_MIDIFile *m) {
@@ -215,8 +353,6 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 	/* Seed tempo map with 120 BPM at tick 0 */
 	midi_push_tempo(m, 0, 120.0);
 
-	bool loop_start_found = false;
-	int loop_end_count = 0;
 	bool first_note_set = false;
 	bool karaoke_has_title = false;
 
@@ -258,32 +394,11 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 						if(note > m->key_range.max) m->key_range.max = note;
 					}
 				} else if(type == 0xB0 && e->data_length >= 2) {
-					/* Controller change — loop detection */
-					uint8_t cc = e->data[0];
-					uint8_t val = e->data[1];
-					(void)val;
-					switch(cc) {
-						case 2: /* Touhou loop start */
-						case 111: /* RPG Maker */
-						case 116: /* EMIDI/XMI loop start */
-							m->loop.start = e->ticks;
-							loop_start_found = true;
-							break;
-						case 4: /* Touhou loop end */
-						case 117: /* EMIDI/XMI loop end */
-							if(loop_end_count == 0) {
-								m->loop.end = e->ticks;
-							} else {
-								m->loop.end = 0; /* duplicate → not a real loop end */
-							}
-							loop_end_count++;
-							break;
-						case 0: /* Bank select MSB — detect DLS RMIDI bank offset */
-							if(m->is_dls_rmidi && e->data_length >= 2 &&
-							   e->data[1] != 0 && e->data[1] != 127) {
-								m->bank_offset = 1;
-							}
-							break;
+					/* Controller change — DLS RMIDI bank-offset hint only.
+					 * Loop markers are handled in scan_loops below. */
+					if(e->data[0] == 0 && m->is_dls_rmidi &&
+					   e->data[1] != 0 && e->data[1] != 127) {
+						m->bank_offset = 1;
 					}
 				}
 			}
@@ -328,23 +443,6 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 					}
 					break;
 
-				case SS_META_MARKER: {
-					/* Loop-point markers: "loopstart" / "loopend" / "start" */
-					char lower[64];
-					str_lower_trim((const char *)e->data,
-					               e->data_length < 63 ? e->data_length : 63,
-					               lower, sizeof(lower));
-					if(strcmp(lower, "loopstart") == 0 ||
-					   strcmp(lower, "start") == 0) {
-						m->loop.start = e->ticks;
-						loop_start_found = true;
-					} else if(strcmp(lower, "loopend") == 0) {
-						m->loop.end = e->ticks;
-						loop_end_count++;
-					}
-					break;
-				}
-
 				case SS_META_TEXT: {
 					if(e->data_length == 0) break;
 					char buf[32];
@@ -373,9 +471,8 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 		}
 	}
 
-	/* If only loop start found, loop end = last voice event */
-	if(loop_start_found && m->loop.end == 0)
-		m->loop.end = m->last_voice_event_tick;
+	/* Run the four loop scanners now that last_voice_event_tick is known. */
+	scan_loops(m);
 
 	/* Sort tempo changes descending by tick (last → first) */
 	qsort(m->tempo_changes, m->tempo_change_count,
