@@ -134,7 +134,7 @@ SS_Sequencer *ss_sequencer_create(SS_Processor *proc) {
 	if(!seq) return NULL;
 	seq->proc = proc;
 	seq->playback_rate = 1.0;
-	seq->loop_count = 2;
+	seq->loop_count = 1;
 	seq->fade_seconds = 7.0;
 	seq->loops_played = 1;
 	seq->saved_master_volume = 1.0f;
@@ -149,7 +149,7 @@ SS_Sequencer *ss_sequencer_create_callbacks(const SS_SequencerCallbacks *cb) {
 	seq->proc = NULL;
 	seq->callbacks = *cb;
 	seq->playback_rate = 1.0;
-	seq->loop_count = 2;
+	seq->loop_count = 1;
 	seq->fade_seconds = 7.0;
 	seq->loops_played = 1;
 	seq->saved_master_volume = 1.0f;
@@ -231,6 +231,7 @@ static void dispatch_voice_event(SS_Sequencer *seq, const SS_MIDIFile *midi,
                                  const SS_MIDIMessage *e, double t);
 static void dispatch_sysex_event(SS_Sequencer *seq, const SS_MIDIFile *midi,
                                  const SS_MIDIMessage *e, double t);
+static void dispatch_reset(SS_Sequencer *seq);
 
 /** Drop any active fade and restore the master volume the user had
  *  set before the fade started. */
@@ -239,8 +240,6 @@ static void end_fade(SS_Sequencer *seq) {
 	seq->fading = false;
 	dispatch_master_volume(seq, seq->saved_master_volume);
 }
-
-static void dispatch_reset(SS_Sequencer *seq);
 
 void ss_sequencer_stop(SS_Sequencer *seq) {
 	seq->is_playing = false;
@@ -493,11 +492,11 @@ static void process_event(SS_Sequencer *seq, SS_MIDIFile *midi,
 
 static bool ss_sequencer_next_song(SS_Sequencer *seq) {
 	/* Detach the outgoing song's embedded bank before advancing. */
-	unload_embedded_bank(seq);
-	end_fade(seq);
-
 	seq->current_song_index++;
 	if((size_t)seq->current_song_index < seq->song_count) {
+		unload_embedded_bank(seq);
+		end_fade(seq);
+
 		seq->base_time += seq->current_time;
 		seq->current_time = 0.0;
 		seq->one_tick_seconds = 0.0;
@@ -664,7 +663,6 @@ try_again:
 	/* Apply fade for this block up-front.  If the fade has run its
 	 * course we advance the song immediately and retry. */
 	if(seq->fading && apply_fade(seq, seq->base_time + target_time)) {
-		end_fade(seq);
 		if(ss_sequencer_next_song(seq)) goto try_again;
 		seq->finished = true;
 		seq->is_playing = false;
@@ -733,12 +731,12 @@ try_again:
 				 * jumping so the music continues to play rather than
 				 * trailing into silence after the final loop body. */
 				do_jump = true;
-			} else if(seq->loop_count >= 2) {
+			} else if(seq->loop_count >= 1) {
 				/* Finite target.  Incrementing loops_played brings it to
 				 * the count of the playthrough we're about to begin;
 				 * when that hits loop_count we are starting the final
 				 * iteration, which is also the fade iteration. */
-				if(seq->loops_played + 1 >= seq->loop_count)
+				if(seq->loops_played >= seq->loop_count)
 					begin_fade(seq);
 				do_jump = true;
 			}
