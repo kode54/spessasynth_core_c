@@ -35,4 +35,12 @@ bool ss_midi_is_mids(SS_File *file, size_t size);
  *  Returns false on malformed input. */
 bool ss_midi_parse_mids(SS_MIDIFile *m, SS_File *file, size_t size);
 
+/** Detect a Miles Sound System XMI (Extended MIDI) file. */
+bool ss_midi_is_xmi(SS_File *file, size_t size);
+
+/** Parse an XMI file.  Single-track files become SMF format 0; multi-
+ *  track collections become format 2 with concatenated tick timelines.
+ *  Returns false on malformed input. */
+bool ss_midi_parse_xmi(SS_MIDIFile *m, SS_File *file, size_t size);
+
 #endif /* SS_MIDI_PARSERS_H */
