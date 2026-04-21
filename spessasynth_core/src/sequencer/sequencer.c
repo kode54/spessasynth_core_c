@@ -193,6 +193,7 @@ bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 		seq->current_time = 0.0;
 		seq->finished = false;
 		seq->loops_played = 0;
+		seq->ports_active = 0;
 		seq->fading = false;
 		/* This song is now current — attach its embedded bank, if any. */
 		load_embedded_bank(seq, midi);
@@ -233,6 +234,7 @@ static void dispatch_voice_event(SS_Sequencer *seq, const SS_MIDIFile *midi,
 static void dispatch_sysex_event(SS_Sequencer *seq, const SS_MIDIFile *midi,
                                  const SS_MIDIMessage *e, double t);
 static void dispatch_reset(SS_Sequencer *seq);
+static void dispatch_all_notes_off(SS_Sequencer *seq);
 
 /** Drop any active fade and restore the master volume the user had
  *  set before the fade started. */
@@ -250,6 +252,7 @@ void ss_sequencer_stop(SS_Sequencer *seq) {
 	seq->current_time = 0.0;
 	end_fade(seq);
 	seq->loops_played = 0;
+	seq->ports_active = 0;
 	SS_SequencerSong *song = current_song(seq);
 	if(song) song_rewind(song);
 	if(seq->proc) {
@@ -266,6 +269,7 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 	/* Manual seek cancels any active fade and restarts the loop counter. */
 	end_fade(seq);
 	seq->loops_played = 0;
+	seq->ports_active = 0;
 
 	/* Rewind and replay non-note events up to target time */
 	song_rewind(song);
@@ -419,6 +423,7 @@ static void dispatch_master_volume(SS_Sequencer *seq, float value) {
 static void dispatch_port_select(SS_Sequencer *seq, int port, double t) {
 	uint8_t syx[2] = { 0xF5, (uint8_t)((port & 0x0F) + 1) };
 	dispatch_midi(seq, syx, 2, t);
+	seq->ports_active |= 1 << port;
 }
 
 /** Dispatch a voice event (non-meta, non-SysEx) via the sink. */
@@ -505,6 +510,7 @@ static bool ss_sequencer_next_song(SS_Sequencer *seq) {
 		seq->current_time = 0.0;
 		seq->one_tick_seconds = 0.0;
 		seq->loops_played = 0;
+		seq->ports_active = 0;
 		/* Attach the new current song's embedded bank, if any. */
 		load_embedded_bank(seq, seq->songs[seq->current_song_index].midi);
 		return true;
@@ -618,6 +624,9 @@ static void loop_rewind_to_tick(SS_Sequencer *seq, size_t target_tick,
 
 	seq->current_tick = target_tick;
 	seq->current_time = new_song_time;
+
+	/* Kill any hanging notes */
+	dispatch_all_notes_off(seq);
 }
 
 /** Ramp the master volume toward zero.  Returns true if the fade has
@@ -800,9 +809,36 @@ static void dispatch_reset(SS_Sequencer *seq) {
 		ss_processor_system_reset(seq->proc);
 	if(seq->callbacks.midi_command) {
 		for(int i = 0; i < 4; i++) {
-			dispatch_port_select(seq, i, seq->base_time);
-			dispatch_midi(seq, syx_reset_gm, sizeof(syx_reset_gm), seq->base_time);
+			if((seq->ports_active & (1 << i)) != 0) {
+				dispatch_port_select(seq, i, seq->base_time);
+				dispatch_midi(seq, syx_reset_gm, sizeof(syx_reset_gm), seq->base_time);
+			}
 		}
 	}
 }
 
+static void dispatch_all_notes_off(SS_Sequencer *seq) {
+	if(seq->proc) {
+		for(int ch = 0; ch < seq->proc->channel_count; ch++) {
+			int port = ch >> 4;
+			if((seq->ports_active & (1 << port)) != 0) {
+				SS_MIDIChannel *c = seq->proc->midi_channels[ch];
+				if(c) ss_channel_all_notes_off(c, seq->base_time);
+			}
+		}
+	}
+	if(seq->callbacks.midi_command) {
+		for(int i = 0; i < 4; i++) {
+			if((seq->ports_active & (1 << i)) != 0) {
+				dispatch_port_select(seq, i, seq->base_time);
+				for(int ch = 0; ch < 16; ch++) {
+					uint8_t msg[3];
+					msg[0] = 0xB0 | ch;
+					msg[1] = 123; /* All notes off */
+					msg[2] = 0;
+					dispatch_midi(seq, msg, 3, seq->base_time);
+				}
+			}
+		}
+	}
+}

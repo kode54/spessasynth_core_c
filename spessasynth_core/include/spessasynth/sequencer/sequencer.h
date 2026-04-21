@@ -70,6 +70,7 @@ typedef struct {
 	double current_time; /* seconds, same units as proc->current_synth_time */
 	double playback_rate; /* 1.0 = normal */
 	double one_tick_seconds; /* current tempo ratio */
+	size_t ports_active; /* bit mask */
 	bool is_playing;
 	bool is_paused;
 	bool loop;
