@@ -162,6 +162,7 @@ size_t ss_seconds_to_midi_tick(const SS_MIDIFile *m, double seconds_in) {
 	if(m->tempo_change_count > 0 && m->time_division > 0) {
 		for(i = 0, tc = m->tempo_changes; i < m->tempo_change_count; i++, tc++) {
 			size_t delta = tc->ticks - current_tick;
+			if(!delta) continue;
 			double delta_time = (double)delta * 60.0 / (current_tempo * (double)m->time_division);
 			if(total + delta_time > seconds_in) break;
 			total += delta_time;
