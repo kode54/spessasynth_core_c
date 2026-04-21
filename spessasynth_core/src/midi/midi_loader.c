@@ -435,6 +435,10 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 					if(ei != track->event_count - 1) {
 						ss_midi_track_delete_event(track, ei);
 						ei--;
+					} else {
+						/* Note last voice event as the end of the longest track */
+						if(e->ticks > m->last_voice_event_tick)
+							m->last_voice_event_tick = e->ticks;
 					}
 					break;
 
