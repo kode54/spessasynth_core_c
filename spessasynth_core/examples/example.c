@@ -61,6 +61,18 @@ int main(int argc, char *argv[]) {
 	// parameters for a default file & soundfont, or with these arguments:
 	//
 	// ./example3-... <yoursoundfont>.sf2 <yourfile>.mid [.. more midi files]
+	// Optionally: --inf - play forever
+
+	bool playForever = false;
+	int argPlayForever = -1;
+	int argSoundBank = -1;
+	for(int i = 1; i < argc; i++) {
+		if(strcmp(argv[i], "--inf") == 0) {
+			playForever = true;
+			argPlayForever = i;
+			break;
+		}
+	}
 
 	// Define the desired audio output format we request
 	ma_device device;
@@ -79,7 +91,14 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Load the SoundFont from a file
-	const char *soundBankName = (argc >= 2 ? argv[1] : "florestan-subset.sf2");
+	const char *soundBankName = NULL;
+	for(int i = 1; i < argc; i++) {
+		if(i == argPlayForever) continue;
+		argSoundBank = i;
+		soundBankName = argv[i];
+		break;
+	}
+	if(!soundBankName) soundBankName = "florestan-subset.sf2";
 	SS_File *fSoundBank = ss_file_open_from_file(soundBankName);
 	if(!fSoundBank) {
 		fprintf(stderr, "Could not load SoundFont\n");
@@ -106,18 +125,20 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	if(argc < 3) {
+	size_t midisLoaded = 0;
+	for(int i = 1; i < argc; i++) {
+		if(i == argPlayForever || i == argSoundBank) continue;
+		if(!load_midi_file(g_sequencer, argv[i])) {
+			return 1;
+		}
+		midisLoaded++;
+	}
+	if(midisLoaded < 1) {
 		// Venture (Original WIP) by Ximon
 		// https://musescore.com/user/2391686/scores/841451
 		// License: Creative Commons copyright waiver (CC0)
 		if(!load_midi_file(g_sequencer, "venture.mid")) {
 			return 1;
-		}
-	} else {
-		for(int idx = 2; idx < argc; idx++) {
-			if(!load_midi_file(g_sequencer, argv[idx])) {
-				return 1;
-			}
 		}
 	}
 
@@ -133,6 +154,8 @@ int main(int argc, char *argv[]) {
 		ma_device_uninit(&device);
 		return 1;
 	}
+
+	ss_sequencer_set_loop_count(g_sequencer, playForever ? -1 : 1);
 
 	ss_sequencer_play(g_sequencer);
 
