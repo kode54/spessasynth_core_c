@@ -108,7 +108,8 @@ if(SS_ENABLE_SF3_FLAC)
 endif()
 
 # ── Math ─────────────────────────────────────────────────────────────────────
-if(!MSVC)
+if(MSVC)
+else()
 target_link_libraries(spessasynth_core PUBLIC m)
 endif()
 
@@ -122,7 +123,11 @@ endif()
 # ── Examples ─────────────────────────────────────────────────────────────────
 if(SS_BUILD_EXAMPLES)
     add_executable(spessasynth_example examples/example.c)
-    target_link_libraries(spessasynth_example PRIVATE spessasynth_core)
+    target_link_libraries(spessasynth_example PUBLIC spessasynth_core)
+    if(MSVC)
+    else()
+        target_link_libraries(spessasynth_example PUBLIC m)
+    endif()
     target_include_directories(spessasynth_example PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/examples
