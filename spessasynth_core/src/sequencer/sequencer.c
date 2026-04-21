@@ -709,13 +709,15 @@ try_again:
 
 		size_t ei = song->event_indexes[ti];
 		SS_MIDIMessage *e = &midi->tracks[ti].events[ei];
-		double delta_time = (double)(e->ticks - seq->current_tick) * seq->one_tick_seconds;
+		size_t delta_ticks = 0;
+		if(e->ticks > seq->current_tick) delta_ticks = e->ticks - seq->current_tick;
+		double delta_time = (double)delta_ticks * seq->one_tick_seconds;
 		double ev_time = delta_time + current_time;
 
 		if(ev_time > target_time) break;
 
 		current_time = ev_time;
-		seq->current_tick = e->ticks;
+		seq->current_tick += delta_ticks;
 
 		song->event_indexes[ti]++;
 		process_event(seq, midi, e, ti);
