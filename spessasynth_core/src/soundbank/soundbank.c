@@ -1015,7 +1015,7 @@ SS_BasicPreset *ss_soundbanks_find_preset(SS_SoundBank **banks,
 	/* No matches, return the first available preset */
 	if(match_count < 1) {
 		free(matches);
-		return bank_count ? &banks[bank_count - 1]->presets[0] : NULL;
+		return bank_count ? &banks[0]->presets[0] : NULL;
 	}
 
 	match = NULL;
