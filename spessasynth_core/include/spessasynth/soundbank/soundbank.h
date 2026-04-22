@@ -237,15 +237,15 @@ void ss_soundbank_free(SS_SoundBank *bank);
  * Find a preset by bank + program.
  * midi_system: 0 = GM, 1 = GS, 2 = XG — affects drum channel lookup.
  */
-SS_BasicPreset *ss_soundbank_find_preset(
-SS_SoundBank *bank,
+SS_BasicPreset *ss_soundbanks_find_preset(
+SS_SoundBank **banks,
+const uint16_t *bank_offsets,
+size_t bank_count,
 uint8_t program,
 uint16_t bank_msb,
 uint16_t bank_lsb,
-uint16_t bank_offset,
 int midi_system,
-bool is_drum_channel,
-bool try_inexact);
+bool is_drum_channel);
 
 /**
  * Load a SoundFont2/SF3 or DLS soundbank from a raw buffer.

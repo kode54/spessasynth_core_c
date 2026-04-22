@@ -41,17 +41,11 @@ static SS_BasicPreset *find_preset_all_banks(SS_Processor *proc,
                                              uint16_t bank_msb,
                                              uint16_t bank_lsb,
                                              bool is_drum) {
-	for(int b = 0; b < proc->soundbank_count; b++) {
-		SS_SoundBank *bank = proc->soundbanks[b];
-		if(!bank) continue;
-		uint16_t bank_offset = proc->soundbank_offsets[b];
-		SS_BasicPreset *p = ss_soundbank_find_preset(bank, program,
-		                                             bank_msb, bank_lsb, bank_offset,
-		                                             (int)proc->master_params.midi_system,
-		                                             is_drum, (b + 1) == proc->soundbank_count);
-		if(p) return p;
-	}
-	return NULL;
+	return ss_soundbanks_find_preset(proc->soundbanks, proc->soundbank_offsets,
+	                                 proc->soundbank_count,
+	                                 program, bank_msb, bank_lsb,
+	                                 (int)proc->master_params.midi_system,
+	                                 is_drum);
 }
 
 /** Re-resolve preset for every channel after a soundbank or system change. */

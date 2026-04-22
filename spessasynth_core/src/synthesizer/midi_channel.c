@@ -1366,23 +1366,18 @@ void ss_channel_program_change(SS_MIDIChannel *ch, int program) {
 	/* Look up preset in the soundbank(s) via processor */
 	struct SS_Processor *proc = ch->synth;
 	if(!proc) return;
-	for(int b = 0; b < proc->soundbank_count; b++) {
-		SS_SoundBank *bank = proc->soundbanks[b];
-		if(!bank) continue;
-		uint16_t bank_offset = proc->soundbank_offsets[b];
-		SS_BasicPreset *p = ss_soundbank_find_preset(bank,
-		                                             ch->program, ch->bank_msb, ch->bank_lsb, bank_offset,
-		                                             (int)proc->master_params.midi_system, ch->drum_channel,
-		                                             (b + 1) == proc->soundbank_count);
-		if(p) {
-			ch->preset = p;
-			bool is_drum_preset = p->is_gm_gs_drum || p->is_xg_drum;
-			if(ch->drum_channel != is_drum_preset) {
-				ch->drum_channel = is_drum_preset;
-			}
-			reset_drum_params(ch);
-			return;
+	SS_BasicPreset *p = ss_soundbanks_find_preset(proc->soundbanks, proc->soundbank_offsets,
+	                                              proc->soundbank_count,
+	                                              ch->program, ch->bank_msb, ch->bank_lsb,
+	                                              (int)proc->master_params.midi_system, ch->drum_channel);
+	if(p) {
+		ch->preset = p;
+		bool is_drum_preset = p->is_gm_gs_drum || p->is_xg_drum;
+		if(ch->drum_channel != is_drum_preset) {
+			ch->drum_channel = is_drum_preset;
 		}
+		reset_drum_params(ch);
+		return;
 	}
 }
 
