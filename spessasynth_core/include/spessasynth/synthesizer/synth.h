@@ -436,8 +436,6 @@ typedef struct {
 
 /* ── Processor (synthesis engine) ────────────────────────────────────────── */
 
-#define SS_MAX_SOUNDBANKS 16
-
 #define SS_MAX_SOUND_CHUNK 128
 
 typedef struct SS_Processor {
@@ -445,10 +443,11 @@ typedef struct SS_Processor {
 	SS_MIDIChannel *midi_channels[SS_CHANNEL_COUNT * 4]; /* up to 4 ports */
 	int channel_count;
 
-	SS_SoundBank *soundbanks[SS_MAX_SOUNDBANKS];
-	char soundbank_ids[SS_MAX_SOUNDBANKS][64];
-	uint16_t soundbank_offsets[SS_MAX_SOUNDBANKS];
-	int soundbank_count;
+	SS_SoundBank **soundbanks;
+	char **soundbank_ids;
+	uint16_t *soundbank_offsets;
+	size_t soundbank_count;
+	size_t soundbank_allocated;
 
 	int total_voices;
 	double current_synth_time; /* seconds */
@@ -519,6 +518,8 @@ bool ss_processor_remove_soundbank(SS_Processor *proc, const char *id, bool dont
  *
  * Instead, render in increments of that sample count, and use finer offsets to the
  * timestamp parameter to the event functions.
+ *
+ * These functions clear the buffer automatically first.
  */
 void ss_processor_render(SS_Processor *proc,
                          float *out_left, float *out_right,

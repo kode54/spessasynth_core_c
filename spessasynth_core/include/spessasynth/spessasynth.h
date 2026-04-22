@@ -6,40 +6,32 @@
  * Quick-start example:
  *
  *   #include <spessasynth/spessasynth.h>
- *   #include <stdio.h>
  *
  *   int main(void) {
  *       // Load soundfont
- *       FILE *f = fopen("bank.sf2", "rb");
- *       fseek(f, 0, SEEK_END); size_t sz = ftell(f); rewind(f);
- *       uint8_t *buf = malloc(sz);
- *       fread(buf, 1, sz, f); fclose(f);
+ *       SS_File *f = ss_file_open_from_file("bank.sf2");
  *
- *       SS_SoundBank *bank = ss_soundbank_load(buf, sz);
- *       free(buf);
+ *       SS_SoundBank *bank = ss_soundbank_load(f);
+ *       ss_file_close(f);
  *
  *       // Load MIDI
- *       f = fopen("song.mid", "rb");
- *       fseek(f, 0, SEEK_END); sz = ftell(f); rewind(f);
- *       buf = malloc(sz); fread(buf, 1, sz, f); fclose(f);
- *       SS_MIDIFile *midi = ss_midi_load(buf, sz, "song.mid");
- *       free(buf);
+ *       f = ss_file_open_from_file("song.mid");
+ *       SS_MIDIFile *midi = ss_midi_load(f, "song.mid");
+ *       ss_file_close(f);
  *
  *       // Create processor + sequencer
  *       SS_Processor *proc = ss_processor_create(44100, NULL);
- *       ss_processor_load_soundbank(proc, bank, "primary", false);
+ *       ss_processor_load_soundbank(proc, bank, "primary", 0, false);
  *       SS_Sequencer *seq = ss_sequencer_create(proc);
  *       ss_sequencer_load_midi(seq, midi);
  *       ss_sequencer_play(seq);
  *
  *       // Render loop
- *       float left[512], right[512];
+ *       float buffer[256];
  *       while (!ss_sequencer_is_finished(seq)) {
- *           memset(left, 0, sizeof(left));
- *           memset(right, 0, sizeof(right));
- *           ss_sequencer_tick(seq, 512);
- *           ss_processor_render(proc, left, right, 512);
- *           // ... write left/right to audio device ...
+ *           ss_sequencer_tick(seq, 128);
+ *           ss_processor_render_interleaved(proc, buffer, 128);
+ *           // ... write interleaved buffer to device
  *       }
  *
  *       ss_sequencer_free(seq);

@@ -1051,7 +1051,7 @@ SS_BasicPreset *ss_soundbanks_find_preset(SS_SoundBank **banks,
 	 * Extra case: Bank lsb 126 on Chrono_Trigger_-_To_Far_Away_Times.mid
 	 */
 	if((bank_lsb != 64 && bank_lsb != 126) || !isXG) {
-		const int bank = bank_msb > bank_lsb ? bank_msb : bank_lsb;
+		const unsigned int bank = bank_msb > bank_lsb ? bank_msb : bank_lsb;
 		/* Any matching bank. */
 		for(size_t i = 0; i < match_count; i++) {
 			SS_BasicPreset *p = matches[i].preset;

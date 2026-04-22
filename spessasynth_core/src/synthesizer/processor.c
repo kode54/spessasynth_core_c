@@ -133,10 +133,13 @@ void ss_processor_free(SS_Processor *proc) {
 		proc->midi_channels[i] = NULL;
 	}
 
-	for(int i = 0; i < proc->soundbank_count; i++) {
+	for(size_t i = 0; i < proc->soundbank_count; i++) {
 		ss_soundbank_free(proc->soundbanks[i]);
-		proc->soundbanks[i] = NULL;
+		free(proc->soundbank_ids[i]);
 	}
+	free(proc->soundbanks);
+	free(proc->soundbank_ids);
+	free(proc->soundbank_offsets);
 
 	/* Free MTS tuning grid if allocated */
 	if(proc->master_params.tunings) {
@@ -155,7 +158,7 @@ void ss_processor_free(SS_Processor *proc) {
 /* ── Soundbank management ────────────────────────────────────────────────── */
 
 SS_SoundBank *ss_processor_get_soundbank(SS_Processor *proc, const char *id) {
-	for(int i = 0; i < proc->soundbank_count; i++) {
+	for(size_t i = 0; i < proc->soundbank_count; i++) {
 		if(strcmp(proc->soundbank_ids[i], id) == 0)
 			return proc->soundbanks[i];
 	}
@@ -168,7 +171,7 @@ bool ss_processor_load_soundbank(SS_Processor *proc,
 	if(!bank || !id) return false;
 
 	/* Replace if same ID already exists */
-	for(int i = 0; i < proc->soundbank_count; i++) {
+	for(size_t i = 0; i < proc->soundbank_count; i++) {
 		if(strcmp(proc->soundbank_ids[i], id) == 0) {
 			ss_soundbank_free(proc->soundbanks[i]);
 			proc->soundbanks[i] = bank;
@@ -182,7 +185,23 @@ bool ss_processor_load_soundbank(SS_Processor *proc,
 		}
 	}
 
-	if(proc->soundbank_count >= SS_MAX_SOUNDBANKS) return false;
+	if(proc->soundbank_count >= proc->soundbank_allocated) {
+		const size_t existing_allocated = proc->soundbank_allocated;
+		const size_t new_allocated = proc->soundbank_allocated ? proc->soundbank_allocated * 2 : 4;
+		SS_SoundBank **new_soundbanks = realloc(proc->soundbanks, new_allocated * sizeof(*new_soundbanks));
+		if(!new_soundbanks) return false;
+		memset(new_soundbanks + existing_allocated, 0, (new_allocated - existing_allocated) * sizeof(*new_soundbanks));
+		proc->soundbanks = new_soundbanks;
+		char **new_soundbank_ids = realloc(proc->soundbank_ids, new_allocated * sizeof(*new_soundbank_ids));
+		if(!new_soundbank_ids) return false;
+		memset(new_soundbank_ids + existing_allocated, 0, (new_allocated - existing_allocated) * sizeof(*new_soundbank_ids));
+		proc->soundbank_ids = new_soundbank_ids;
+		uint16_t *new_soundbank_offsets = realloc(proc->soundbank_offsets, new_allocated * sizeof(*new_soundbank_offsets));
+		if(!new_soundbank_offsets) return false;
+		memset(new_soundbank_offsets + existing_allocated, 0, (new_allocated - existing_allocated) * sizeof(*new_soundbank_offsets));
+		proc->soundbank_offsets = new_soundbank_offsets;
+		proc->soundbank_allocated = new_allocated;
+	}
 
 	int idx;
 	if(insert) {
@@ -190,7 +209,7 @@ bool ss_processor_load_soundbank(SS_Processor *proc,
 			/* Move the array forward */
 			for(int i = proc->soundbank_count; i > 0; i--) {
 				proc->soundbanks[i] = proc->soundbanks[i - 1];
-				memcpy(proc->soundbank_ids[i], proc->soundbank_ids[i - 1], sizeof(proc->soundbank_ids[0]));
+				proc->soundbank_ids[i] = proc->soundbank_ids[i - 1];
 				proc->soundbank_offsets[i] = proc->soundbank_offsets[i - 1];
 			}
 		}
@@ -205,26 +224,32 @@ bool ss_processor_load_soundbank(SS_Processor *proc,
 	} else {
 		proc->soundbank_offsets[idx] = 0;
 	}
-	strncpy(proc->soundbank_ids[idx], id, sizeof(proc->soundbank_ids[idx]) - 1);
+	size_t len = strlen(id);
+	proc->soundbank_ids[idx] = (char *)malloc(len + 1);
+	if(!proc->soundbank_ids[idx]) return false;
+	strncpy(proc->soundbank_ids[idx], id, len);
 
 	proc_refresh_presets(proc);
 	return true;
 }
 
 bool ss_processor_remove_soundbank(SS_Processor *proc, const char *id, bool dontfree) {
-	for(int i = 0; i < proc->soundbank_count; i++) {
+	for(size_t i = 0; i < proc->soundbank_count; i++) {
 		if(strcmp(proc->soundbank_ids[i], id) == 0) {
 			if(!dontfree) ss_soundbank_free(proc->soundbanks[i]);
+			free(proc->soundbank_ids[i]);
 			/* Compact the arrays */
-			int last = proc->soundbank_count - 1;
+			size_t last = proc->soundbank_count - 1;
 			if(i != last) {
-				for(int ii = i + 1; ii <= last; ii++) {
+				for(size_t ii = i + 1; ii <= last; ii++) {
 					proc->soundbanks[ii - 1] = proc->soundbanks[ii];
-					memcpy(proc->soundbank_ids[ii - 1], proc->soundbank_ids[ii],
-					       sizeof(proc->soundbank_ids[0]));
+					proc->soundbank_ids[ii - 1] = proc->soundbank_ids[ii];
+					proc->soundbank_offsets[ii - 1] = proc->soundbank_offsets[ii];
 				}
 			}
 			proc->soundbanks[last] = NULL;
+			proc->soundbank_ids[last] = NULL;
+			proc->soundbank_offsets[last] = 0;
 			proc->soundbank_count--;
 			proc_refresh_presets(proc);
 			return true;
