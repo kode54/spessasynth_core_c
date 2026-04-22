@@ -747,10 +747,11 @@ static void ss_channel_set_generator_override(SS_MIDIChannel *ch, SS_GeneratorTy
 		/* Patch voice->generators directly, matching TS setGeneratorOverride realtime path */
 		for(size_t vi = 0; vi < ch->voice_count; vi++) {
 			SS_Voice *v = ch->voices[vi];
-			if(v->is_active)
+			if(v->is_active) {
 				v->generators[gen] = (int16_t)val;
+				ss_voice_compute_modulators(v, ch, time);
+			}
 		}
-		ss_channel_compute_modulators(ch, time);
 	}
 }
 
