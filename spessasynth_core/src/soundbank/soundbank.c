@@ -1071,6 +1071,23 @@ SS_BasicPreset *ss_soundbanks_find_preset(SS_SoundBank **banks,
 	return match;
 }
 
+/**
+ * Single bank helper for the above function.
+ *
+ * Capital tone fallback will fail seriously if using this to single
+ * step multiple banks.
+ */
+SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
+                                         uint16_t bank_offset,
+                                         uint8_t program,
+                                         uint16_t bank_msb,
+                                         uint16_t bank_lsb,
+                                         int midi_system,
+                                         bool is_drum_channel) {
+	return ss_soundbanks_find_preset(&bank, &bank_offset, 1, program, bank_msb,
+	                                 bank_lsb, midi_system, is_drum_channel);
+}
+
 static void soundbank_parse(SS_SoundBank *bank) {
 	bank->is_xg_bank = false;
 	// Definitions for XG:

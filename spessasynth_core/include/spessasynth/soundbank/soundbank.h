@@ -236,6 +236,22 @@ void ss_soundbank_free(SS_SoundBank *bank);
 /**
  * Find a preset by bank + program.
  * midi_system: 0 = GM, 1 = GS, 2 = XG — affects drum channel lookup.
+ *
+ * Capital tone fallback will fail seriously if using this to single
+ * step multiple banks.
+ */
+SS_BasicPreset *ss_soundbank_find_preset(
+SS_SoundBank *bank,
+uint16_t bank_offset,
+uint8_t program,
+uint16_t bank_msb,
+uint16_t bank_lsb,
+int midi_system,
+bool is_drum_channel);
+
+/**
+ * Find a preset from multiple banks, using capital tone fallback
+ * Otherwise, same parameters as the above function.
  */
 SS_BasicPreset *ss_soundbanks_find_preset(
 SS_SoundBank **banks,
