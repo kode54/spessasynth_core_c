@@ -541,6 +541,9 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		ch->midi_controllers[SS_MIDCON_BRIGHTNESS] = backup_brightness;
 		ch->midi_controllers[SS_MIDCON_FILTER_RESONANCE] = backup_filter_resonance;
 
+		/* Initialize panning now that modulators have calculated it. */
+		voice->current_pan = (float)voice->modulated_generators[SS_GEN_PAN];
+
 		/* Recalculate the envelopes */
 		ss_volume_envelope_recalculate(voice, &voice->volume_env, voice->modulated_generators, voice->target_key, voice->is_in_release, voice->release_start_time, time);
 		ss_modulation_envelope_recalculate(&voice->modulation_env, voice->modulated_generators, voice->target_key, voice->is_in_release, voice->release_start_time, time);

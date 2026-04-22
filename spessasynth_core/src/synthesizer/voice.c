@@ -147,8 +147,9 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
 	ss_volume_envelope_init(&v->volume_env, sample_rate,
 	                        generators[SS_GEN_SUSTAIN_VOL_ENV]);
 
-	/* Store current_pan in generator units (-500..500) to match TS smoothing behaviour */
-	v->current_pan = (float)v->modulated_generators[SS_GEN_PAN];
+	/* Store current_pan in generator units (-500..500) to match TS smoothing behaviour. */
+	/* Init to 0 and init properly at the first modulated offset after computing them. */
+	v->current_pan = 0;
 
 	return v;
 }
