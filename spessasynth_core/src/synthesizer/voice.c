@@ -544,10 +544,9 @@ bool ss_voice_render(SS_Voice *v,
 	} else {
 		/* Smooth only the generator pan (matches TS: currentPan tracks modulated[pan] only).
 		 * v->current_pan is stored in the -500..500 generator range.
-		 * Channel pan is added at use time, not during smoothing. */
+		 * Channel pan is already integrated into the generator by the default modulators. */
 		v->current_pan += ((float)v->modulated_generators[SS_GEN_PAN] - v->current_pan) * pan_smoothing;
-		float ch_pan = (float)ch->midi_controllers[SS_MIDCON_PAN] / (63.5f * 128.0f) - 1.0f;
-		pan_val = v->current_pan / 500.0f + ch_pan;
+		pan_val = v->current_pan / 500.0f;
 	}
 
 	/* Master volume applied here */
