@@ -36,30 +36,73 @@ static const int GS_PART_TO_CHANNEL[16] = { 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
+/* Build a flat pointer array of every SS_FilteredBank currently
+ * registered, in search order.  Caller must free() *out_fbanks. */
+static size_t proc_collect_fbanks(SS_Processor *proc, SS_FilteredBank ***out_fbanks) {
+	size_t total = 0;
+	for(size_t g = 0; g < proc->bank_group_count; g++) {
+		SS_FilteredBanks *fbs = proc->bank_groups[g].banks;
+		if(fbs) total += fbs->count;
+	}
+	if(total == 0) {
+		*out_fbanks = NULL;
+		return 0;
+	}
+	SS_FilteredBank **arr = (SS_FilteredBank **)malloc(total * sizeof(*arr));
+	if(!arr) {
+		*out_fbanks = NULL;
+		return 0;
+	}
+	size_t idx = 0;
+	for(size_t g = 0; g < proc->bank_group_count; g++) {
+		SS_FilteredBanks *fbs = proc->bank_groups[g].banks;
+		if(!fbs) continue;
+		for(size_t i = 0; i < fbs->count; i++)
+			arr[idx++] = &fbs->fbanks[i];
+	}
+	*out_fbanks = arr;
+	return total;
+}
+
+SS_BasicPreset *ss_processor_resolve_preset(SS_Processor *proc,
+                                            int target_channel,
+                                            uint8_t program,
+                                            uint16_t bank_msb,
+                                            uint16_t bank_lsb,
+                                            bool is_drum) {
+	SS_FilteredBank **arr = NULL;
+	size_t total = proc_collect_fbanks(proc, &arr);
+	SS_BasicPreset *p = ss_filtered_banks_find_preset(arr, total, target_channel,
+	                                                  program, bank_msb, bank_lsb,
+	                                                  (int)proc->master_params.midi_system,
+	                                                  is_drum);
+	free(arr);
+	return p;
+}
+
 static SS_BasicPreset *find_preset_all_banks(SS_Processor *proc,
                                              uint8_t program,
                                              uint16_t bank_msb,
                                              uint16_t bank_lsb,
                                              bool is_drum) {
-	return ss_soundbanks_find_preset(proc->soundbanks, proc->soundbank_offsets,
-	                                 proc->soundbank_count,
-	                                 program, bank_msb, bank_lsb,
-	                                 (int)proc->master_params.midi_system,
-	                                 is_drum);
+	return ss_processor_resolve_preset(proc, -1, program, bank_msb, bank_lsb, is_drum);
 }
 
 /** Re-resolve preset for every channel after a soundbank or system change. */
 static void proc_refresh_presets(SS_Processor *proc) {
+	SS_FilteredBank **arr = NULL;
+	size_t total = proc_collect_fbanks(proc, &arr);
 	for(int i = 0; i < proc->channel_count; i++) {
 		SS_MIDIChannel *ch = proc->midi_channels[i];
 		if(!ch) continue;
-		SS_BasicPreset *p = find_preset_all_banks(proc,
-		                                          ch->program,
-		                                          ch->bank_msb,
-		                                          ch->bank_lsb,
-		                                          ch->drum_channel || ch->is_gm_gs_drum);
+		SS_BasicPreset *p = ss_filtered_banks_find_preset(
+		arr, total, ch->channel_number,
+		ch->program, ch->bank_msb, ch->bank_lsb,
+		(int)proc->master_params.midi_system,
+		ch->drum_channel || ch->is_gm_gs_drum);
 		if(p) ch->preset = p;
 	}
+	free(arr);
 }
 
 /* ── Create / free ───────────────────────────────────────────────────────── */
@@ -133,13 +176,12 @@ void ss_processor_free(SS_Processor *proc) {
 		proc->midi_channels[i] = NULL;
 	}
 
-	for(size_t i = 0; i < proc->soundbank_count; i++) {
-		ss_soundbank_free(proc->soundbanks[i]);
-		free(proc->soundbank_ids[i]);
+	for(size_t i = 0; i < proc->bank_group_count; i++) {
+		SS_ProcessorBankGroup *g = &proc->bank_groups[i];
+		ss_filtered_banks_free(g->banks, !g->external_banks);
+		free(g->id);
 	}
-	free(proc->soundbanks);
-	free(proc->soundbank_ids);
-	free(proc->soundbank_offsets);
+	free(proc->bank_groups);
 
 	/* Free MTS tuning grid if allocated */
 	if(proc->master_params.tunings) {
@@ -158,104 +200,139 @@ void ss_processor_free(SS_Processor *proc) {
 /* ── Soundbank management ────────────────────────────────────────────────── */
 
 SS_SoundBank *ss_processor_get_soundbank(SS_Processor *proc, const char *id) {
-	for(size_t i = 0; i < proc->soundbank_count; i++) {
-		if(strcmp(proc->soundbank_ids[i], id) == 0)
-			return proc->soundbanks[i];
+	for(size_t i = 0; i < proc->bank_group_count; i++) {
+		if(strcmp(proc->bank_groups[i].id, id) == 0) {
+			SS_FilteredBanks *fbs = proc->bank_groups[i].banks;
+			if(fbs && fbs->count > 0) return fbs->fbanks[0].parent_bank;
+			return NULL;
+		}
 	}
 	return NULL;
 }
 
-bool ss_processor_load_soundbank(SS_Processor *proc,
-                                 SS_SoundBank *bank, const char *id, int offset,
-                                 bool insert) {
-	if(!bank || !id) return false;
+/* Grow the bank_groups array by one slot and return the index of the
+ * newly inserted entry (at `insert_at_head ? 0 : count`).  Returns -1
+ * on OOM. */
+static int proc_bank_group_reserve(SS_Processor *proc, bool insert_at_head) {
+	if(proc->bank_group_count >= proc->bank_group_allocated) {
+		const size_t existing = proc->bank_group_allocated;
+		const size_t new_allocated = existing ? existing * 2 : 4;
+		SS_ProcessorBankGroup *next = (SS_ProcessorBankGroup *)realloc(
+		proc->bank_groups, new_allocated * sizeof(*next));
+		if(!next) return -1;
+		memset(next + existing, 0, (new_allocated - existing) * sizeof(*next));
+		proc->bank_groups = next;
+		proc->bank_group_allocated = new_allocated;
+	}
+	if(insert_at_head && proc->bank_group_count > 0) {
+		for(size_t i = proc->bank_group_count; i > 0; i--)
+			proc->bank_groups[i] = proc->bank_groups[i - 1];
+		proc->bank_group_count++;
+		return 0;
+	}
+	return (int)(proc->bank_group_count++);
+}
 
-	/* Replace if same ID already exists */
-	for(size_t i = 0; i < proc->soundbank_count; i++) {
-		if(strcmp(proc->soundbank_ids[i], id) == 0) {
-			ss_soundbank_free(proc->soundbanks[i]);
-			proc->soundbanks[i] = bank;
-			if(offset >= 0 && offset <= 65535) {
-				proc->soundbank_offsets[i] = (uint16_t)offset;
-			} else {
-				proc->soundbank_offsets[i] = 0;
-			}
-			proc_refresh_presets(proc);
-			return true;
-		}
+/* Locate an existing group by id; returns index or -1. */
+static int proc_bank_group_find(SS_Processor *proc, const char *id) {
+	for(size_t i = 0; i < proc->bank_group_count; i++) {
+		if(strcmp(proc->bank_groups[i].id, id) == 0) return (int)i;
+	}
+	return -1;
+}
+
+/* Internal: install a pre-built SS_FilteredBanks under an id.  On
+ * replacement, the previous group's banks are freed respecting the
+ * previous group's external_banks flag. */
+static bool proc_install_group(SS_Processor *proc, SS_FilteredBanks *banks,
+                               const char *id, bool insert, bool external_banks) {
+	int existing = proc_bank_group_find(proc, id);
+	if(existing >= 0) {
+		SS_ProcessorBankGroup *g = &proc->bank_groups[existing];
+		ss_filtered_banks_free(g->banks, !g->external_banks);
+		g->banks = banks;
+		g->external_banks = external_banks;
+		proc_refresh_presets(proc);
+		return true;
 	}
 
-	if(proc->soundbank_count >= proc->soundbank_allocated) {
-		const size_t existing_allocated = proc->soundbank_allocated;
-		const size_t new_allocated = proc->soundbank_allocated ? proc->soundbank_allocated * 2 : 4;
-		SS_SoundBank **new_soundbanks = realloc(proc->soundbanks, new_allocated * sizeof(*new_soundbanks));
-		if(!new_soundbanks) return false;
-		memset(new_soundbanks + existing_allocated, 0, (new_allocated - existing_allocated) * sizeof(*new_soundbanks));
-		proc->soundbanks = new_soundbanks;
-		char **new_soundbank_ids = realloc(proc->soundbank_ids, new_allocated * sizeof(*new_soundbank_ids));
-		if(!new_soundbank_ids) return false;
-		memset(new_soundbank_ids + existing_allocated, 0, (new_allocated - existing_allocated) * sizeof(*new_soundbank_ids));
-		proc->soundbank_ids = new_soundbank_ids;
-		uint16_t *new_soundbank_offsets = realloc(proc->soundbank_offsets, new_allocated * sizeof(*new_soundbank_offsets));
-		if(!new_soundbank_offsets) return false;
-		memset(new_soundbank_offsets + existing_allocated, 0, (new_allocated - existing_allocated) * sizeof(*new_soundbank_offsets));
-		proc->soundbank_offsets = new_soundbank_offsets;
-		proc->soundbank_allocated = new_allocated;
-	}
+	int idx = proc_bank_group_reserve(proc, insert);
+	if(idx < 0) return false;
 
-	int idx;
-	if(insert) {
-		if(proc->soundbank_count > 0) {
-			/* Move the array forward */
-			for(int i = proc->soundbank_count; i > 0; i--) {
-				proc->soundbanks[i] = proc->soundbanks[i - 1];
-				proc->soundbank_ids[i] = proc->soundbank_ids[i - 1];
-				proc->soundbank_offsets[i] = proc->soundbank_offsets[i - 1];
-			}
-		}
-		proc->soundbank_count++;
-		idx = 0;
-	} else {
-		idx = proc->soundbank_count++;
-	}
-	proc->soundbanks[idx] = bank;
-	if(offset >= 0 && offset <= 65535) {
-		proc->soundbank_offsets[idx] = (uint16_t)offset;
-	} else {
-		proc->soundbank_offsets[idx] = 0;
-	}
+	SS_ProcessorBankGroup *g = &proc->bank_groups[idx];
 	size_t len = strlen(id);
-	proc->soundbank_ids[idx] = (char *)malloc(len + 1);
-	if(!proc->soundbank_ids[idx]) return false;
-	strncpy(proc->soundbank_ids[idx], id, len);
+	g->id = (char *)malloc(len + 1);
+	if(!g->id) {
+		/* Roll back the reservation. */
+		if(insert) {
+			for(size_t i = 0; i + 1 < proc->bank_group_count; i++)
+				proc->bank_groups[i] = proc->bank_groups[i + 1];
+		}
+		proc->bank_group_count--;
+		return false;
+	}
+	memcpy(g->id, id, len);
+	g->id[len] = '\0';
+	g->banks = banks;
+	g->external_banks = external_banks;
 
 	proc_refresh_presets(proc);
 	return true;
 }
 
-bool ss_processor_remove_soundbank(SS_Processor *proc, const char *id, bool dontfree) {
-	for(size_t i = 0; i < proc->soundbank_count; i++) {
-		if(strcmp(proc->soundbank_ids[i], id) == 0) {
-			if(!dontfree) ss_soundbank_free(proc->soundbanks[i]);
-			free(proc->soundbank_ids[i]);
-			/* Compact the arrays */
-			size_t last = proc->soundbank_count - 1;
-			if(i != last) {
-				for(size_t ii = i + 1; ii <= last; ii++) {
-					proc->soundbanks[ii - 1] = proc->soundbanks[ii];
-					proc->soundbank_ids[ii - 1] = proc->soundbank_ids[ii];
-					proc->soundbank_offsets[ii - 1] = proc->soundbank_offsets[ii];
-				}
-			}
-			proc->soundbanks[last] = NULL;
-			proc->soundbank_ids[last] = NULL;
-			proc->soundbank_offsets[last] = 0;
-			proc->soundbank_count--;
-			proc_refresh_presets(proc);
-			return true;
-		}
+bool ss_processor_load_soundbank(SS_Processor *proc,
+                                 SS_SoundBank *bank, const char *id, int offset,
+                                 bool insert) {
+	if(!proc || !bank || !id) return false;
+
+	int clamped_offset = (offset >= 0 && offset <= 65535) ? offset : 0;
+	SS_FilteredBankRule rule = {
+		.source_program = -1,
+		.source_bank = -1,
+		.destination_program = 0,
+		.destination_bank = clamped_offset,
+		.minimum_channel = 0,
+		.channel_count = 0
+	};
+	SS_FilteredBanks *fbs = ss_filtered_banks_build(bank, &rule, 1);
+	if(!fbs) return false;
+
+	if(!proc_install_group(proc, fbs, id, insert, /*external_banks=*/false)) {
+		/* Install failed — caller retains bank ownership (consistent with
+		 * the prior API contract), so free only the filtered-preset
+		 * shell, not the underlying SS_SoundBank. */
+		ss_filtered_banks_free(fbs, /*free_banks=*/false);
+		return false;
 	}
-	return false;
+	return true;
+}
+
+bool ss_processor_load_filtered_banks(SS_Processor *proc,
+                                      SS_FilteredBanks *banks, const char *id,
+                                      bool insert) {
+	if(!proc || !banks || !id) return false;
+	if(!proc_install_group(proc, banks, id, insert, /*external_banks=*/false))
+		return false;
+	return true;
+}
+
+bool ss_processor_remove_soundbank(SS_Processor *proc, const char *id, bool dontfree) {
+	int idx = proc_bank_group_find(proc, id);
+	if(idx < 0) return false;
+
+	SS_ProcessorBankGroup *g = &proc->bank_groups[idx];
+	ss_filtered_banks_free(g->banks, !dontfree && !g->external_banks);
+	free(g->id);
+
+	size_t last = proc->bank_group_count - 1;
+	if((size_t)idx != last) {
+		for(size_t ii = (size_t)idx + 1; ii <= last; ii++)
+			proc->bank_groups[ii - 1] = proc->bank_groups[ii];
+	}
+	memset(&proc->bank_groups[last], 0, sizeof(proc->bank_groups[last]));
+	proc->bank_group_count--;
+	proc_refresh_presets(proc);
+	return true;
 }
 
 /* ── Event callback ──────────────────────────────────────────────────────── */

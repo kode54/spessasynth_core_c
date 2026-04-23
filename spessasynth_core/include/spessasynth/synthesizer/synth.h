@@ -438,16 +438,22 @@ typedef struct {
 
 #define SS_MAX_SOUND_CHUNK 128
 
+/* Registered bank group: one string ID → one SS_FilteredBanks (which
+ * may internally contain many filtered banks, as produced by an sflist). */
+typedef struct SS_ProcessorBankGroup {
+	char *id;                  /* OWNED */
+	SS_FilteredBanks *banks;   /* OWNED when external_banks=false; non-owning view otherwise */
+	bool external_banks;       /* true = caller retains ownership of the SS_SoundBank(s) */
+} SS_ProcessorBankGroup;
+
 typedef struct SS_Processor {
 	uint32_t sample_rate;
 	SS_MIDIChannel *midi_channels[SS_CHANNEL_COUNT * 4]; /* up to 4 ports */
 	int channel_count;
 
-	SS_SoundBank **soundbanks;
-	char **soundbank_ids;
-	uint16_t *soundbank_offsets;
-	size_t soundbank_count;
-	size_t soundbank_allocated;
+	SS_ProcessorBankGroup *bank_groups; /* registered banks, in search order */
+	size_t bank_group_count;
+	size_t bank_group_allocated;
 
 	int total_voices;
 	double current_synth_time; /* seconds */
@@ -507,7 +513,28 @@ SS_SoundBank *ss_processor_get_soundbank(SS_Processor *proc, const char *id);
 bool ss_processor_load_soundbank(SS_Processor *proc,
                                  SS_SoundBank *bank, const char *id, int offset,
                                  bool insert);
+/**
+ * Register a pre-built SS_FilteredBanks (e.g. from sflist_load) under an ID.
+ * Ownership of `banks` transfers to the processor on success.  On removal,
+ * the underlying SS_SoundBanks are freed unless remove is called with
+ * dontfree=true.
+ */
+bool ss_processor_load_filtered_banks(SS_Processor *proc,
+                                      SS_FilteredBanks *banks, const char *id,
+                                      bool insert);
 bool ss_processor_remove_soundbank(SS_Processor *proc, const char *id, bool dontfree);
+
+/**
+ * Resolve a preset across all currently registered bank groups, honoring
+ * each filtered bank's channel range.  target_channel may be -1 to
+ * ignore channel filtering.
+ */
+SS_BasicPreset *ss_processor_resolve_preset(SS_Processor *proc,
+                                            int target_channel,
+                                            uint8_t program,
+                                            uint16_t bank_msb,
+                                            uint16_t bank_lsb,
+                                            bool is_drum);
 
 /**
  * Main render call. Mixes into the provided float buffers.

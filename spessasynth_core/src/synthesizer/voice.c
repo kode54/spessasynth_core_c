@@ -409,6 +409,7 @@ bool ss_voice_render(SS_Voice *v,
 
 	/* voice_gain: amplitude generator + LFO amplitude depths (matches TS voiceGain) */
 	float voice_gain = v->gain * (1.0f + (float)v->modulated_generators[SS_GEN_AMPLITUDE] / 1000.0f);
+	if(ch && ch->preset && ch->preset->parent_bank) voice_gain *= ch->preset->parent_bank->gain;
 	if(voice_gain < 0.0f) voice_gain = 0.0f;
 
 	/* Vibrato LFO — triangle wave with phase accumulator, matching TypeScript render_voice.ts.

@@ -185,6 +185,8 @@ typedef struct SS_BasicPreset {
 	uint32_t library;
 	uint32_t genre;
 	uint32_t morphology;
+	uint32_t minchan; /* Minimum channel match */
+	uint32_t numchan; /* Channel count, match all if 0 */
 	struct SS_SoundBank *parent_bank; /* non-owning */
 } SS_BasicPreset;
 
@@ -215,6 +217,8 @@ typedef struct SS_SoundBank {
 	/* Samples (owned) */
 	SS_BasicSample *samples;
 	size_t sample_count;
+	/* Gain change */
+	float gain;
 	/* Default modulators */
 	SS_Modulator *default_modulators;
 	size_t default_mod_count;
@@ -232,6 +236,95 @@ typedef struct SS_SoundBank {
 
 SS_SoundBank *ss_soundbank_new(void);
 void ss_soundbank_free(SS_SoundBank *bank);
+
+
+/**
+ * Filter/remap rule applied to a source SS_SoundBank to produce an
+ * SS_FilteredBank.  Bank values pack MSB in the low 8 bits and LSB in
+ * the high 8 bits (so 0x..MSB..LSB when read natively).
+ */
+typedef struct SS_FilteredBankRule {
+	int source_program;      /* 0..127, or -1 for all programs */
+	int source_bank;         /* (MSB) | (LSB << 8), or -1 for all banks */
+	int destination_program; /* remap if source_program>=0; else offset added to all programs */
+	int destination_bank;    /* remap if source_bank>=0; else offset added to all banks */
+	int minimum_channel;     /* 0-based inclusive lower MIDI channel bound */
+	int channel_count;       /* 0 = applies to all channels */
+} SS_FilteredBankRule;
+
+/**
+ * A filtered copy of a source bank's preset list.  Owns only `presets`.
+ * Preset inner pointers (zones, global_zone.generators, etc.) are shared
+ * with the parent bank and MUST NOT be deep-freed from here.
+ */
+typedef struct SS_FilteredBank {
+	SS_SoundBank *parent_bank;   /* non-owning here; ownership tracked at SS_FilteredBanks level */
+	SS_BasicPreset *presets;     /* OWNED: shallow-copied, remapped presets */
+	size_t preset_count;
+	int minimum_channel;         /* 0-based channel range start */
+	int channel_count;           /* 0 = applies to all channels */
+} SS_FilteredBank;
+
+/**
+ * A collection of filtered banks, typically the result of one sflist
+ * load or one raw bank wrap.  Owns both the fbanks array and (when
+ * freed with free_banks=true) the underlying SS_SoundBanks — which are
+ * deduplicated across fbanks so a bank shared by multiple entries is
+ * only freed once.
+ */
+typedef struct SS_FilteredBanks {
+	SS_FilteredBank *fbanks;
+	size_t count;
+} SS_FilteredBanks;
+
+/**
+ * Build one SS_FilteredBank from a source bank and a single rule.
+ * On success, allocates out->presets with the filtered/remapped copies.
+ * Returns false and leaves *out untouched on OOM.
+ */
+bool ss_filtered_bank_build_one(SS_FilteredBank *out,
+                                SS_SoundBank *bank,
+                                const SS_FilteredBankRule *rule);
+
+/** Release the presets array inside a single SS_FilteredBank and zero it.
+ *  Does NOT free parent_bank. */
+void ss_filtered_bank_dispose(SS_FilteredBank *fb);
+
+/**
+ * Build an SS_FilteredBanks from one source bank and N rules.
+ * rule_count==0 synthesizes a single passthrough rule
+ * ({-1,-1,0,0,0,0}) so every call produces at least one entry.
+ * On OOM returns NULL.
+ */
+SS_FilteredBanks *ss_filtered_banks_build(SS_SoundBank *bank,
+                                          const SS_FilteredBankRule *rules,
+                                          size_t rule_count);
+
+/**
+ * Free an SS_FilteredBanks.  When free_banks is true, each underlying
+ * SS_SoundBank is ss_soundbank_free'd exactly once even if referenced
+ * by multiple fbanks.
+ */
+void ss_filtered_banks_free(SS_FilteredBanks *fbs, bool free_banks);
+
+/**
+ * Find a preset from an array of filtered banks.  Mirrors
+ * ss_soundbanks_find_preset but iterates filtered preset arrays
+ * (no runtime bank_offset — offsets are pre-baked by the builder).
+ *
+ * target_channel: -1 to ignore per-fbank channel filter; otherwise
+ * fbanks whose [minimum_channel, minimum_channel+channel_count) range
+ * doesn't include target_channel are skipped.
+ */
+SS_BasicPreset *ss_filtered_banks_find_preset(
+SS_FilteredBank *const *fbanks,
+size_t fbank_count,
+int target_channel,
+uint8_t program,
+uint16_t bank_msb,
+uint16_t bank_lsb,
+int midi_system,
+bool is_drum_channel);
 
 /**
  * Find a preset by bank + program.

@@ -817,6 +817,7 @@ size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
 
 SS_SoundBank *ss_soundbank_new(void) {
 	SS_SoundBank *bank = (SS_SoundBank *)calloc(1, sizeof(SS_SoundBank));
+	if(bank) bank->gain = 1.0;
 	return bank;
 }
 
@@ -834,6 +835,144 @@ void ss_soundbank_free(SS_SoundBank *bank) {
 	if(bank->custom_default_modulators)
 		free(bank->default_modulators);
 	free(bank);
+}
+
+/* ── FilteredBank / FilteredBanks ────────────────────────────────────────── */
+
+bool ss_filtered_bank_build_one(SS_FilteredBank *out,
+                                SS_SoundBank *bank,
+                                const SS_FilteredBankRule *rule) {
+	if(!out || !bank || !rule) return false;
+
+	const int src_prog = rule->source_program;
+	const int src_bank = rule->source_bank;
+	const int dst_prog = rule->destination_program;
+	const int dst_bank = rule->destination_bank;
+	const int dst_bank_msb = dst_bank & 0xff;
+	const int dst_bank_lsb = (dst_bank >> 8) & 0xff;
+
+	SS_BasicPreset *tmp = (SS_BasicPreset *)malloc(bank->preset_count * sizeof(SS_BasicPreset));
+	if(!tmp && bank->preset_count > 0) return false;
+
+	size_t kept = 0;
+	for(size_t i = 0; i < bank->preset_count; i++) {
+		const SS_BasicPreset *p = &bank->presets[i];
+		if(src_prog >= 0 && p->program != src_prog) continue;
+		if(src_bank >= 0) {
+			int p_bank = p->bank_msb | (p->bank_lsb << 8);
+			if(p_bank != src_bank) continue;
+		}
+
+		SS_BasicPreset copy = *p; /* shallow copy; zones/global_zone pointers shared */
+		copy.parent_bank = bank;
+
+		if(src_prog >= 0) {
+			copy.program = (uint8_t)(dst_prog & 0x7f);
+		} else {
+			copy.program = (uint8_t)((p->program + dst_prog) & 0x7f);
+		}
+
+		if(src_bank >= 0) {
+			copy.bank_msb = (uint8_t)(dst_bank_msb & 0x7f);
+			copy.bank_lsb = (uint8_t)(dst_bank_lsb & 0x7f);
+		} else {
+			copy.bank_msb = (uint8_t)((p->bank_msb + dst_bank_msb) & 0x7f);
+			copy.bank_lsb = (uint8_t)((p->bank_lsb + dst_bank_lsb) & 0x7f);
+		}
+
+		tmp[kept++] = copy;
+	}
+
+	if(kept == 0) {
+		free(tmp);
+		out->parent_bank = bank;
+		out->presets = NULL;
+		out->preset_count = 0;
+		out->minimum_channel = rule->minimum_channel;
+		out->channel_count = rule->channel_count;
+		return true;
+	}
+
+	/* Shrink to actual kept count; realloc failure is non-fatal (keep the
+	 * larger buffer). */
+	if(kept < bank->preset_count) {
+		SS_BasicPreset *shrunk = (SS_BasicPreset *)realloc(tmp, kept * sizeof(SS_BasicPreset));
+		if(shrunk) tmp = shrunk;
+	}
+
+	out->parent_bank = bank;
+	out->presets = tmp;
+	out->preset_count = kept;
+	out->minimum_channel = rule->minimum_channel;
+	out->channel_count = rule->channel_count;
+	return true;
+}
+
+void ss_filtered_bank_dispose(SS_FilteredBank *fb) {
+	if(!fb) return;
+	free(fb->presets);
+	fb->presets = NULL;
+	fb->preset_count = 0;
+	fb->parent_bank = NULL;
+	fb->minimum_channel = 0;
+	fb->channel_count = 0;
+}
+
+SS_FilteredBanks *ss_filtered_banks_build(SS_SoundBank *bank,
+                                          const SS_FilteredBankRule *rules,
+                                          size_t rule_count) {
+	if(!bank) return NULL;
+
+	SS_FilteredBankRule default_rule = { -1, -1, 0, 0, 0, 0 };
+	const SS_FilteredBankRule *rule_ptr = rules;
+	size_t actual_rule_count = rule_count;
+	if(actual_rule_count == 0) {
+		rule_ptr = &default_rule;
+		actual_rule_count = 1;
+	}
+
+	SS_FilteredBanks *rval = (SS_FilteredBanks *)calloc(1, sizeof(*rval));
+	if(!rval) return NULL;
+
+	rval->fbanks = (SS_FilteredBank *)calloc(actual_rule_count, sizeof(*rval->fbanks));
+	if(!rval->fbanks) {
+		free(rval);
+		return NULL;
+	}
+	rval->count = actual_rule_count;
+
+	for(size_t i = 0; i < actual_rule_count; i++) {
+		if(!ss_filtered_bank_build_one(&rval->fbanks[i], bank, &rule_ptr[i])) {
+			for(size_t j = 0; j < i; j++) ss_filtered_bank_dispose(&rval->fbanks[j]);
+			free(rval->fbanks);
+			free(rval);
+			return NULL;
+		}
+	}
+
+	return rval;
+}
+
+void ss_filtered_banks_free(SS_FilteredBanks *fbs, bool free_banks) {
+	if(!fbs) return;
+	if(fbs->fbanks) {
+		if(free_banks) {
+			for(size_t i = 0; i < fbs->count; i++) {
+				SS_SoundBank *parent = fbs->fbanks[i].parent_bank;
+				if(!parent) continue;
+				for(size_t j = i + 1; j < fbs->count; j++) {
+					if(fbs->fbanks[j].parent_bank == parent)
+						fbs->fbanks[j].parent_bank = NULL;
+				}
+				ss_soundbank_free(parent);
+			}
+		}
+		for(size_t i = 0; i < fbs->count; i++) {
+			free(fbs->fbanks[i].presets);
+		}
+		free(fbs->fbanks);
+	}
+	free(fbs);
 }
 
 typedef struct {
@@ -1086,6 +1225,192 @@ SS_BasicPreset *ss_soundbank_find_preset(SS_SoundBank *bank,
                                          bool is_drum_channel) {
 	return ss_soundbanks_find_preset(&bank, &bank_offset, 1, program, bank_msb,
 	                                 bank_lsb, midi_system, is_drum_channel);
+}
+
+/* Mirrors the 4-stage cascade in ss_soundbanks_find_preset above, but
+ * iterates filtered banks (no runtime offset — offsets are baked into
+ * the filtered preset copies) and honors per-fbank channel ranges. */
+static inline bool fbank_channel_match(const SS_FilteredBank *fb, int target_channel) {
+	if(target_channel < 0) return true;
+	if(fb->channel_count <= 0) return true;
+	return target_channel >= fb->minimum_channel &&
+	       target_channel < fb->minimum_channel + fb->channel_count;
+}
+
+SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
+                                              size_t fbank_count,
+                                              int target_channel,
+                                              uint8_t program,
+                                              uint16_t bank_msb,
+                                              uint16_t bank_lsb,
+                                              int midi_system,
+                                              bool is_drum_channel) {
+	SS_BasicPreset *match = NULL;
+	const bool isXG = midi_system == SS_SYSTEM_XG;
+
+	if(is_drum_channel && isXG) {
+		is_drum_channel = false;
+		bank_lsb = 0;
+		bank_msb = 127;
+	}
+
+	const bool xgDrums = (bank_msb == 120 || bank_msb == 127) && isXG;
+
+	for(size_t b = 0; b < fbank_count; b++) {
+		SS_FilteredBank *fb = fbanks[b];
+		if(!fbank_channel_match(fb, target_channel)) continue;
+		for(size_t i = 0; i < fb->preset_count; i++) {
+			SS_BasicPreset *p = &fb->presets[i];
+			if(p->program != program) continue;
+			const bool is_drum_match = (is_drum_channel == p->is_gm_gs_drum);
+			if(!is_drum_match && !isXG) continue;
+			if(p->bank_lsb != bank_lsb || p->bank_msb != bank_msb) continue;
+			match = p;
+			break;
+		}
+		if(match) break;
+	}
+
+	if(match) {
+		if(!xgDrums || (xgDrums && match->is_xg_drum)) {
+			return match;
+		}
+	}
+
+	if(is_drum_channel) {
+		for(size_t b = 0; b < fbank_count; b++) {
+			SS_FilteredBank *fb = fbanks[b];
+			if(!fbank_channel_match(fb, target_channel)) continue;
+			for(size_t i = 0; i < fb->preset_count; i++) {
+				SS_BasicPreset *p = &fb->presets[i];
+				if(p->program == program && p->is_gm_gs_drum) return p;
+			}
+		}
+		for(size_t b = 0; b < fbank_count; b++) {
+			SS_FilteredBank *fb = fbanks[b];
+			if(!fbank_channel_match(fb, target_channel)) continue;
+			for(size_t i = 0; i < fb->preset_count; i++) {
+				SS_BasicPreset *p = &fb->presets[i];
+				if(p->program == program && (p->is_gm_gs_drum || p->is_xg_drum)) return p;
+			}
+		}
+		for(size_t b = 0; b < fbank_count; b++) {
+			SS_FilteredBank *fb = fbanks[b];
+			if(!fbank_channel_match(fb, target_channel)) continue;
+			for(size_t i = 0; i < fb->preset_count; i++) {
+				SS_BasicPreset *p = &fb->presets[i];
+				if(p->is_gm_gs_drum) return p;
+			}
+		}
+		for(size_t b = 0; b < fbank_count; b++) {
+			SS_FilteredBank *fb = fbanks[b];
+			if(!fbank_channel_match(fb, target_channel)) continue;
+			for(size_t i = 0; i < fb->preset_count; i++) {
+				SS_BasicPreset *p = &fb->presets[i];
+				if(p->is_gm_gs_drum || p->is_xg_drum) return p;
+			}
+		}
+	}
+
+	if(xgDrums) {
+		for(size_t b = 0; b < fbank_count; b++) {
+			SS_FilteredBank *fb = fbanks[b];
+			if(!fbank_channel_match(fb, target_channel)) continue;
+			for(size_t i = 0; i < fb->preset_count; i++) {
+				SS_BasicPreset *p = &fb->presets[i];
+				if(p->program == program && p->is_xg_drum) return p;
+			}
+		}
+		for(size_t b = 0; b < fbank_count; b++) {
+			SS_FilteredBank *fb = fbanks[b];
+			if(!fbank_channel_match(fb, target_channel)) continue;
+			for(size_t i = 0; i < fb->preset_count; i++) {
+				SS_BasicPreset *p = &fb->presets[i];
+				if(p->program == program && (p->is_xg_drum || p->is_gm_gs_drum)) return p;
+			}
+		}
+		for(size_t b = 0; b < fbank_count; b++) {
+			SS_FilteredBank *fb = fbanks[b];
+			if(!fbank_channel_match(fb, target_channel)) continue;
+			for(size_t i = 0; i < fb->preset_count; i++) {
+				SS_BasicPreset *p = &fb->presets[i];
+				if(p->is_xg_drum) return p;
+			}
+		}
+		for(size_t b = 0; b < fbank_count; b++) {
+			SS_FilteredBank *fb = fbanks[b];
+			if(!fbank_channel_match(fb, target_channel)) continue;
+			for(size_t i = 0; i < fb->preset_count; i++) {
+				SS_BasicPreset *p = &fb->presets[i];
+				if(p->is_xg_drum || p->is_gm_gs_drum) return p;
+			}
+		}
+	}
+
+	/* Capital tone fallback: collect all non-drum presets matching program. */
+	SS_BasicPreset **matches = NULL;
+	size_t match_count = 0;
+	size_t allocated_match_count = 0;
+	SS_BasicPreset *first_preset = NULL;
+
+	for(size_t b = 0; b < fbank_count; b++) {
+		SS_FilteredBank *fb = fbanks[b];
+		if(!fbank_channel_match(fb, target_channel)) continue;
+		if(!first_preset && fb->preset_count > 0) first_preset = &fb->presets[0];
+		for(size_t i = 0; i < fb->preset_count; i++) {
+			SS_BasicPreset *p = &fb->presets[i];
+			if(p->program == program && !p->is_gm_gs_drum && !p->is_xg_drum) {
+				size_t new_match_count = match_count + 1;
+				if(new_match_count > allocated_match_count) {
+					allocated_match_count = allocated_match_count ? allocated_match_count * 2 : 16;
+					SS_BasicPreset **new_matches = (SS_BasicPreset **)realloc(
+					matches, allocated_match_count * sizeof(*new_matches));
+					if(!new_matches) {
+						free(matches);
+						return NULL;
+					}
+					matches = new_matches;
+				}
+				matches[match_count++] = p;
+			}
+		}
+	}
+
+	if(match_count < 1) {
+		free(matches);
+		return first_preset;
+	}
+
+	match = NULL;
+	if(isXG) {
+		for(size_t i = 0; i < match_count; i++) {
+			if(matches[i]->bank_lsb == bank_lsb) { match = matches[i]; break; }
+		}
+	} else {
+		for(size_t i = 0; i < match_count; i++) {
+			if(matches[i]->bank_msb == bank_msb) { match = matches[i]; break; }
+		}
+	}
+
+	if(match) {
+		free(matches);
+		return match;
+	}
+
+	if((bank_lsb != 64 && bank_lsb != 126) || !isXG) {
+		const unsigned int target = bank_msb > bank_lsb ? bank_msb : bank_lsb;
+		for(size_t i = 0; i < match_count; i++) {
+			SS_BasicPreset *p = matches[i];
+			if(p->bank_lsb == target || p->bank_msb == target) {
+				free(matches);
+				return p;
+			}
+		}
+	}
+
+	match = matches[0];
+	free(matches);
+	return match;
 }
 
 static void soundbank_parse(SS_SoundBank *bank) {

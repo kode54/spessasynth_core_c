@@ -5,6 +5,7 @@
 
 #include "spessasynth/midi/midi.h"
 #include "spessasynth/sequencer/sequencer.h"
+#include "spessasynth/sflist/sflist.h"
 
 // Holds the global instance pointer
 SS_MIDIFile *g_midiFile;
@@ -12,6 +13,75 @@ SS_Sequencer *g_sequencer;
 
 SS_Processor *g_processor;
 SS_SoundBank *g_soundBank;
+
+static bool has_ext_ci(const char *path, const char *ext) {
+	size_t plen = strlen(path);
+	size_t elen = strlen(ext);
+	if(plen < elen) return false;
+	const char *tail = path + plen - elen;
+	for(size_t i = 0; i < elen; i++) {
+		char a = tail[i], b = ext[i];
+		if(a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+		if(b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+		if(a != b) return false;
+	}
+	return true;
+}
+
+/* Load an sflist (JSON or legacy text) and register it with the processor. */
+static bool load_sflist(SS_Processor *proc, const char *sflistPath) {
+	FILE *f = fopen(sflistPath, "rb");
+	if(!f) {
+		fprintf(stderr, "Could not open sflist '%s'\n", sflistPath);
+		return false;
+	}
+	fseek(f, 0, SEEK_END);
+	long len = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	if(len < 0) { fclose(f); return false; }
+
+	char *buf = (char *)malloc((size_t)len + 1);
+	if(!buf) { fclose(f); fprintf(stderr, "Out of memory\n"); return false; }
+	if(len > 0 && fread(buf, 1, (size_t)len, f) != (size_t)len) {
+		fclose(f); free(buf);
+		fprintf(stderr, "Could not read sflist '%s'\n", sflistPath);
+		return false;
+	}
+	buf[len] = '\0';
+	fclose(f);
+
+	/* Derive base path from the sflist file location so relative
+	 * SoundFont paths resolve correctly. */
+	char base_path[4096];
+	const char *slash = strrchr(sflistPath, '/');
+#ifdef _WIN32
+	const char *bslash = strrchr(sflistPath, '\\');
+	if(bslash && (!slash || bslash > slash)) slash = bslash;
+#endif
+	if(slash) {
+		size_t n = (size_t)(slash - sflistPath);
+		if(n >= sizeof(base_path)) n = sizeof(base_path) - 1;
+		memcpy(base_path, sflistPath, n);
+		base_path[n] = '\0';
+	} else {
+		strcpy(base_path, ".");
+	}
+
+	char err[sflist_max_error] = "";
+	SS_FilteredBanks *banks = sflist_load(buf, (size_t)len, base_path, err);
+	free(buf);
+	if(!banks) {
+		fprintf(stderr, "Could not parse sflist '%s': %s\n", sflistPath, err);
+		return false;
+	}
+
+	if(!ss_processor_load_filtered_banks(proc, banks, "theBank", false)) {
+		fprintf(stderr, "Could not register sflist with the synthesizer\n");
+		sflist_free(banks);
+		return false;
+	}
+	return true;
+}
 
 // Callback function called by the audio thread
 static void AudioCallback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount) {
@@ -90,7 +160,7 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	// Load the SoundFont from a file
+	// Pick the SoundFont / sflist argument
 	const char *soundBankName = NULL;
 	for(int i = 1; i < argc; i++) {
 		if(i == argPlayForever) continue;
@@ -99,17 +169,23 @@ int main(int argc, char *argv[]) {
 		break;
 	}
 	if(!soundBankName) soundBankName = "florestan-subset.sf2";
-	SS_File *fSoundBank = ss_file_open_from_file(soundBankName);
-	if(!fSoundBank) {
-		fprintf(stderr, "Could not load SoundFont\n");
-		return 1;
-	}
+	const bool isSflist = has_ext_ci(soundBankName, ".json") ||
+	                      has_ext_ci(soundBankName, ".sflist");
 
-	g_soundBank = ss_soundbank_load(fSoundBank);
-	ss_file_close(fSoundBank);
-	if(!g_soundBank) {
-		fprintf(stderr, "Could not load SoundFont\n");
-		return 1;
+	/* Plain SoundFont: load eagerly here; sflist is loaded after the
+	 * processor exists since it registers directly with it. */
+	if(!isSflist) {
+		SS_File *fSoundBank = ss_file_open_from_file(soundBankName);
+		if(!fSoundBank) {
+			fprintf(stderr, "Could not load SoundFont\n");
+			return 1;
+		}
+		g_soundBank = ss_soundbank_load(fSoundBank);
+		ss_file_close(fSoundBank);
+		if(!g_soundBank) {
+			fprintf(stderr, "Could not load SoundFont\n");
+			return 1;
+		}
 	}
 
 	// Set the SoundFont rendering output mode
@@ -142,9 +218,15 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	if(!ss_processor_load_soundbank(g_processor, g_soundBank, "theBank", 0, false)) {
-		fprintf(stderr, "Could not add the bank to the synthesizer\n");
-		return 1;
+	if(isSflist) {
+		if(!load_sflist(g_processor, soundBankName)) {
+			return 1;
+		}
+	} else {
+		if(!ss_processor_load_soundbank(g_processor, g_soundBank, "theBank", 0, false)) {
+			fprintf(stderr, "Could not add the bank to the synthesizer\n");
+			return 1;
+		}
 	}
 
 	// Start the actual audio playback here

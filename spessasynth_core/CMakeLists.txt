@@ -48,6 +48,9 @@ set(SS_SOURCES
     src/synthesizer/dsp/delay.c
     src/synthesizer/dsp/insertion.c
     src/sequencer/sequencer.c
+    src/sflist/sflist.c
+    extern/json/json.c
+    extern/json/json-builder.c
 )
 
 # ── Library target ────────────────────────────────────────────────────────────
@@ -62,6 +65,8 @@ target_include_directories(spessasynth_core
             $<INSTALL_INTERFACE:include>
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/include/spessasynth/sflist
+            ${CMAKE_CURRENT_SOURCE_DIR}/extern/json
 )
 
 # ── stb_vorbis (header-only; compiled as a unity .c translation unit) ────────
