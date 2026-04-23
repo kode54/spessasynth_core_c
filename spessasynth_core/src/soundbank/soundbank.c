@@ -436,7 +436,7 @@ bool ss_sample_decode(SS_BasicSample *s) {
 					ss_file_read_bytes(s->audio_file, 0, hdr, 4);
 
 					if(hdr[0] == 'O' && hdr[1] == 'g' && hdr[2] == 'g' && hdr[3] == 'S') {
-#ifdef SS_HAVE_STB_VORBIS
+#ifdef SS_HAVE_LIBVORBISFILE
 						bool res = ss_vorbis_decode(s);
 						ss_mutex_leave(s->mutex);
 						return res;
@@ -477,7 +477,7 @@ bool ss_sample_decode(SS_BasicSample *s) {
 		if(s->compressed_data_length >= 4) {
 			const uint8_t *hdr = s->compressed_data;
 			if(hdr[0] == 'O' && hdr[1] == 'g' && hdr[2] == 'g' && hdr[3] == 'S') {
-#ifdef SS_HAVE_STB_VORBIS
+#ifdef SS_HAVE_LIBVORBISFILE
 				bool res = ss_vorbis_decode(s);
 				ss_mutex_leave(s->mutex);
 				return res;

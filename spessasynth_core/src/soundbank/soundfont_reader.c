@@ -261,7 +261,7 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 		if(!ss_riff_read_chunk(sdta.file, &sub, false, riff64)) break;
 		if(strcmp(sub.header, "smpl") == 0) {
 			if(is_sf2pack) {
-#if defined(SS_HAVE_STB_VORBIS) || defined(SS_HAVE_LIBFLAC)
+#if defined(SS_HAVE_LIBVORBISFILE) || defined(SS_HAVE_LIBFLAC)
 				/* SF2Pack: smpl is a single Ogg Vorbis stream covering all samples */
 				/* We decode it and get a Float32 array */
 				/* For now, copy raw compressed data; decode lazily */

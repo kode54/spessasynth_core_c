@@ -1,14 +1,14 @@
 cmake_minimum_required(VERSION 3.21)
-project(spessasynth_core VERSION 0.1.0 LANGUAGES C)
+project(spessasynth_core VERSION 4.2.12 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # ── Options ──────────────────────────────────────────────────────────────────
-option(SS_ENABLE_SF3_VORBIS  "Enable SF3 OGG Vorbis decoding via stb_vorbis"  ON)
-option(SS_ENABLE_SF3_FLAC    "Enable SF3 FLAC decoding via libFLAC"           ON)
-option(SS_BUILD_SHARED       "Build as a shared library"                      OFF)
-option(SS_BUILD_EXAMPLES     "Build example tools"                            ON)
+option(SS_ENABLE_SF3_VORBIS  "Enable SF3 OGG Vorbis decoding via libvorbisfile" ON)
+option(SS_ENABLE_SF3_FLAC    "Enable SF3 FLAC decoding via libFLAC"             ON)
+option(SS_BUILD_SHARED       "Build as a shared library"                        ON)
+option(SS_BUILD_EXAMPLES     "Build example tools"                              ON)
 
 # ── Core source list ─────────────────────────────────────────────────────────
 set(SS_SOURCES
@@ -55,12 +55,14 @@ set(SS_SOURCES
 
 # ── Library target ────────────────────────────────────────────────────────────
 if(SS_BUILD_SHARED)
-    add_library(spessasynth_core SHARED ${SS_SOURCES})
+    add_library(spessasynth SHARED ${SS_SOURCES})
 else()
-    add_library(spessasynth_core STATIC ${SS_SOURCES})
+    add_library(spessasynth STATIC ${SS_SOURCES})
 endif()
 
-target_include_directories(spessasynth_core
+set_target_properties(spessasynth PROPERTIES VERSION 4.2.12 SOVERSION 0)
+
+target_include_directories(spessasynth
     PUBLIC  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
             $<INSTALL_INTERFACE:include>
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -71,20 +73,22 @@ target_include_directories(spessasynth_core
 
 # ── stb_vorbis (header-only; compiled as a unity .c translation unit) ────────
 if(SS_ENABLE_SF3_VORBIS)
-    find_path(STB_VORBIS_INCLUDE_DIR stb_vorbis.h
-        HINTS ${CMAKE_CURRENT_SOURCE_DIR}/extern/stb
-              ${CMAKE_CURRENT_SOURCE_DIR}/extern)
-    if(NOT STB_VORBIS_INCLUDE_DIR)
-        message(FATAL_ERROR
-            "stb_vorbis.h not found.\n"
-            "Download it from https://github.com/nothings/stb/blob/master/stb_vorbis.c\n"
-            "and place it at extern/stb/stb_vorbis.h, or disable with "
-            "-DSS_ENABLE_SF3_VORBIS=OFF")
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(Vorbis REQUIRED vorbisfile)
+        if(Vorbis_FOUND)
+            target_sources(spessasynth PRIVATE src/soundbank/vorbis_decode.c)
+            include_directories(${Vorbis_INCLUDE_DIRS})
+            link_directories(${Vorbis_LIBRARY_DIRS})
+            target_link_libraries(spessasynth PRIVATE ${Vorbis_LIBRARIES})
+            target_compile_definitions(spessasynth PRIVATE SS_HAVE_LIBVORBISFILE=1)
+            message(STATUS "libvorbisfile found")
+        else()
+            message(STATUS "libvorbisfile not found - Vorbis SF3 sample support disabled.")
+        endif()
+    else()
+        message(STATUS "pkgconfing not found - Vorbis SF3 sample support disabled.")
     endif()
-    target_sources(spessasynth_core PRIVATE src/soundbank/vorbis_decode.c)
-    target_include_directories(spessasynth_core PRIVATE ${STB_VORBIS_INCLUDE_DIR})
-    target_compile_definitions(spessasynth_core PRIVATE SS_HAVE_STB_VORBIS=1)
-    message(STATUS "stb_vorbis found: ${STB_VORBIS_INCLUDE_DIR}")
 endif()
 
 # ── libFLAC ──────────────────────────────────────────────────────────────────
@@ -92,9 +96,9 @@ if(SS_ENABLE_SF3_FLAC)
     find_package(Threads QUIET)
     find_package(FLAC QUIET)
     if(FLAC_FOUND)
-        target_sources(spessasynth_core PRIVATE src/soundbank/flac_decode.c)
-        target_link_libraries(spessasynth_core PRIVATE FLAC::FLAC)
-        target_compile_definitions(spessasynth_core PRIVATE SS_HAVE_LIBFLAC=1)
+        target_sources(spessasynth PRIVATE src/soundbank/flac_decode.c)
+        target_link_libraries(spessasynth PRIVATE FLAC::FLAC)
+        target_compile_definitions(spessasynth PRIVATE SS_HAVE_LIBFLAC=1)
         message(STATUS "libFLAC found")
     else()
         find_package(PkgConfig QUIET)
@@ -102,10 +106,10 @@ if(SS_ENABLE_SF3_FLAC)
             pkg_check_modules(FLAC flac)
         endif()
         if(FLAC_FOUND)
-            target_sources(spessasynth_core PRIVATE src/soundbank/flac_decode.c)
-            target_include_directories(spessasynth_core PRIVATE ${FLAC_INCLUDE_DIRS})
-            target_link_libraries(spessasynth_core PRIVATE ${FLAC_LIBRARIES})
-            target_compile_definitions(spessasynth_core PRIVATE SS_HAVE_LIBFLAC=1)
+            target_sources(spessasynth PRIVATE src/soundbank/flac_decode.c)
+            target_include_directories(spessasynth PRIVATE ${FLAC_INCLUDE_DIRS})
+            target_link_libraries(spessasynth PRIVATE ${FLAC_LIBRARIES})
+            target_compile_definitions(spessasynth PRIVATE SS_HAVE_LIBFLAC=1)
         else()
             message(WARNING "libFLAC not found — FLAC SF3 sample support disabled.")
         endif()
@@ -113,38 +117,36 @@ if(SS_ENABLE_SF3_FLAC)
 endif()
 
 # ── Math ─────────────────────────────────────────────────────────────────────
-if(MSVC)
-else()
-target_link_libraries(spessasynth_core PUBLIC m)
+if(NOT MSVC)
+target_link_libraries(spessasynth PRIVATE m)
 endif()
 
 # ── Warnings ─────────────────────────────────────────────────────────────────
 if(MSVC)
-    target_compile_options(spessasynth_core PRIVATE /W3)
+    target_compile_options(spessasynth PRIVATE /W3)
 else()
-    target_compile_options(spessasynth_core PRIVATE -Wall -Wextra -Wno-unused-parameter -pedantic)
+    target_compile_options(spessasynth PRIVATE -Wall -Wextra -Wno-unused-parameter -pedantic)
 endif()
 
 # ── Examples ─────────────────────────────────────────────────────────────────
 if(SS_BUILD_EXAMPLES)
-    add_executable(spessasynth_example examples/example.c)
-    target_link_libraries(spessasynth_example PUBLIC spessasynth_core)
-    if(MSVC)
-    else()
-        target_link_libraries(spessasynth_example PUBLIC m)
+    add_executable(spessasynth-example examples/example.c)
+    target_link_libraries(spessasynth-example PRIVATE spessasynth)
+    if(NOT MSVC)
+        target_link_libraries(spessasynth-example PRIVATE m)
     endif()
-    target_include_directories(spessasynth_example PRIVATE
+    target_include_directories(spessasynth-example PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/examples
     )
     if(NOT MSVC)
-        target_compile_options(spessasynth_example PRIVATE -Wall -Wextra -Wno-unused-parameter)
+        target_compile_options(spessasynth-example PRIVATE -Wall -Wextra -Wno-unused-parameter -pedantic)
     endif()
 endif()
 
 # ── Install ──────────────────────────────────────────────────────────────────
 include(GNUInstallDirs)
-install(TARGETS spessasynth_core
+install(TARGETS spessasynth
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
