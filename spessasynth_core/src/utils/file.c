@@ -13,6 +13,48 @@
 
 #include <stdio.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <wchar.h>
+
+/* Open a file whose path is UTF-8 encoded.  Windows fopen takes the
+ * system ANSI codepage which can't represent arbitrary Unicode paths,
+ * so convert UTF-8 → UTF-16 and use _wfopen.  A stack buffer sized for
+ * MAX_PATH is used when possible; longer paths fall back to malloc. */
+static FILE *ss_fopen_utf8(const char *path, const char *mode) {
+	wchar_t stack_path[320]; /* 260-char MAX_PATH plus headroom */
+	wchar_t wmode[8];
+	int wlen = MultiByteToWideChar(CP_UTF8, 0, path, -1, NULL, 0);
+	if(wlen <= 0) return NULL;
+
+	wchar_t *wpath;
+	wchar_t *heap_path = NULL;
+	if((size_t)wlen <= sizeof(stack_path) / sizeof(stack_path[0])) {
+		wpath = stack_path;
+	} else {
+		heap_path = (wchar_t *)malloc((size_t)wlen * sizeof(wchar_t));
+		if(!heap_path) return NULL;
+		wpath = heap_path;
+	}
+	if(MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, wlen) <= 0) {
+		free(heap_path);
+		return NULL;
+	}
+
+	if(MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode,
+	                       sizeof(wmode) / sizeof(wmode[0])) <= 0) {
+		free(heap_path);
+		return NULL;
+	}
+
+	FILE *f = _wfopen(wpath, wmode);
+	free(heap_path);
+	return f;
+}
+#else
+#define ss_fopen_utf8(path, mode) fopen((path), (mode))
+#endif
+
 struct SS_File {
 	uint64_t scope_begin, scope_end;
 	uint64_t current_offset;
@@ -318,7 +360,7 @@ SS_File *ss_file_open_from_file(const char *path) {
 		return NULL;
 	}
 
-	res->file = fopen(path, "rb");
+	res->file = ss_fopen_utf8(path, "rb");
 	if(!res->file) {
 		free(res->last_offset);
 		ss_mutex_free(res->base.mutex);
@@ -353,7 +395,7 @@ SS_File *ss_file_open_blank_file(const char *path) {
 		return NULL;
 	}
 
-	res->file = fopen(path, "wb");
+	res->file = ss_fopen_utf8(path, "wb");
 	if(!res->file) {
 		ss_mutex_free(res->base.mutex);
 		free(res);
