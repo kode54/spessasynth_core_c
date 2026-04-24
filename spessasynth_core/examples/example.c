@@ -152,7 +152,6 @@ int main(int argc, char *argv[]) {
 	deviceConfig.playback.channels = 2;
 	deviceConfig.sampleRate = 44100;
 	deviceConfig.dataCallback = AudioCallback;
-	deviceConfig.performanceProfile = ma_performance_profile_conservative;
 
 	// Initialize the audio system
 	if(ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS) {
@@ -189,7 +188,14 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Set the SoundFont rendering output mode
-	g_processor = ss_processor_create((int)deviceConfig.sampleRate, NULL);
+	SS_ProcessorOptions opts = {
+		.enable_effects = true,
+		.voice_cap = 512,
+		.interpolation = SS_INTERP_LINEAR,
+		.preload_samples = true
+	};
+
+	g_processor = ss_processor_create((int)deviceConfig.sampleRate, &opts);
 	if(!g_processor) {
 		fprintf(stderr, "Could not create the synthesizer\n");
 		return 1;

@@ -380,6 +380,12 @@ typedef struct {
 	bool enable_effects;
 	uint32_t voice_cap;
 	SS_InterpolationType interpolation;
+	/* When true, ss_processor_load_soundbank() and
+	 * ss_processor_load_filtered_banks() decode every sample reachable
+	 * through the bank's instrument zones before returning.  Trades a
+	 * one-time load cost for a real-time-safe synthesis path (no
+	 * lazy Vorbis/FLAC decode on the audio thread). */
+	bool preload_samples;
 } SS_ProcessorOptions;
 
 /* ── Event callback ──────────────────────────────────────────────────────── */

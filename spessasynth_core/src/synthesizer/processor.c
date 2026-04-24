@@ -280,6 +280,43 @@ static bool proc_install_group(SS_Processor *proc, SS_FilteredBanks *banks,
 	return true;
 }
 
+/* Walk every instrument zone reachable from the filtered banks' parent
+ * banks and eagerly decode its per-zone sample, so the audio thread
+ * never triggers a Vorbis/FLAC decode.  Parent banks are deduplicated
+ * so a bank shared by multiple fbanks is only walked once.  Individual
+ * decode failures are ignored — the bank is still considered loaded. */
+static void preload_filtered_banks_samples(SS_FilteredBanks *fbs) {
+	if(!fbs || fbs->count == 0) return;
+
+	SS_SoundBank **seen = (SS_SoundBank **)malloc(fbs->count * sizeof(*seen));
+	if(!seen) return;
+	size_t seen_count = 0;
+
+	for(size_t i = 0; i < fbs->count; i++) {
+		SS_SoundBank *bank = fbs->fbanks[i].parent_bank;
+		if(!bank) continue;
+		bool already = false;
+		for(size_t j = 0; j < seen_count; j++) {
+			if(seen[j] == bank) {
+				already = true;
+				break;
+			}
+		}
+		if(already) continue;
+		seen[seen_count++] = bank;
+
+		for(size_t ii = 0; ii < bank->instrument_count; ii++) {
+			SS_BasicInstrument *inst = &bank->instruments[ii];
+			for(size_t zi = 0; zi < inst->zone_count; zi++) {
+				SS_BasicSample *s = inst->zones[zi].sample;
+				if(s) ss_sample_decode(s);
+			}
+		}
+	}
+
+	free(seen);
+}
+
 bool ss_processor_load_soundbank(SS_Processor *proc,
                                  SS_SoundBank *bank, const char *id, int offset,
                                  bool insert) {
@@ -304,6 +341,8 @@ bool ss_processor_load_soundbank(SS_Processor *proc,
 		ss_filtered_banks_free(fbs, /*free_banks=*/false);
 		return false;
 	}
+	if(proc->options.preload_samples)
+		preload_filtered_banks_samples(fbs);
 	return true;
 }
 
@@ -313,6 +352,8 @@ bool ss_processor_load_filtered_banks(SS_Processor *proc,
 	if(!proc || !banks || !id) return false;
 	if(!proc_install_group(proc, banks, id, insert, /*external_banks=*/false))
 		return false;
+	if(proc->options.preload_samples)
+		preload_filtered_banks_samples(banks);
 	return true;
 }
 
