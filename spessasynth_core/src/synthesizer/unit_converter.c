@@ -282,7 +282,7 @@ static bool lanczos_table_initialized = false;
 static void init_lanczos_table(void) {
 	if(lanczos_table_initialized) return;
 	for(int i = 0; i < LANCZOS_COUNT; i++) {
-		double real_lanczos_value = ((double)(i + LANCZOS_MIN) / LANCZOS_SCALE);
+		double real_lanczos_value = ((double)(i + LANCZOS_MIN) / (double)LANCZOS_SCALE);
 		lanczos_table[i] = lanczos(real_lanczos_value);
 	}
 	lanczos_table_initialized = true;

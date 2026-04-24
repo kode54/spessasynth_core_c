@@ -70,7 +70,7 @@ bool ss_vorbis_decode(SS_BasicSample *s) {
 	if(!s->audio_file) return false;
 
 	int channels = 0;
-	int sample_rate = 0;
+	long sample_rate = 0;
 	float *pcm = NULL;
 
 	bool partial_sample = (s->audio_file_sample_offset > 0) || (s->audio_file_sample_count != ~0ULL);
@@ -103,7 +103,7 @@ bool ss_vorbis_decode(SS_BasicSample *s) {
 	channels = vi->channels;
 	sample_rate = vi->rate;
 
-	int seekable = ov_seekable(&vorbisRef);
+	long seekable = ov_seekable(&vorbisRef);
 	if(!seekable && partial_sample) {
 		ov_clear(&vorbisRef);
 		return false;
@@ -133,7 +133,7 @@ bool ss_vorbis_decode(SS_BasicSample *s) {
 		if(maxBlock > 1024) maxBlock = 1024;
 		float **outpcm;
 		int currentSection;
-		long ret = ov_read_float(&vorbisRef, &outpcm, maxBlock, &currentSection);
+		long ret = ov_read_float(&vorbisRef, &outpcm, (int)maxBlock, &currentSection);
 		if(ret == OV_HOLE) continue;
 		if(ret < 0) {
 			ov_clear(&vorbisRef);

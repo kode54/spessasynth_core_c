@@ -1117,7 +1117,7 @@ void sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 
 								case 0x40: {
 									/* Scale tuning: up to 12 bytes */
-									int tuning_bytes = len - 8; /* Data starts at 7, minus checksum */
+									long tuning_bytes = len - 8; /* Data starts at 7, minus checksum */
 									if(tuning_bytes < 0)
 										tuning_bytes = 0;
 									else if(tuning_bytes > 12)
