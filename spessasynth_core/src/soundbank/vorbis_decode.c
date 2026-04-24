@@ -109,11 +109,10 @@ bool ss_vorbis_decode(SS_BasicSample *s) {
 		return false;
 	}
 
-	int totalFrames = ov_pcm_total(&vorbisRef, -1);
+	long totalFrames = ov_pcm_total(&vorbisRef, -1);
 
-	int seekFrame = s->audio_file_sample_offset;
-	int maxFrame = s->audio_file_sample_count;
-	if(maxFrame <= 0) maxFrame = totalFrames - seekFrame;
+	long seekFrame = partial_sample ? (long)s->audio_file_sample_offset : 0;
+	long maxFrame = partial_sample ? (long)s->audio_file_sample_count : totalFrames;
 	if(maxFrame + seekFrame > totalFrames) {
 		maxFrame = totalFrames - seekFrame;
 	}
@@ -128,27 +127,38 @@ bool ss_vorbis_decode(SS_BasicSample *s) {
 		return false;
 	}
 
-	int n_samples = 0;
+	long n_samples = 0;
 	while(n_samples < maxFrame) {
-		int maxBlock = maxFrame - n_samples;
+		long maxBlock = maxFrame - n_samples;
 		if(maxBlock > 1024) maxBlock = 1024;
 		float **outpcm;
 		int currentSection;
-		int numread = (int)ov_read_float(&vorbisRef, &outpcm, maxBlock, &currentSection);
-		if(numread <= 0) break;
-		for(int i = 0; i < numread; i++) {
-			float sample = 0;
-			for(int c = 0; c < channels; c++) {
-				sample += outpcm[c][i];
-			}
-			pcm[n_samples + i] = sample / (float)channels;
+		long ret = ov_read_float(&vorbisRef, &outpcm, maxBlock, &currentSection);
+		if(ret == OV_HOLE) continue;
+		if(ret < 0) {
+			ov_clear(&vorbisRef);
+			free(pcm);
+			return false;
 		}
-		n_samples += numread;
+		if(channels == 1) {
+			memcpy(pcm + n_samples, outpcm[0], ret * sizeof(float));
+		} else {
+			for(long i = 0; i < ret; i++) {
+				float sample = 0;
+				for(int c = 0; c < channels; c++) {
+					sample += outpcm[c][i];
+				}
+				pcm[n_samples + i] = sample / (float)channels;
+			}
+		}
+		n_samples += ret;
 	}
 
 	ov_clear(&vorbisRef);
 
-	if(n_samples <= 0 || !pcm) return false;
+	if(n_samples <= 0) {
+		return false;
+	}
 
 	memset(pcm + n_samples, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 
