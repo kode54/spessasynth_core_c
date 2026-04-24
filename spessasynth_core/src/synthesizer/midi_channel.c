@@ -362,6 +362,30 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		return;
 	}
 
+	/* Portamento */
+	/* Not implemented correctly */
+	int portamento_from_key = -1;
+	float portamento_duration = 0;
+	// Note: the 14-bit value needs to go down to 7-bit
+	const int portamento_time =
+	ch->midi_controllers[SS_MIDCON_PORTAMENTO_TIME] >> 7;
+	const int porta_control = ch->midi_controllers[SS_MIDCON_PORTAMENTO_CONTROL] >> 7;
+	if(
+		!ch->drum_channel && /* No portamento on drum channel */
+		porta_control != internal_midi_note && /* If the same note, there's no portamento */
+		ch->midi_controllers[SS_MIDCON_PORTAMENTO_ON_OFF] >= 8192 && /* (64 << 7) */
+		portamento_time > 0 /* 0 duration is no portamento */
+	) {
+		/* A value of one means the initial portamento */
+		if(porta_control > 0) {
+			const int diff = abs(internal_midi_note - porta_control);
+			portamento_duration = ss_portamento_time_to_seconds(portamento_time, diff);
+			portamento_from_key = porta_control;
+		}
+		/* Set portamento control to previous value */
+		ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, internal_midi_note, time);
+	}
+
 	/* Drum parameter checks */
 	int drum_filter_cutoff = -1;
 	int drum_filter_resonance = -1;
@@ -480,30 +504,6 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		                                  generators,
 		                                  sd->modulators, sd->mod_count, dms);
 		if(!voice) continue;
-
-		/* Portamento */
-		/* Not implemented correctly */
-		int portamento_from_key = -1;
-		float portamento_duration = 0;
-		// Note: the 14-bit value needs to go down to 7-bit
-		const int portamento_time =
-		ch->midi_controllers[SS_MIDCON_PORTAMENTO_TIME] >> 7;
-		const int porta_control = ch->midi_controllers[SS_MIDCON_PORTAMENTO_CONTROL] >> 7;
-		if(
-		!ch->drum_channel && /* No portamento on drum channel */
-		porta_control != internal_midi_note && /* If the same note, there's no portamento */
-		ch->midi_controllers[SS_MIDCON_PORTAMENTO_ON_OFF] >= 8192 && /* (64 << 7) */
-		portamento_time > 0 /* 0 duration is no portamento */
-		) {
-			/* A value of one means the initial portamento */
-			if(porta_control > 0) {
-				const int diff = abs(internal_midi_note - porta_control);
-				portamento_duration = ss_portamento_time_to_seconds(portamento_time, diff);
-				portamento_from_key = porta_control;
-			}
-			/* Set portamento control to previous value */
-			ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, internal_midi_note, time);
-		}
 
 		/* Apply drum / random-pan parameters */
 		voice->pitch_offset = drum_pitch_offset;
