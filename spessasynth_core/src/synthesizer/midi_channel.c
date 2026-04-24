@@ -598,11 +598,16 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		voice->portamento_duration = portamento_duration;
 		voice->portamento_from_key = portamento_from_key;
 
-		/* Handle exclusive class: cut other voices in same class */
+		/* Handle exclusive class: cut other voices in same class.
+		 * Only kill voices that have already been rendered in a prior
+		 * quantum — otherwise a stereo pair triggered by the same note-on
+		 * (e.g. hard-panned L/R drum samples sharing one exclusive class)
+		 * would release itself. */
 		if(voice->exclusive_class > 0) {
 			for(size_t vi = 0; vi < ch->voice_count; vi++) {
 				SS_Voice *ov = ch->voices[vi];
-				if(ov->is_active && ov->exclusive_class == voice->exclusive_class) {
+				if(ov->is_active && ov->has_rendered &&
+				   ov->exclusive_class == voice->exclusive_class) {
 					ss_voice_exclusive_release(ov, time);
 				}
 			}
