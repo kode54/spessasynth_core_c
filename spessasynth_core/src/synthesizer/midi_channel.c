@@ -386,6 +386,10 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, internal_midi_note, time);
 	}
 
+	if(!ch->poly_mode) {
+		ss_channel_exclusive_release(ch, -1, time);
+	}
+
 	/* Drum parameter checks */
 	int drum_filter_cutoff = -1;
 	int drum_filter_resonance = -1;
@@ -625,15 +629,15 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 
 void ss_channel_exclusive_release(SS_MIDIChannel *ch, int note, double time) {
 	/* Adjust midiNote by channel key shift */
-	const int real_key =
+	int real_key = (note < 0) ? -1 :
 	note +
 	ch->channel_transpose_key_shift +
 	ch->custom_controllers[SS_CUSTOM_CTRL_KEY_SHIFT];
 
 	for(size_t i = 0; i < ch->voice_count; i++) {
 		SS_Voice *v = ch->voices[i];
-		if(v->is_active &&
-		   v->real_key == real_key) {
+		if(v->is_active && (real_key == -1 ||
+		   v->real_key == real_key)) {
 			ss_voice_exclusive_release(v, time);
 		}
 	}
