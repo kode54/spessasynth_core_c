@@ -972,7 +972,9 @@ void sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 
 								case 0x00:
 									/* Tone number (program change) */
-									ss_channel_program_change(mch, data);
+									if(len < 9) return;
+									ss_channel_controller(mch, SS_MIDCON_BANK_SELECT, data, t);
+									ss_channel_program_change(mch, syx[8]);
 									break;
 
 								case 0x02:
