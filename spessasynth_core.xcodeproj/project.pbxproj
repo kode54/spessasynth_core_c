@@ -221,7 +221,6 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(SRCROOT)/../../../../ThirdParty/FLAC/lib",
 					"$(SRCROOT)/../../../../ThirdParty/vorbis/lib",
-					"$(PROJECT_DIR)/spessasynth_core/build",
 				);
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
@@ -265,7 +264,6 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(SRCROOT)/../../../../ThirdParty/FLAC/lib",
 					"$(SRCROOT)/../../../../ThirdParty/vorbis/lib",
-					"$(PROJECT_DIR)/spessasynth_core/build",
 				);
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
