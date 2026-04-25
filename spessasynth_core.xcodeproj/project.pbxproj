@@ -25,8 +25,8 @@
 			);
 			publicHeaders = (
 				include/spessasynth/midi/midi_enums.h,
-				include/spessasynth/midi/nrpn_enums.h,
 				include/spessasynth/midi/midi.h,
+				include/spessasynth/midi/nrpn_enums.h,
 				include/spessasynth/sequencer/sequencer.h,
 				include/spessasynth/sflist/sflist.h,
 				include/spessasynth/soundbank/generator_types.h,
