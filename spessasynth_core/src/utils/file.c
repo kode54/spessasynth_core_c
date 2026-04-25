@@ -965,3 +965,117 @@ void ss_file_seek(SS_File *file, size_t offset) {
 
 	ss_mutex_leave(file->mutex);
 }
+
+uint16_t ss_file_read_le16(SS_File *file, size_t offset) {
+	if(!file || !file->read_u8) return 0;
+
+	ss_mutex_enter(file->mutex);
+
+	file->current_offset = file->scope_begin + offset;
+	if(file->current_offset > file->scope_end) {
+		file->current_offset = file->scope_end;
+	}
+
+	uint16_t v = file->read_u8(file);
+	v |= (uint16_t)file->read_u8(file) << 8;
+
+	ss_mutex_leave(file->mutex);
+
+	return v;
+}
+
+uint32_t ss_file_read_le24(SS_File *file, size_t offset) {
+	if(!file || !file->read_u8) return 0;
+
+	ss_mutex_enter(file->mutex);
+
+	file->current_offset = file->scope_begin + offset;
+	if(file->current_offset > file->scope_end) {
+		file->current_offset = file->scope_end;
+	}
+
+	uint32_t v = file->read_u8(file);
+	v |= (uint32_t)file->read_u8(file) << 8;
+	v |= (uint32_t)file->read_u8(file) << 16;
+
+	ss_mutex_leave(file->mutex);
+
+	return v;
+}
+
+uint32_t ss_file_read_le32(SS_File *file, size_t offset) {
+	if(!file || !file->read_u8) return 0;
+
+	ss_mutex_enter(file->mutex);
+
+	file->current_offset = file->scope_begin + offset;
+	if(file->current_offset > file->scope_end) {
+		file->current_offset = file->scope_end;
+	}
+
+	uint32_t v = file->read_u8(file);
+	v |= (uint32_t)file->read_u8(file) << 8;
+	v |= (uint32_t)file->read_u8(file) << 16;
+	v |= (uint32_t)file->read_u8(file) << 24;
+
+	ss_mutex_leave(file->mutex);
+
+	return v;
+}
+
+uint16_t ss_file_read_be16(SS_File *file, size_t offset) {
+	if(!file || !file->read_u8) return 0;
+
+	ss_mutex_enter(file->mutex);
+
+	file->current_offset = file->scope_begin + offset;
+	if(file->current_offset > file->scope_end) {
+		file->current_offset = file->scope_end;
+	}
+
+	uint16_t v = (uint16_t)file->read_u8(file) << 8;
+	v |= (uint16_t)file->read_u8(file);
+
+	ss_mutex_leave(file->mutex);
+
+	return v;
+}
+
+uint32_t ss_file_read_be24(SS_File *file, size_t offset) {
+	if(!file || !file->read_u8) return 0;
+
+	ss_mutex_enter(file->mutex);
+
+	file->current_offset = file->scope_begin + offset;
+	if(file->current_offset > file->scope_end) {
+		file->current_offset = file->scope_end;
+	}
+
+	uint32_t v = (uint32_t)file->read_u8(file) << 16;
+	v |= (uint32_t)file->read_u8(file) << 8;
+	v |= (uint32_t)file->read_u8(file);
+
+	ss_mutex_leave(file->mutex);
+
+	return v;
+}
+
+uint32_t ss_file_read_be32(SS_File *file, size_t offset) {
+	if(!file || !file->read_u8) return 0;
+
+	ss_mutex_enter(file->mutex);
+
+	file->current_offset = file->scope_begin + offset;
+	if(file->current_offset > file->scope_end) {
+		file->current_offset = file->scope_end;
+	}
+
+	uint32_t v = (uint32_t)file->read_u8(file) << 24;
+	v |= (uint32_t)file->read_u8(file) << 16;
+	v |= (uint32_t)file->read_u8(file) << 8;
+	v |= (uint32_t)file->read_u8(file);
+
+	ss_mutex_leave(file->mutex);
+
+	return v;
+}

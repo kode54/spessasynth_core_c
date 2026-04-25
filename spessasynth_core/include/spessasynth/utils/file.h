@@ -99,6 +99,15 @@ bool ss_file_write_vlq(SS_File *file, size_t v);
 bool ss_file_write_bytes(SS_File *file, const uint8_t *src, size_t count);
 bool ss_file_write_string(SS_File *file, const char *s, size_t count);
 
+/* Static size helpers, should be faster */
+uint16_t ss_file_read_le16(SS_File *file, size_t offset);
+uint32_t ss_file_read_le24(SS_File *file, size_t offset);
+uint32_t ss_file_read_le32(SS_File *file, size_t offset);
+
+uint16_t ss_file_read_be16(SS_File *file, size_t offset);
+uint32_t ss_file_read_be24(SS_File *file, size_t offset);
+uint32_t ss_file_read_be32(SS_File *file, size_t offset);
+
 #ifdef __cplusplus
 }
 #endif
