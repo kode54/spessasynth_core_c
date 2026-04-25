@@ -353,8 +353,8 @@ bool ss_sample_decode(SS_BasicSample *s) {
 					const uint8_t *in = temp;
 					float *out = s->audio_data;
 					ss_file_read_bytes(s->audio_file, 0, temp, frame_count * block_align);
-					for(size_t i = 0, bsz = frame_count * block_align; i < bsz; i += block_align) {
-						int16_t sample = (uint16_t)in[i] | ((int16_t)in[i + 1] << 8);
+					for(size_t i = 0; i < frame_count; i++) {
+						int16_t sample = (int16_t)((uint16_t)in[i * block_align] | ((uint16_t)in[i * block_align + 1] << 8));
 						out[i] = ((float)sample) / 32768.0;
 					}
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
