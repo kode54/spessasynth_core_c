@@ -1,7 +1,7 @@
 /**
- * voice.c
- * SS_Voice creation, copying, and rendering helpers.
- * Port of voice.ts and render_voice.ts.
+ * render_voice.c
+ * SS_Voice rendering function.
+ * Port of voice_render.ts
  */
 
 #include <math.h>
@@ -17,32 +17,27 @@
 #include "spessasynth/synthesizer/synth.h"
 #endif
 
-extern void ss_volume_envelope_init(SS_VolumeEnvelope *env,
-                                    uint32_t sr, int initial_decay_cb);
-extern void ss_lowpass_filter_init(SS_LowpassFilter *f, uint32_t sr);
+/* ── Render voice ────────────────────────────────────────────────────────── */
+
+enum { MIN_PAN = -500 };
+enum { MAX_PAN = 500 };
+enum { PAN_RESOLUTION = MAX_PAN - MIN_PAN };
+
+extern void ss_init_pan_table(void);
+extern float ss_panTableLeft[PAN_RESOLUTION + 1];
+extern float ss_panTableRight[PAN_RESOLUTION + 1];
+
+extern void ss_channel_remove_finished_voices(SS_MIDIChannel *ch);
 extern bool ss_wavetable_get_sample(SS_Voice *v, float *out, int count,
                                     SS_InterpolationType interp);
 extern bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
                                        int count, float gain_target);
-/*extern void ss_volume_envelope_recalculate(SS_Voice *v,
-                                           SS_VolumeEnvelope *env,
-                                           const int16_t *mod_gens,
-                                           int target_key,
-                                           bool is_in_release,
-                                           double release_start_time,
-                                           double start_time);*/
 extern void ss_volume_envelope_start_release(SS_Voice *v,
                                              SS_VolumeEnvelope *env,
                                              const int16_t *mod_gens,
                                              int target_key,
                                              double release_start_time,
                                              double start_time);
-/*extern void ss_modulation_envelope_recalculate(SS_ModulationEnvelope *env,
-                                               const int16_t *mod_gens,
-                                               int midi_note,
-                                               bool is_in_release,
-                                               double release_start_time,
-                                               double start_time);*/
 extern void ss_modulation_envelope_start_release(SS_ModulationEnvelope *env,
                                                  const int16_t *mod_gens,
                                                  int midi_note,
@@ -53,310 +48,6 @@ extern float ss_modulation_envelope_get_value(const SS_ModulationEnvelope *env,
 extern float ss_abs_cents_to_hz(int cents);
 extern float ss_lfo_value(double start_time, float freq_hz, double current_time);
 extern float ss_centibel_attenuation_to_gain(float db);
-
-#define MIN_NOTE_LENGTH 0.05
-#define MIN_EXCLUSIVE_LENGTH 0.01
-#define EXCLUSIVE_CUTOFF_TIME (-2320)
-#define EXCLUSIVE_MOD_CUTOFF_TIME (-1130)
-
-/* ── Create ──────────────────────────────────────────────────────────────── */
-
-SS_Voice *ss_voice_create(uint32_t sample_rate,
-                          const SS_BasicPreset *preset,
-                          const SS_AudioSample *audio_sample,
-                          int midi_note, int velocity,
-                          double current_time, int target_key, int real_key,
-                          const int16_t *generators,
-                          const SS_Modulator *modulators, size_t mod_count,
-                          const SS_DynamicModulatorSystem *dms) {
-	SS_Voice *v = (SS_Voice *)calloc(1, sizeof(SS_Voice));
-	if(!v) return NULL;
-
-	v->preset = preset;
-	v->sample = *audio_sample;
-	v->midi_note = midi_note;
-	v->velocity = velocity;
-	v->start_time = current_time;
-	v->is_active = true;
-	v->target_key = target_key;
-	v->real_key = real_key;
-	v->release_start_time = INFINITY;
-	v->current_tuning_calculated = 1.0;
-	v->portamento_from_key = -1;
-	v->gain = 1.0f;
-	v->pitch_offset = 0.0f;
-	/* Match TypeScript Voice.setup(): vibLfoPhase = modLfoPhase = 0.25 */
-	v->vib_lfo_phase = 0.25f;
-	v->mod_lfo_phase = 0.25f;
-	v->reverb_send = 1.0f;
-	v->chorus_send = 1.0f;
-	v->delay_send = 1.0f;
-	v->has_rendered = false;
-
-	if(v->sample.loop_end < v->sample.loop_start) {
-		const size_t temp = v->sample.loop_start;
-		v->sample.loop_start = v->sample.loop_end;
-		v->sample.loop_end = temp;
-	}
-	if(v->sample.loop_end - v->sample.loop_start < 1) {
-		/* Disable loop if enabled
-		 * Don't disable on release mode. Testcase:
-		 * https://github.com/spessasus/SpessaSynth/issues/174
-		 */
-		if(v->sample.looping_mode == SS_LOOP_LOOP || v->sample.looping_mode == SS_LOOP_LOOP_RELEASE) {
-			v->sample.looping_mode = SS_LOOP_NONE;
-			v->sample.is_looping = false;
-		}
-	}
-
-	memcpy(v->generators, generators, SS_GEN_COUNT * sizeof(int16_t));
-	memcpy(v->modulated_generators, generators, SS_GEN_COUNT * sizeof(int16_t));
-
-	v->exclusive_class = generators[SS_GEN_EXCLUSIVE_CLASS];
-
-	/* Copy modulators */
-	if(mod_count > 0 || dms->is_active) {
-		size_t max_mod_count = mod_count + (dms->is_active ? dms->modulator_count : 0);
-		size_t adjusted_mod_count = mod_count;
-		v->modulators = (SS_Modulator *)malloc(max_mod_count * sizeof(SS_Modulator));
-		if(v->modulators) {
-			for(size_t i = 0; i < mod_count; i++)
-				v->modulators[i] = ss_modulator_copy(&modulators[i]);
-			if(dms->is_active) {
-				for(size_t i = 0, count = dms->modulator_count; i < count; i++) {
-					signed long match = -1;
-					const SS_Modulator mod = ss_modulator_copy(&dms->modulators[i].modulator);
-					for(size_t ii = 0; ii < adjusted_mod_count; ii++) {
-						if(ss_modulator_is_identical(&v->modulators[ii], &mod)) {
-							match = (signed long)ii;
-							break;
-						}
-					}
-					if(match >= 0) {
-						v->modulators[match] = mod;
-					} else {
-						v->modulators[adjusted_mod_count++] = mod;
-					}
-				}
-			}
-			v->modulator_count = adjusted_mod_count;
-		}
-	}
-
-	ss_lowpass_filter_init(&v->filter, sample_rate);
-	ss_volume_envelope_init(&v->volume_env, sample_rate,
-	                        generators[SS_GEN_SUSTAIN_VOL_ENV]);
-
-	/* Store current_pan in generator units (-500..500) to match TS smoothing behaviour. */
-	/* Init to 0 and init properly at the first modulated offset after computing them. */
-	v->current_pan = 0;
-
-	return v;
-}
-
-/* ── Copy ────────────────────────────────────────────────────────────────── */
-
-#if 0
-SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int real_key) {
-	SS_Voice *v = (SS_Voice *)calloc(1, sizeof(SS_Voice));
-	if(!v) return NULL;
-
-	*v = *src; /* shallow copy of all fields */
-
-	/* Re-initialize filter state (don't copy x1/x2/y1/y2) */
-	v->filter.x1 = v->filter.x2 = v->filter.y1 = v->filter.y2 = 0.0;
-	v->filter.initialized = false;
-	v->filter.last_target_cutoff = 1e38f;
-
-	/* Re-init envelopes */
-	memset(&v->volume_env, 0, sizeof(v->volume_env));
-	memset(&v->modulation_env, 0, sizeof(v->modulation_env));
-	v->volume_env.sample_rate = src->volume_env.sample_rate;
-	v->volume_env.can_end_on_silent_sustain = src->volume_env.can_end_on_silent_sustain;
-
-	v->start_time = current_time;
-	v->real_key = real_key;
-	v->release_start_time = INFINITY;
-	v->is_in_release = false;
-	v->is_active = true;
-
-	/* Deep copy modulators */
-	v->modulators = NULL;
-	v->modulator_count = 0;
-	if(src->modulator_count > 0 && src->modulators) {
-		v->modulators = (SS_Modulator *)malloc(src->modulator_count * sizeof(SS_Modulator));
-		if(v->modulators) {
-			for(size_t i = 0; i < src->modulator_count; i++)
-				v->modulators[i] = ss_modulator_copy(&src->modulators[i]);
-			v->modulator_count = src->modulator_count;
-		}
-	}
-
-	ss_volume_envelope_recalculate(v, &v->volume_env, v->modulated_generators,
-	                               v->target_key, false, 0.0, current_time);
-	ss_modulation_envelope_recalculate(&v->modulation_env, v->modulated_generators,
-	                                   v->midi_note, false, 0.0, current_time);
-	return v;
-}
-#endif
-
-/* ── Free ────────────────────────────────────────────────────────────────── */
-
-void ss_voice_free(SS_Voice *v) {
-	if(!v) return;
-	free(v->modulators);
-	free(v);
-}
-
-/* ── Release ─────────────────────────────────────────────────────────────── */
-
-void ss_voice_release(SS_Voice *v, double current_time, double min_note_length) {
-	v->release_start_time = current_time;
-	if(v->release_start_time - v->start_time < min_note_length)
-		v->release_start_time = v->start_time + min_note_length;
-}
-
-void ss_voice_exclusive_release(SS_Voice *v, double current_time) {
-	v->override_release_vol_env = EXCLUSIVE_CUTOFF_TIME; /* Make the release nearly instant */
-	v->is_in_release = false;
-	ss_voice_release(v, current_time, MIN_EXCLUSIVE_LENGTH);
-}
-
-/* ── Compute modulators ──────────────────────────────────────────────────── */
-
-float ss_modcurve_get_value(int transform_type, SS_ModulatorCurveType curve_type, int index_0_to_16_383);
-
-/*
- * Evaluate the modulator source value.
- * For now, supports CC (direct), velocity, key, pressure, pitch wheel.
- */
-
-static float get_source_value(const SS_MIDIChannel *ch, const SS_Voice *v,
-                              uint16_t source_enum) {
-	/* Decode packed source_enum:
-	 * bits 11-10: curve (0=linear, 1=concave, 2=convex, 3=switch)
-	 * bit 9: is_bipolar
-	 * bit 8: is_negative
-	 * bit 7: is_cc
-	 * bits 6-0: index
-	 */
-	bool is_cc = (source_enum & 0x80) != 0;
-	uint8_t idx = source_enum & 0x7F;
-	bool is_negative = (source_enum & 0x100) != 0;
-	bool is_bipolar = (source_enum & 0x200) != 0;
-	int curve = (source_enum >> 10) & 3;
-
-	int raw = 0;
-	if(is_cc) {
-		raw = ch->midi_controllers[idx];
-	} else {
-		switch(idx) {
-			case SS_MODSRC_NO_CONTROLLER:
-				raw = 16383;
-				break;
-			case SS_MODSRC_NOTE_ON_VELOCITY:
-				raw = v->velocity << 7;
-				break;
-			case SS_MODSRC_NOTE_ON_KEYNUM:
-				raw = v->midi_note << 7;
-				break;
-			case SS_MODSRC_POLY_PRESSURE:
-				raw = v->pressure << 7;
-				break;
-			case SS_MODSRC_PITCH_WHEEL:
-				raw = ch->per_note_pitch ? (int)ch->pitch_wheels[v->real_key] : ch->midi_controllers[SS_MODSRC_PITCH_WHEEL + NON_CC_INDEX_OFFSET];
-				break;
-			default:
-				if(idx + NON_CC_INDEX_OFFSET >= SS_MIDI_CONTROLLER_COUNT)
-					raw = 0;
-				else
-					raw = ch->midi_controllers[idx + NON_CC_INDEX_OFFSET];
-				break;
-		}
-	}
-
-	if(raw < 0)
-		raw = 0;
-	else if(raw > 16383)
-		raw = 16383;
-
-	const int transform = (SS_ModulatorTransformType)((is_bipolar ? 2 : 0) | (is_negative ? 1 : 0));
-
-	return ss_modcurve_get_value(transform, (SS_ModulatorCurveType)curve, raw);
-}
-
-static const float EFFECT_MODULATOR_TRANSFORM_MULTIPLIER = 1000.0 / 200.0;
-
-void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch,
-                                 double time) {
-	/* Reset modulated generators to base values */
-	memcpy(v->modulated_generators, v->generators, SS_GEN_COUNT * sizeof(int16_t));
-
-	v->resonance_offset = 0.0f;
-
-	for(size_t mi = 0; mi < v->modulator_count; mi++) {
-		const SS_Modulator *m = &v->modulators[mi];
-		if(m->dest_enum >= SS_GEN_COUNT) continue;
-
-		if(!m->transform_amount) continue;
-
-		float src = get_source_value(ch, v, m->source_enum);
-		float asrc = (m->amount_source_enum != 0) ? get_source_value(ch, v, m->amount_source_enum) : 1.0f;
-
-		/* Effect modulators: scale CC91/CC93 as in spessasynth */
-		float transform_amount = (float)m->transform_amount;
-		if(m->is_effect_modulator && transform_amount <= 1000) {
-			transform_amount *= EFFECT_MODULATOR_TRANSFORM_MULTIPLIER;
-			if(transform_amount > 1000.0) transform_amount = 1000.0;
-		}
-
-		float val = src * asrc * transform_amount;
-
-		if(m->transform_type == SS_MODTRANS_ABSOLUTE) {
-			/* Abs value */
-			val = fabs(val);
-		}
-
-		/* Default resonant modulator: track separately */
-		if(m->is_default_resonant_modulator) {
-			/* Half the gain, negates the filter */
-			v->resonance_offset = (val > 0) ? val / 2 : 0;
-		}
-
-		if(m->is_mod_wheel_modulator) {
-			val *= ch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER];
-		}
-
-		{
-			int16_t g = v->modulated_generators[m->dest_enum];
-			int32_t new_val = (int32_t)g + (int32_t)val;
-			if(new_val > 32767) new_val = 32767;
-			if(new_val < -32768) new_val = -32768;
-			v->modulated_generators[m->dest_enum] = (int16_t)new_val;
-			val = new_val;
-		}
-		/* Update stored current_value (for snapshot purposes) */
-		((SS_Modulator *)m)->current_value = val;
-	}
-
-	/* Apply generator-specific limits to all modulated generators.
-	 * Matches TypeScript computeModulators second pass (compute_modulator.ts lines 119-130).
-	 * This clamps base generator values (e.g. sustainVolEnv = -461 from preset+inst summing)
-	 * that were never touched by any modulator but still need to be in spec range. */
-	for(int g = 0; g < SS_GEN_COUNT; g++) {
-		v->modulated_generators[g] = ss_generator_clamp((SS_GeneratorType)g, v->modulated_generators[g]);
-	}
-}
-
-/* ── Render voice ────────────────────────────────────────────────────────── */
-
-enum { MIN_PAN = -500 };
-enum { MAX_PAN = 500 };
-enum { PAN_RESOLUTION = MAX_PAN - MIN_PAN };
-
-extern void ss_init_pan_table(void);
-extern float ss_panTableLeft[PAN_RESOLUTION + 1];
-extern float ss_panTableRight[PAN_RESOLUTION + 1];
 
 bool ss_voice_render(SS_Voice *v,
                      const SS_MIDIChannel *ch,
@@ -603,4 +294,37 @@ bool ss_voice_render(SS_Voice *v,
 
 	if(owned_buf) free(buf);
 	return v->is_active;
+}
+
+/* ── Render channel ──────────────────────────────────────────────────────── */
+
+void ss_channel_render(SS_MIDIChannel *ch,
+                       double time_now,
+                       float *out_left, float *out_right,
+                       float *reverb,
+                       float *chorus,
+                       float *delay,
+                       uint32_t sample_count) {
+	if(ch->is_muted) return;
+	SS_Processor *proc = ch->synth;
+
+	SS_InterpolationType interp = proc ? proc->master_params.interpolation_type : SS_INTERP_LINEAR;
+	float vol_smoothing = proc ? proc->volume_envelope_smoothing_factor : 0.01f;
+	float filter_smoothing = proc ? proc->filter_smoothing_factor : 0.1f;
+	float pan_smoothing = proc ? proc->pan_smoothing_factor : 0.1f;
+
+	for(size_t i = 0; i < ch->voice_count; i++) {
+		SS_Voice *v = ch->voices[i];
+		if(!v->is_active) continue;
+
+		ss_voice_render(v, ch, time_now,
+		                out_left, out_right,
+		                reverb,
+		                chorus,
+		                delay,
+		                (int)sample_count, interp,
+		                vol_smoothing, filter_smoothing, pan_smoothing);
+	}
+	ss_channel_remove_finished_voices(ch);
+	if(proc) proc->total_voices -= (proc->total_voices > (int)ch->voice_count) ? (int)(ch->voice_count - ch->voice_count) : 0;
 }

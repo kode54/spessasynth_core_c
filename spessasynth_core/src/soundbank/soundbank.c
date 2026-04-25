@@ -1384,11 +1384,17 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 	match = NULL;
 	if(isXG) {
 		for(size_t i = 0; i < match_count; i++) {
-			if(matches[i]->bank_lsb == bank_lsb) { match = matches[i]; break; }
+			if(matches[i]->bank_lsb == bank_lsb) {
+				match = matches[i];
+				break;
+			}
 		}
 	} else {
 		for(size_t i = 0; i < match_count; i++) {
-			if(matches[i]->bank_msb == bank_msb) { match = matches[i]; break; }
+			if(matches[i]->bank_msb == bank_msb) {
+				match = matches[i];
+				break;
+			}
 		}
 	}
 

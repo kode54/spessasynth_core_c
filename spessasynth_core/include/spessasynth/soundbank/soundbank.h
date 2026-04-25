@@ -237,19 +237,18 @@ typedef struct SS_SoundBank {
 SS_SoundBank *ss_soundbank_new(void);
 void ss_soundbank_free(SS_SoundBank *bank);
 
-
 /**
  * Filter/remap rule applied to a source SS_SoundBank to produce an
  * SS_FilteredBank.  Bank values pack MSB in the low 8 bits and LSB in
  * the high 8 bits (so 0x..MSB..LSB when read natively).
  */
 typedef struct SS_FilteredBankRule {
-	int source_program;      /* 0..127, or -1 for all programs */
-	int source_bank;         /* (MSB) | (LSB << 8), or -1 for all banks */
+	int source_program; /* 0..127, or -1 for all programs */
+	int source_bank; /* (MSB) | (LSB << 8), or -1 for all banks */
 	int destination_program; /* remap if source_program>=0; else offset added to all programs */
-	int destination_bank;    /* remap if source_bank>=0; else offset added to all banks */
-	int minimum_channel;     /* 0-based inclusive lower MIDI channel bound */
-	int channel_count;       /* 0 = applies to all channels */
+	int destination_bank; /* remap if source_bank>=0; else offset added to all banks */
+	int minimum_channel; /* 0-based inclusive lower MIDI channel bound */
+	int channel_count; /* 0 = applies to all channels */
 } SS_FilteredBankRule;
 
 /**
@@ -258,11 +257,11 @@ typedef struct SS_FilteredBankRule {
  * with the parent bank and MUST NOT be deep-freed from here.
  */
 typedef struct SS_FilteredBank {
-	SS_SoundBank *parent_bank;   /* non-owning here; ownership tracked at SS_FilteredBanks level */
-	SS_BasicPreset *presets;     /* OWNED: shallow-copied, remapped presets */
+	SS_SoundBank *parent_bank; /* non-owning here; ownership tracked at SS_FilteredBanks level */
+	SS_BasicPreset *presets; /* OWNED: shallow-copied, remapped presets */
 	size_t preset_count;
-	int minimum_channel;         /* 0-based channel range start */
-	int channel_count;           /* 0 = applies to all channels */
+	int minimum_channel; /* 0-based channel range start */
+	int channel_count; /* 0 = applies to all channels */
 } SS_FilteredBank;
 
 /**

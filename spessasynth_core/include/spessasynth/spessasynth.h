@@ -46,7 +46,7 @@
 
 #if __has_include(<spessasynth_core/spessasynth.h>)
 #include <spessasynth_core/chorus.h>
-#include <spessasynth_core/dattorro_reverb.h>
+#include <spessasynth_core/dattorro.h>
 #include <spessasynth_core/delay_line.h>
 #include <spessasynth_core/generator_types.h>
 #include <spessasynth_core/indexed_byte_array.h>
@@ -62,7 +62,7 @@
 #include "soundbank/generator_types.h"
 #include "soundbank/soundbank.h"
 #include "synthesizer/dsp/chorus.h"
-#include "synthesizer/dsp/dattorro_reverb.h"
+#include "synthesizer/dsp/dattorro.h"
 #include "synthesizer/dsp/delay_line.h"
 #include "synthesizer/dsp/reverb.h"
 #include "synthesizer/synth.h"

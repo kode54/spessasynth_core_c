@@ -100,15 +100,6 @@ float ss_centibel_attenuation_to_gain(float centibels) {
 	return centibel_table[idx];
 }
 
-/* ── LFO ──────────────────────────────────────────────────────────────────── */
-
-float ss_lfo_value(double start_time, float freq_hz, double current_time) {
-	if(current_time < start_time) return 0.0f;
-	if(freq_hz <= 0.0f) return 0.0f;
-	double elapsed = current_time - start_time;
-	return (float)sin(2.0 * M_PI * freq_hz * elapsed);
-}
-
 /* ── Modulator curve ─────────────────────────────────────────────────────── */
 
 /* Convex attack table (1000 entries), computed once at init. */

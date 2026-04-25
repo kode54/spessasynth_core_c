@@ -447,9 +447,9 @@ typedef struct {
 /* Registered bank group: one string ID → one SS_FilteredBanks (which
  * may internally contain many filtered banks, as produced by an sflist). */
 typedef struct SS_ProcessorBankGroup {
-	char *id;                  /* OWNED */
-	SS_FilteredBanks *banks;   /* OWNED when external_banks=false; non-owning view otherwise */
-	bool external_banks;       /* true = caller retains ownership of the SS_SoundBank(s) */
+	char *id; /* OWNED */
+	SS_FilteredBanks *banks; /* OWNED when external_banks=false; non-owning view otherwise */
+	bool external_banks; /* true = caller retains ownership of the SS_SoundBank(s) */
 } SS_ProcessorBankGroup;
 
 typedef struct SS_Processor {

@@ -15,6 +15,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
+
 #include <wchar.h>
 
 /* Open a file whose path is UTF-8 encoded.  Windows fopen takes the

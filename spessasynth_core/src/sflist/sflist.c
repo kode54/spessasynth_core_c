@@ -725,8 +725,8 @@ static SS_FilteredBanks *sflist_process(const json_value *sflist, const char *ba
 				}
 				if(channel > (prevchannel + 1)) {
 					SS_FilteredBankRule rule = { -1, -1, 0, 0,
-					                             firstchannel - 1,
-					                             prevchannel - firstchannel + 1 };
+						                         firstchannel - 1,
+						                         prevchannel - firstchannel + 1 };
 					if(!ss_filtered_bank_build_one(&rval->fbanks[preset_number++], bank, &rule))
 						goto oom;
 					firstchannel = channel;
@@ -735,8 +735,8 @@ static SS_FilteredBanks *sflist_process(const json_value *sflist, const char *ba
 			}
 			{
 				SS_FilteredBankRule rule = { -1, -1, 0, 0,
-				                             firstchannel - 1,
-				                             prevchannel - firstchannel + 1 };
+					                         firstchannel - 1,
+					                         prevchannel - firstchannel + 1 };
 				if(!ss_filtered_bank_build_one(&rval->fbanks[preset_number++], bank, &rule))
 					goto oom;
 			}
@@ -783,7 +783,10 @@ error:
 		bool attached = false;
 		if(rval && rval->fbanks) {
 			for(size_t bi = 0; bi < rval->count; bi++) {
-				if(rval->fbanks[bi].parent_bank == bank) { attached = true; break; }
+				if(rval->fbanks[bi].parent_bank == bank) {
+					attached = true;
+					break;
+				}
 			}
 		}
 		if(!attached) ss_soundbank_free(bank);

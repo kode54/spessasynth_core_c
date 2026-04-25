@@ -8,10 +8,10 @@
 #include <stdlib.h>
 
 #if __has_include(<spessasynth_core/spessasynth.h>)
-#include <spessasynth_core/dattorro_reverb.h>
+#include <spessasynth_core/dattorro.h>
 #include <spessasynth_core/delay_line.h>
 #else
-#include "spessasynth/synthesizer/dsp/dattorro_reverb.h"
+#include "spessasynth/synthesizer/dsp/dattorro.h"
 #include "spessasynth/synthesizer/dsp/delay_line.h"
 #endif
 

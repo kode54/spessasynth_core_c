@@ -1,5 +1,5 @@
-#ifndef SS_DATTORRO_REVERB_H
-#define SS_DATTORRO_REVERB_H
+#ifndef SS_DATTORRO_H
+#define SS_DATTORRO_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,4 +55,4 @@ void ss_dattorro_reverb_process(SS_DattorroReverb *reverb,
 }
 #endif
 
-#endif /* SS_DATTORRO_REVERB_H */
+#endif /* SS_DATTORRO_H */

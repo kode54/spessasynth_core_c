@@ -25,6 +25,7 @@
 			);
 			publicHeaders = (
 				include/spessasynth/midi/midi_enums.h,
+				include/spessasynth/midi/nrpn_enums.h,
 				include/spessasynth/midi/midi.h,
 				include/spessasynth/sequencer/sequencer.h,
 				include/spessasynth/sflist/sflist.h,
@@ -33,7 +34,7 @@
 				include/spessasynth/soundbank/soundbank.h,
 				include/spessasynth/spessasynth.h,
 				include/spessasynth/synthesizer/dsp/chorus.h,
-				include/spessasynth/synthesizer/dsp/dattorro_reverb.h,
+				include/spessasynth/synthesizer/dsp/dattorro.h,
 				include/spessasynth/synthesizer/dsp/delay_line.h,
 				include/spessasynth/synthesizer/dsp/delay.h,
 				include/spessasynth/synthesizer/dsp/insertion.h,

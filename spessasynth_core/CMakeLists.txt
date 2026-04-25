@@ -32,21 +32,37 @@ set(SS_SOURCES
     src/soundbank/soundbank.c
     src/soundbank/dls_reader.c
     src/soundbank/soundfont_reader.c
-    src/synthesizer/unit_converter.c
-    src/synthesizer/volume_envelope.c
-    src/synthesizer/modulation_envelope.c
-    src/synthesizer/lowpass_filter.c
-    src/synthesizer/wavetable_oscillator.c
-    src/synthesizer/voice.c
-    src/synthesizer/midi_channel.c
-    src/synthesizer/dynamic_modulators.c
+    src/synthesizer/audio_engine/engine_methods/program_change.c
+    src/synthesizer/audio_engine/engine_methods/system_exclusive.c
+    src/synthesizer/audio_engine/engine_methods/system_exclusive/handle_gm.c
+    src/synthesizer/audio_engine/engine_methods/system_exclusive/handle_gs.c
+    src/synthesizer/audio_engine/engine_methods/system_exclusive/handle_xg.c
+    src/synthesizer/audio_engine/engine_methods/note_on.c
+    src/synthesizer/audio_engine/engine_methods/controller_control/controller_change.c
+    src/synthesizer/audio_engine/engine_methods/controller_control/reset_controllers.c
+    src/synthesizer/audio_engine/engine_methods/controller_control/data_entry/data_entry_fine.c
+    src/synthesizer/audio_engine/engine_methods/controller_control/data_entry/data_entry_coarse.c
+    src/synthesizer/audio_engine/engine_methods/controller_control/data_entry/awe32.c
+    src/synthesizer/audio_engine/engine_methods/note_off.c
+    src/synthesizer/audio_engine/engine_methods/portamento_time.c
+    src/synthesizer/audio_engine/engine_components/voice.c
+    src/synthesizer/audio_engine/engine_components/midi_channel.c
+    src/synthesizer/audio_engine/engine_components/compute_modulator.c
+    src/synthesizer/audio_engine/engine_components/dynamic_modulator_system.c
+    src/synthesizer/audio_engine/engine_components/unit_converter.c
+    src/synthesizer/audio_engine/engine_components/dsp_chain/lfo.c
+    src/synthesizer/audio_engine/engine_components/dsp_chain/wavetable_oscillator.c
+    src/synthesizer/audio_engine/engine_components/dsp_chain/volume_envelope.c
+    src/synthesizer/audio_engine/engine_components/dsp_chain/lowpass_filter.c
+    src/synthesizer/audio_engine/engine_components/dsp_chain/render_voice.c
+    src/synthesizer/audio_engine/engine_components/dsp_chain/modulation_envelope.c
+    src/synthesizer/audio_engine/effects/delay_line.c
+    src/synthesizer/audio_engine/effects/reverb/reverb.c
+    src/synthesizer/audio_engine/effects/reverb/dattorro.c
+    src/synthesizer/audio_engine/effects/insertion/insertion.c
+    src/synthesizer/audio_engine/effects/chorus/chorus.c
+    src/synthesizer/audio_engine/effects/delay/delay.c
     src/synthesizer/processor.c
-    src/synthesizer/dsp/chorus.c
-    src/synthesizer/dsp/dattorro_reverb.c
-    src/synthesizer/dsp/delay_line.c
-    src/synthesizer/dsp/reverb.c
-    src/synthesizer/dsp/delay.c
-    src/synthesizer/dsp/insertion.c
     src/sequencer/sequencer.c
     src/sflist/sflist.c
     extern/json/json.c

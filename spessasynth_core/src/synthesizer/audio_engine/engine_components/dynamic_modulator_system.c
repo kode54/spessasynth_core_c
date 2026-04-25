@@ -68,7 +68,7 @@ void ss_dynamic_modulator_system_free(SS_DynamicModulatorSystem *dms) {
 }
 
 static signed long find_modulator(SS_DynamicModulatorSystem *dms, uint16_t source,
-                              uint16_t destination, bool is_bipolar, bool is_negative) {
+                                  uint16_t destination, bool is_bipolar, bool is_negative) {
 	for(size_t i = 0; i < dms->modulator_count; i++) {
 		SS_DynamicModulatorSystem_Modulator *mod = &dms->modulators[i];
 		if(mod->source == source && mod->destination == destination &&

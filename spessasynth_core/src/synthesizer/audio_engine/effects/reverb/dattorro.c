@@ -1,6 +1,6 @@
 /**
- * dattorro_reverb.c
- * A complex reverb filter.  Basically a port of dattorro_reverb.ts.
+ * dattorro.c
+ * A complex reverb filter.  Basically a port of dattorro.ts.
  */
 
 #include <math.h>
@@ -11,9 +11,9 @@
 #include <string.h>
 
 #if __has_include(<spessasynth_core/spessasynth.h>)
-#include <spessasynth_core/dattorro_reverb.h>
+#include <spessasynth_core/dattorro.h>
 #else
-#include "spessasynth/synthesizer/dsp/dattorro_reverb.h"
+#include "spessasynth/synthesizer/dsp/dattorro.h"
 #endif
 
 enum { templateDelaysCount = 12 };
