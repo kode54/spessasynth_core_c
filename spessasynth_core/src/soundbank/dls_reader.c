@@ -1565,11 +1565,48 @@ static bool parse_wave_pool(SS_File *waves_file,
 			} else if(strcmp(sub.header, "wsmp") == 0) {
 				DLS_WaveSample ws;
 				parse_wsmp(sub.file, &ws, riff64);
-				s->original_key = (uint8_t)ws.unity_note;
-				s->pitch_correction = (int8_t)ws.fine_tune; /* fine_tune is in cents */
+				/* DLS sFineTune is signed 16-bit cents; SF2 pitch_correction
+				 * is signed 8-bit (±99 cents).  Fold whole semitones into the
+				 * unity note and keep the cent remainder in pitch_correction. */
+				int16_t fine = ws.fine_tune;
+				int16_t semitones = (int16_t)(fine / 100); /* truncate toward 0 */
+				int unity = (int)ws.unity_note + semitones;
+				if(unity < 0) unity = 0;
+				if(unity > 127) unity = 127;
+				s->original_key = (uint8_t)unity;
+				s->pitch_correction = (int8_t)(fine - semitones * 100);
 				if(ws.loop_count > 0) {
 					s->loop_start = ws.loop_start;
 					s->loop_end = ws.loop_start + ws.loop_length;
+				}
+			} else if(strcmp(sub.header, "LIST") == 0) {
+				/* INFO/INAM — sample name */
+				char list_id[5];
+				ss_file_read_string(sub.file, 0, list_id, 4);
+				if(strcmp(list_id, "INFO") == 0) {
+					size_t ip = 4;
+					size_t list_size = ss_file_size(sub.file);
+					while(ip + 8 <= list_size) {
+						char ifid[5];
+						ss_file_read_string(sub.file, ip, ifid, 4);
+						size_t ifsz = ss_file_read_le(sub.file, ip + 4, 4);
+						ip += 8;
+						if(ip + ifsz > list_size) break;
+						if(strcmp(ifid, "INAM") == 0 && ifsz > 0) {
+							size_t copy = ifsz < sizeof(s->name) - 1
+							                  ? ifsz
+							                  : sizeof(s->name) - 1;
+							ss_file_read_bytes(sub.file, ip,
+							                   (uint8_t *)s->name, copy);
+							s->name[copy] = '\0';
+							/* Strip any trailing NUL terminators baked into the chunk */
+							while(copy > 0 && s->name[copy - 1] == '\0') copy--;
+							s->name[copy] = '\0';
+							break;
+						}
+						ip += ifsz;
+						if(ip & 1) ip++;
+					}
 				}
 			}
 			ss_riff_close_chunk(&sub);
