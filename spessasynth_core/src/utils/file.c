@@ -236,11 +236,26 @@ SS_File *ss_file_open_blank_memory(void) {
 	return &res->base;
 }
 
+/* Read-ahead buffer size used by the SS_FileStdio reader.  Override at
+ * compile time with -DSS_FILESTDIO_BUFFER_SIZE=N. */
+#ifndef SS_FILESTDIO_BUFFER_SIZE
+#define SS_FILESTDIO_BUFFER_SIZE 16384
+#endif
+
 typedef struct SS_FileStdio {
 	SS_File base;
 
 	size_t *last_offset;
 	FILE *file;
+
+	/* Read-ahead buffer.  All three pointers are heap-allocated by
+	 * ss_file_open_from_file and freed by ss_file_stdio_close.  Slicing
+	 * via ss_file_dup performs a shallow copy of the SS_FileStdio struct,
+	 * so the buffer (and its start/filled state) are shared across every
+	 * SS_File handle that points at the same underlying FILE. */
+	uint8_t *buffer;
+	size_t *buffer_start;  /* Start offset (in the FILE) of the current buffered range */
+	size_t *buffer_filled; /* Number of valid bytes currently held in buffer */
 } SS_FileStdio;
 
 static SS_File *ss_file_stdio_dup(SS_File *file) {
@@ -262,52 +277,77 @@ static void ss_file_stdio_close(SS_File *file) {
 	}
 
 	free(fs->last_offset);
+	free(fs->buffer);
+	free(fs->buffer_start);
+	free(fs->buffer_filled);
+}
+
+/* Refill the read-ahead buffer starting at file offset `target`, then
+ * update *last_offset so the next physical read in the same place is a
+ * no-op.  Stores the actual byte count in *buffer_filled — when reading
+ * near EOF, this may be less than SS_FILESTDIO_BUFFER_SIZE (or zero). */
+static void ss_file_stdio_buffer_fill(SS_FileStdio *fs, size_t target) {
+	if(*(fs->last_offset) != target) {
+		fseek(fs->file, (long)target, SEEK_SET);
+	}
+	size_t got = fread(fs->buffer, 1, SS_FILESTDIO_BUFFER_SIZE, fs->file);
+	*(fs->buffer_start) = target;
+	*(fs->buffer_filled) = got;
+	*(fs->last_offset) = target + got;
 }
 
 static uint8_t ss_file_stdio_read_u8(SS_File *file) {
 	SS_FileStdio *fs = (SS_FileStdio *)file;
 
-	if(file->current_offset != *(fs->last_offset)) {
-		fseek(fs->file, file->current_offset, SEEK_SET);
-		*(fs->last_offset) = ftell(fs->file);
+	if(file->current_offset >= file->scope_end) return 0;
+
+	size_t off = file->current_offset;
+	size_t buf_start = *(fs->buffer_start);
+	size_t buf_filled = *(fs->buffer_filled);
+
+	if(off < buf_start || off >= buf_start + buf_filled) {
+		ss_file_stdio_buffer_fill(fs, off);
+		buf_start = *(fs->buffer_start);
+		buf_filled = *(fs->buffer_filled);
+		if(buf_filled == 0) return 0;
 	}
 
-	const size_t max_bytes_to_read = file->scope_end - file->current_offset;
-	const size_t to_read = max_bytes_to_read > 0 ? 1 : 0;
-
-	uint8_t v = 0;
-
-	if(to_read) {
-		size_t bytes_read = fread(&v, 1, 1, fs->file);
-
-		file->current_offset += bytes_read;
-		*(fs->last_offset) = ftell(fs->file);
-	}
-
+	uint8_t v = fs->buffer[off - buf_start];
+	file->current_offset++;
 	return v;
 }
 
 static void ss_file_stdio_read_bytes(SS_File *file, uint8_t *out, size_t count) {
 	SS_FileStdio *fs = (SS_FileStdio *)file;
 
-	if(file->current_offset != *(fs->last_offset)) {
-		fseek(fs->file, file->current_offset, SEEK_SET);
-		*(fs->last_offset) = ftell(fs->file);
+	size_t to_read = 0;
+	if(file->current_offset < file->scope_end) {
+		const size_t max_bytes_to_read = file->scope_end - file->current_offset;
+		to_read = count > max_bytes_to_read ? max_bytes_to_read : count;
 	}
 
-	const size_t max_bytes_to_read = file->scope_end - file->current_offset;
-	const size_t to_read = count > max_bytes_to_read ? max_bytes_to_read : count;
-	size_t bytes_read = 0;
+	size_t copied = 0;
+	while(copied < to_read) {
+		size_t off = file->current_offset;
+		size_t buf_start = *(fs->buffer_start);
+		size_t buf_filled = *(fs->buffer_filled);
 
-	if(to_read) {
-		bytes_read = fread(out, 1, to_read, fs->file);
+		if(off < buf_start || off >= buf_start + buf_filled) {
+			ss_file_stdio_buffer_fill(fs, off);
+			buf_start = *(fs->buffer_start);
+			buf_filled = *(fs->buffer_filled);
+			if(buf_filled == 0) break; /* EOF */
+		}
 
-		file->current_offset += bytes_read;
-		*(fs->last_offset) = ftell(fs->file);
+		size_t in_buf = (buf_start + buf_filled) - off;
+		size_t n = (to_read - copied < in_buf) ? to_read - copied : in_buf;
+		memcpy(out + copied, fs->buffer + (off - buf_start), n);
+		copied += n;
+		file->current_offset += n;
 	}
 
-	if(bytes_read < count) {
-		memset(out + bytes_read, 0, count - bytes_read);
+	if(copied < count) {
+		memset(out + copied, 0, count - copied);
 	}
 }
 
@@ -355,7 +395,14 @@ SS_File *ss_file_open_from_file(const char *path) {
 	}
 
 	res->last_offset = calloc(1, sizeof(*(res->last_offset)));
-	if(!res->last_offset) {
+	res->buffer = (uint8_t *)malloc(SS_FILESTDIO_BUFFER_SIZE);
+	res->buffer_start = calloc(1, sizeof(*(res->buffer_start)));
+	res->buffer_filled = calloc(1, sizeof(*(res->buffer_filled)));
+	if(!res->last_offset || !res->buffer || !res->buffer_start || !res->buffer_filled) {
+		free(res->last_offset);
+		free(res->buffer);
+		free(res->buffer_start);
+		free(res->buffer_filled);
 		ss_mutex_free(res->base.mutex);
 		free(res);
 		return NULL;
@@ -364,6 +411,9 @@ SS_File *ss_file_open_from_file(const char *path) {
 	res->file = ss_fopen_utf8(path, "rb");
 	if(!res->file) {
 		free(res->last_offset);
+		free(res->buffer);
+		free(res->buffer_start);
+		free(res->buffer_filled);
 		ss_mutex_free(res->base.mutex);
 		free(res);
 		return NULL;
@@ -382,6 +432,11 @@ SS_File *ss_file_open_from_file(const char *path) {
 	res->base.close = &ss_file_stdio_close;
 	res->base.read_u8 = &ss_file_stdio_read_u8;
 	res->base.read_bytes = &ss_file_stdio_read_bytes;
+
+	/* Pre-read the head of the file so the first access is served from
+	 * the buffer.  Subsequent ranges are loaded on demand whenever a read
+	 * crosses outside the currently buffered window. */
+	ss_file_stdio_buffer_fill(res, 0);
 
 	return &res->base;
 }
