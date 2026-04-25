@@ -53,9 +53,9 @@ static bool mus_check_header(SS_File *file, size_t size) {
 	   ss_file_read_u8(file, 2) != 'S' ||
 	   ss_file_read_u8(file, 3) != 0x1A) return false;
 
-	uint16_t length = (uint16_t)ss_file_read_le(file, 4, 2);
-	uint16_t offset = (uint16_t)ss_file_read_le(file, 6, 2);
-	uint16_t instrument_count = (uint16_t)ss_file_read_le(file, 12, 2);
+	uint16_t length = ss_file_read_le16(file, 4);
+	uint16_t offset = ss_file_read_le16(file, 6);
+	uint16_t instrument_count = ss_file_read_le16(file, 12);
 
 	/* Offset must point past the instrument list and the combined
 	 * score+offset region must fit in the file. */
@@ -92,8 +92,8 @@ static bool push_msg(SS_MIDITrack *track, size_t ticks, uint8_t status_byte,
 bool ss_midi_parse_mus(SS_MIDIFile *m, SS_File *file, size_t size) {
 	if(!mus_check_header(file, size)) return false;
 
-	uint16_t length = (uint16_t)ss_file_read_le(file, 4, 2);
-	uint16_t offset = (uint16_t)ss_file_read_le(file, 6, 2);
+	uint16_t length = ss_file_read_le16(file, 4);
+	uint16_t offset = ss_file_read_le16(file, 6);
 
 	m->format = 0;
 	m->time_division = MUS_TIME_DIVISION;

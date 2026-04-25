@@ -387,7 +387,7 @@ bool ss_midi_parse_lds(SS_MIDIFile *m, SS_File *file, size_t size) {
 	pos++; /* register_bd; ignored */
 
 	if(size - pos < 2) return false;
-	uint16_t patch_count = (uint16_t)ss_file_read_le(file, pos, 2);
+	uint16_t patch_count = ss_file_read_le16(file, pos);
 	pos += 2;
 	if(patch_count == 0) return false;
 	if(size - pos < (size_t)patch_count * 46) return false;
@@ -436,7 +436,7 @@ bool ss_midi_parse_lds(SS_MIDIFile *m, SS_File *file, size_t size) {
 		free(patches);
 		return false;
 	}
-	uint16_t position_count = (uint16_t)ss_file_read_le(file, pos, 2);
+	uint16_t position_count = ss_file_read_le16(file, pos);
 	pos += 2;
 	if(position_count == 0) {
 		free(patches);
@@ -456,7 +456,7 @@ bool ss_midi_parse_lds(SS_MIDIFile *m, SS_File *file, size_t size) {
 	for(uint16_t i = 0; i < position_count; i++) {
 		for(int j = 0; j < 9; j++) {
 			LDSPosition *p = &positions[i * 9 + j];
-			uint16_t patnum = (uint16_t)ss_file_read_le(file, pos, 2);
+			uint16_t patnum = ss_file_read_le16(file, pos);
 			if(patnum & 1) {
 				free(patches);
 				free(positions);
@@ -484,7 +484,7 @@ bool ss_midi_parse_lds(SS_MIDIFile *m, SS_File *file, size_t size) {
 		return false;
 	}
 	for(size_t i = 0; i < pattern_count; i++) {
-		patterns[i] = (uint16_t)ss_file_read_le(file, pos, 2);
+		patterns[i] = ss_file_read_le16(file, pos);
 		pos += 2;
 	}
 

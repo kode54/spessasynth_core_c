@@ -29,7 +29,7 @@
 /* ── Internal helpers ───────────────────────────────────────────────────── */
 
 static int16_t read_s16le(SS_File *file, size_t pos) {
-	uint16_t u = (uint16_t)ss_file_read_le(file, pos, 2);
+	uint16_t u = (uint16_t)ss_file_read_le16(file, pos);
 	return (int16_t)u;
 }
 
@@ -539,9 +539,9 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 		ss_file_read_string(inst_c.file, pos, iname, 20);
 		if(has_xinsts)
 			ss_file_read_string(xinst_c.file, pos, iname + 20, 20);
-		uint32_t bag_idx = (uint16_t)ss_file_read_le(inst_c.file, pos + 20, 2);
+		uint32_t bag_idx = ss_file_read_le16(inst_c.file, pos + 20);
 		if(has_xinsts)
-			bag_idx |= (uint32_t)ss_file_read_le(xinst_c.file, pos + 20, 2) * 65536;
+			bag_idx |= (uint32_t)ss_file_read_le16(xinst_c.file, pos + 20) * 65536;
 		pos += 22;
 		if(i < n_insts) {
 			const int namelen = has_xinsts ? 40 : 20;
@@ -679,16 +679,16 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 		ss_file_read_string(phdr_c.file, pos, pname, 20);
 		if(has_xpresets)
 			ss_file_read_string(xphdr_c.file, pos, pname + 20, 20);
-		uint16_t preset_num = (uint16_t)ss_file_read_le(phdr_c.file, pos + 20, 2);
-		uint16_t bank_num = (uint16_t)ss_file_read_le(phdr_c.file, pos + 22, 2);
+		uint16_t preset_num = ss_file_read_le16(phdr_c.file, pos + 20);
+		uint16_t bank_num = ss_file_read_le16(phdr_c.file, pos + 22);
 
-		uint32_t bag_idx = (uint16_t)ss_file_read_le(phdr_c.file, pos + 24, 2);
+		uint32_t bag_idx = ss_file_read_le16(phdr_c.file, pos + 24);
 		if(has_xpresets)
-			bag_idx |= (uint32_t)ss_file_read_le(xphdr_c.file, pos + 24, 2) * 65536;
+			bag_idx |= (uint32_t)ss_file_read_le16(xphdr_c.file, pos + 24) * 65536;
 
-		uint32_t library = (uint32_t)ss_file_read_le(phdr_c.file, pos + 26, 4);
-		uint32_t genre = (uint32_t)ss_file_read_le(phdr_c.file, pos + 30, 4);
-		uint32_t morphology = (uint32_t)ss_file_read_le(phdr_c.file, pos + 34, 4);
+		uint32_t library = ss_file_read_le32(phdr_c.file, pos + 26);
+		uint32_t genre = ss_file_read_le32(phdr_c.file, pos + 30);
+		uint32_t morphology = ss_file_read_le32(phdr_c.file, pos + 34);
 
 		pos += 38;
 

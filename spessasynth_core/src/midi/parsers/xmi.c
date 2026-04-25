@@ -77,7 +77,7 @@ static bool read_iff_hdr(SS_File *file, size_t pos, size_t end,
 	if(end - pos < 8) return false;
 	for(int i = 0; i < 4; i++)
 		id_out[i] = (char)ss_file_read_u8(file, pos + i);
-	*size_out = (uint32_t)ss_file_read_be(file, pos + 4, 4);
+	*size_out = ss_file_read_be32(file, pos + 4);
 	return true;
 }
 

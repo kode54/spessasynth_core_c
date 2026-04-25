@@ -143,13 +143,13 @@ bool ss_midi_parse_smf(SS_MIDIFile *m, SS_File *smf_data, size_t smf_size) {
 	if(pos + 8 > smf_size) return false;
 	ss_file_read_string(smf_data, 0, mthd_id, 4);
 	if(strcmp(mthd_id, "MThd") != 0) return false;
-	size_t hdr_size = ss_file_read_be(smf_data, 4, 4);
+	size_t hdr_size = ss_file_read_be32(smf_data, 4);
 	pos += 8;
 	if(hdr_size < 6 || pos + 6 > smf_size) return false;
 
 	m->format = ss_file_read_u8(smf_data, pos + 1); /* low byte of big-endian uint16 */
-	uint16_t n_tracks = (uint16_t)ss_file_read_be(smf_data, pos + 2, 2);
-	m->time_division = (uint16_t)ss_file_read_be(smf_data, pos + 4, 2);
+	uint16_t n_tracks = ss_file_read_be16(smf_data, pos + 2);
+	m->time_division = ss_file_read_be16(smf_data, pos + 4);
 	pos += hdr_size;
 
 	/* Allocate track array */
@@ -163,11 +163,11 @@ bool ss_midi_parse_smf(SS_MIDIFile *m, SS_File *smf_data, size_t smf_size) {
 		ss_file_read_string(smf_data, pos, mtrk_id, 4);
 		if(strcmp(mtrk_id, "MTrk") != 0) {
 			/* Skip unrecognized chunk */
-			size_t skip_sz = ss_file_read_be(smf_data, pos + 4, 4);
+			size_t skip_sz = ss_file_read_be32(smf_data, pos + 4);
 			pos += 8 + skip_sz;
 			continue;
 		}
-		size_t trk_sz = ss_file_read_be(smf_data, pos + 4, 4);
+		size_t trk_sz = ss_file_read_be32(smf_data, pos + 4);
 		pos += 8;
 
 		size_t start_ticks = 0;

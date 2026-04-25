@@ -210,14 +210,14 @@ bool ss_midi_parse_hmp(SS_MIDIFile *m, SS_File *file, size_t size) {
 
 		if(is_funky) {
 			if(size - pos < 4) break;
-			uint16_t sz16 = (uint16_t)ss_file_read_le(file, pos, 2);
+			uint16_t sz16 = ss_file_read_le16(file, pos);
 			pos += 2;
 			if(sz16 < 4) return false;
 			track_body_len = (size_t)sz16 - 4;
 			pre_skip = 2;
 		} else {
 			if(size - pos < 8) break;
-			uint32_t sz32 = (uint32_t)ss_file_read_le(file, pos, 4);
+			uint32_t sz32 = ss_file_read_le32(file, pos);
 			pos += 4;
 			if(sz32 < 12) return false;
 			track_body_len = (size_t)sz32 - 12;

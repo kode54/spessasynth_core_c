@@ -39,7 +39,7 @@ bool ss_midi_is_mids(SS_File *file, size_t size) {
 	   ss_file_read_u8(file, 1) != 'I' ||
 	   ss_file_read_u8(file, 2) != 'F' ||
 	   ss_file_read_u8(file, 3) != 'F') return false;
-	uint32_t riff_size = (uint32_t)ss_file_read_le(file, 4, 4);
+	uint32_t riff_size = ss_file_read_le32(file, 4);
 	if(riff_size < 8 || size < (size_t)riff_size + 8) return false;
 	if(ss_file_read_u8(file, 8) != 'M' ||
 	   ss_file_read_u8(file, 9) != 'I' ||
@@ -76,7 +76,7 @@ bool ss_midi_parse_mids(SS_MIDIFile *m, SS_File *file, size_t size) {
 
 	/* ── "fmt " chunk ────────────────────────────────────────────────────── */
 	size_t pos = 16; /* past RIFF header + "MIDS" + "fmt " */
-	uint32_t fmt_size = (uint32_t)ss_file_read_le(file, pos, 4);
+	uint32_t fmt_size = ss_file_read_le32(file, pos);
 	pos += 4;
 	if(size - pos < fmt_size) return false;
 
@@ -85,7 +85,7 @@ bool ss_midi_parse_mids(SS_MIDIFile *m, SS_File *file, size_t size) {
 	size_t fmt_end = pos + fmt_size;
 
 	if(fmt_size >= 4) {
-		time_division = (uint32_t)ss_file_read_le(file, pos, 4);
+		time_division = ss_file_read_le32(file, pos);
 		pos += 4;
 		fmt_size -= 4;
 		if(time_division == 0) return false; /* avoids /0 in tempo math */
@@ -96,7 +96,7 @@ bool ss_midi_parse_mids(SS_MIDIFile *m, SS_File *file, size_t size) {
 		fmt_size -= 4;
 	}
 	if(fmt_size >= 4) {
-		flags = (uint32_t)ss_file_read_le(file, pos, 4);
+		flags = ss_file_read_le32(file, pos);
 		pos += 4;
 		fmt_size -= 4;
 	}
@@ -126,13 +126,13 @@ bool ss_midi_parse_mids(SS_MIDIFile *m, SS_File *file, size_t size) {
 	track->port = -1;
 
 	if(size - pos < 4) return false;
-	uint32_t data_size = (uint32_t)ss_file_read_le(file, pos, 4);
+	uint32_t data_size = ss_file_read_le32(file, pos);
 	pos += 4;
 	size_t body_end = pos + data_size;
 	if(body_end > size) body_end = size;
 
 	if(body_end - pos < 4) return false;
-	uint32_t segment_count = (uint32_t)ss_file_read_le(file, pos, 4);
+	uint32_t segment_count = ss_file_read_le32(file, pos);
 	pos += 4;
 
 	bool is_eight_byte = (flags & 1u) != 0;
@@ -141,14 +141,14 @@ bool ss_midi_parse_mids(SS_MIDIFile *m, SS_File *file, size_t size) {
 	for(uint32_t i = 0; i < segment_count; i++) {
 		if(size - pos < 12) return false;
 		pos += 4; /* unused segment header word */
-		uint32_t segment_size = (uint32_t)ss_file_read_le(file, pos, 4);
+		uint32_t segment_size = ss_file_read_le32(file, pos);
 		pos += 4;
 		size_t segment_end = pos + segment_size;
 		if(segment_end > body_end) segment_end = body_end;
 
 		while(pos < segment_end) {
 			if(segment_end - pos < 4) return false;
-			uint32_t delta = (uint32_t)ss_file_read_le(file, pos, 4);
+			uint32_t delta = ss_file_read_le32(file, pos);
 			pos += 4;
 			current_ticks += delta;
 
@@ -158,7 +158,7 @@ bool ss_midi_parse_mids(SS_MIDIFile *m, SS_File *file, size_t size) {
 			}
 
 			if(segment_end - pos < 4) return false;
-			uint32_t event = (uint32_t)ss_file_read_le(file, pos, 4);
+			uint32_t event = ss_file_read_le32(file, pos);
 			pos += 4;
 
 			uint8_t tag = (uint8_t)(event >> 24);

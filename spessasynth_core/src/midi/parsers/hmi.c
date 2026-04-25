@@ -248,8 +248,8 @@ static bool parse_hmi_track(SS_File *file, size_t start, size_t end,
 bool ss_midi_parse_hmi(SS_MIDIFile *m, SS_File *file, size_t size) {
 	if(!ss_midi_is_hmi(file, size) || size < 0xEC) return false;
 
-	uint32_t track_count = (uint32_t)ss_file_read_le(file, 0xE4, 4);
-	uint32_t track_table_offset = (uint32_t)ss_file_read_le(file, 0xE8, 4);
+	uint32_t track_count = ss_file_read_le32(file, 0xE4);
+	uint32_t track_table_offset = ss_file_read_le32(file, 0xE8);
 	if(track_count == 0) return false;
 	if(track_table_offset >= size) return false;
 	if((uint64_t)track_table_offset + (uint64_t)track_count * 4 > size) return false;
@@ -257,8 +257,8 @@ bool ss_midi_parse_hmi(SS_MIDIFile *m, SS_File *file, size_t size) {
 	uint32_t *track_offsets = (uint32_t *)malloc(track_count * sizeof(uint32_t));
 	if(!track_offsets) return false;
 	for(uint32_t i = 0; i < track_count; i++)
-		track_offsets[i] = (uint32_t)ss_file_read_le(file,
-		                                             track_table_offset + i * 4, 4);
+		track_offsets[i] = ss_file_read_le32(file,
+		                                     track_table_offset + i * 4);
 
 	m->format = 1;
 	m->time_division = 0xC0;
@@ -310,7 +310,7 @@ bool ss_midi_parse_hmi(SS_MIDIFile *m, SS_File *file, size_t size) {
 
 		/* Optional text metadata at meta_offset (track-relative). */
 		if(t_len < 0x4B + 4) goto fail;
-		uint32_t meta_offset = (uint32_t)ss_file_read_le(file, t_off + 0x4B, 4);
+		uint32_t meta_offset = ss_file_read_le32(file, t_off + 0x4B);
 		if(meta_offset != 0 && (uint64_t)meta_offset + 1 < t_len) {
 			uint8_t meta_size = ss_file_read_u8(file, t_off + meta_offset + 1);
 			if((uint64_t)meta_offset + 2 + (uint64_t)meta_size > t_len) goto fail;
@@ -339,7 +339,7 @@ bool ss_midi_parse_hmi(SS_MIDIFile *m, SS_File *file, size_t size) {
 
 		/* Event stream. */
 		if(t_len < 0x57 + 4) goto fail;
-		uint32_t data_off = (uint32_t)ss_file_read_le(file, t_off + 0x57, 4);
+		uint32_t data_off = ss_file_read_le32(file, t_off + 0x57);
 		size_t events_start = (size_t)t_off + data_off;
 		size_t events_end = (size_t)t_off + t_len;
 		if(events_start > events_end) goto fail;

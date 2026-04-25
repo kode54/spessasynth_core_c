@@ -328,26 +328,39 @@ bool ss_sample_decode(SS_BasicSample *s) {
 			case SS_SMPLT_8BIT: {
 				const size_t block_align = s->audio_file_block_align;
 				const size_t frame_count = ss_file_size(s->audio_file) / block_align;
+				uint8_t *temp = (uint8_t *)malloc(frame_count * block_align);
 				s->audio_data = (float *)malloc((frame_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
-				if(s->audio_data) {
+				if(temp && s->audio_data) {
+					const uint8_t *in = temp;
+					float *out = s->audio_data;
+					ss_file_read_bytes(s->audio_file, 0, temp, frame_count * block_align);
 					for(size_t i = 0; i < frame_count; i++)
-						s->audio_data[i] = (((float)ss_file_read_u8(s->audio_file, i * block_align)) - 128.0) / 128.0;
+						out[i] = ((float)in[i * block_align] - 128.0) / 128.0;
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
 				}
+				free(temp);
 				ss_mutex_leave(s->mutex);
 				return true;
 			}
 
 			case SS_SMPLT_16BIT: {
-				const size_t frame_count = ss_file_size(s->audio_file) / 2;
+				const size_t block_align = s->audio_file_block_align;
+				const size_t frame_count = ss_file_size(s->audio_file) / block_align;
+				uint8_t *temp = (uint8_t *)malloc(frame_count * block_align);
 				s->audio_data = (float *)malloc((frame_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
-				if(s->audio_data) {
-					for(size_t i = 0; i < frame_count; i++)
-						s->audio_data[i] = ((float)(int16_t)ss_file_read_le(s->audio_file, i * 2, 2)) / 32768.0;
+				if(temp && s->audio_data) {
+					const uint8_t *in = temp;
+					float *out = s->audio_data;
+					ss_file_read_bytes(s->audio_file, 0, temp, frame_count * block_align);
+					for(size_t i = 0, bsz = frame_count * block_align; i < bsz; i += block_align) {
+						int16_t sample = (uint16_t)in[i] | ((int16_t)in[i + 1] << 8);
+						out[i] = ((float)sample) / 32768.0;
+					}
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
 				}
+				free(temp);
 				ss_mutex_leave(s->mutex);
 				return true;
 			}
@@ -362,16 +375,25 @@ bool ss_sample_decode(SS_BasicSample *s) {
 					ss_mutex_leave(s->mutex);
 					return false;
 				}
+				uint8_t *temp16 = (uint8_t *)malloc(frame_count * 2);
+				uint8_t *temp8 = (uint8_t *)malloc(frame_count);
 				s->audio_data = (float *)malloc((frame_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
-				if(s->audio_data) {
+				if(temp16 && temp8 && s->audio_data) {
+					const uint8_t *in16 = temp16;
+					const uint8_t *in8 = temp8;
+					float *out = s->audio_data;
+					ss_file_read_bytes(s->audio_file, 0, temp16, frame_count * 2);
+					ss_file_read_bytes(s->audio_file, 0, temp8, frame_count);
 					for(size_t i = 0; i < frame_count; i++) {
-						int32_t sample = (int32_t)(ss_file_read_le(s->audio_file, i * 2, 2) << 16) + (int32_t)(ss_file_read_u8(s->audio_file_sm24, i) << 8);
+						int32_t sample = (int32_t)(((uint32_t)in16[i * 2] << 16) | ((uint32_t)in16[i * 2 + 1] << 24) | ((uint32_t)in8[i] << 8)); 
 						sample >>= 8;
-						s->audio_data[i] = (float)sample / 16777216.0;
+						out[i] = (float)sample / 16777216.0;
 					}
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
 				}
+				free(temp8);
+				free(temp16);
 				ss_mutex_leave(s->mutex);
 				return true;
 			}
@@ -379,10 +401,14 @@ bool ss_sample_decode(SS_BasicSample *s) {
 			case SS_SMPLT_ALAW: {
 				const size_t block_align = s->audio_file_block_align;
 				const size_t frame_count = ss_file_size(s->audio_file) / block_align;
+				uint8_t *temp = (uint8_t *)malloc(frame_count * block_align);
 				s->audio_data = (float *)malloc((frame_count + SS_SAMPLE_COUNT_BUMP) * sizeof(float));
-				if(s->audio_data) {
+				if(temp && s->audio_data) {
+					const uint8_t *in = temp;
+					float *out = s->audio_data;
+					ss_file_read_bytes(s->audio_file, 0, temp, frame_count * block_align);
 					for(size_t i = 0; i < frame_count; i++) {
-						const uint8_t input = (int)ss_file_read_u8(s->audio_file, i * block_align);
+						const uint8_t input = (int)in[i * block_align];
 
 						/* https://en.wikipedia.org/wiki/G.711#A-law */
 						/* Re-toggle toggled bits */
@@ -407,11 +433,12 @@ bool ss_sample_decode(SS_BasicSample *s) {
 						const int16_t s16sample = input > 127 ? mantissa : -mantissa;
 
 						/* Convert to floating point */
-						s->audio_data[i] = (float)s16sample / 32768.0;
+						out[i] = (float)s16sample / 32768.0;
 					}
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
 				}
+				free(temp);
 				ss_mutex_leave(s->mutex);
 				return true;
 			}

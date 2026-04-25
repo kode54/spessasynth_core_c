@@ -68,20 +68,20 @@ static bool parse_wsmp(SS_File *file, DLS_WaveSample *ws, bool riff64) {
 	size_t pos = ss_file_tell(file);
 	ws->cbSize = ss_file_read_le(file, pos, size_size);
 	pos += size_size;
-	ws->unity_note = (uint16_t)ss_file_read_le(file, pos, 2);
-	ws->fine_tune = (int16_t)ss_file_read_le(file, pos + 2, 2);
-	ws->gain = (int32_t)ss_file_read_le(file, pos + 4, 4);
-	ws->options = (uint32_t)ss_file_read_le(file, pos + 8, 4);
-	ws->loop_count = (uint32_t)ss_file_read_le(file, pos + 12, 4);
+	ws->unity_note = ss_file_read_le16(file, pos);
+	ws->fine_tune = (int16_t)ss_file_read_le16(file, pos + 2);
+	ws->gain = (int32_t)ss_file_read_le32(file, pos + 4);
+	ws->options = ss_file_read_le32(file, pos + 8);
+	ws->loop_count = ss_file_read_le32(file, pos + 12);
 	ws->loop_size = 0;
 	ws->loop_type = 0;
 	ws->loop_start = 0;
 	ws->loop_length = 0;
 	if(ws->loop_count > 0) {
-		ws->loop_size = (uint32_t)ss_file_read_le(file, pos + 16, 4);
-		ws->loop_type = (uint32_t)ss_file_read_le(file, pos + 20, 4);
-		ws->loop_start = (uint32_t)ss_file_read_le(file, pos + 24, 4);
-		ws->loop_length = (uint32_t)ss_file_read_le(file, pos + 28, 4);
+		ws->loop_size = ss_file_read_le32(file, pos + 16);
+		ws->loop_type = ss_file_read_le32(file, pos + 20);
+		ws->loop_start = ss_file_read_le32(file, pos + 24);
+		ws->loop_length = ss_file_read_le32(file, pos + 28);
 	}
 	return true;
 }
@@ -135,16 +135,16 @@ static void parse_art_body(SS_File *file, DLS_ArtBuf *art, bool riff64) {
 	/*ss_iba_read_le(data, size_size); cbSize */
 	size_t pos = ss_file_tell(file);
 	pos += size_size; /* cbSize */
-	uint32_t n = (uint32_t)ss_file_read_le(file, pos, 4);
+	uint32_t n = ss_file_read_le32(file, pos);
 	pos += 4;
 	for(uint32_t i = 0; i < n; i++) {
 		if(ss_file_remaining(file) < 12) break;
 		DLS_ConnBlock b;
-		b.us_source = (uint16_t)ss_file_read_le(file, pos, 2);
-		b.us_control = (uint16_t)ss_file_read_le(file, pos + 2, 2);
-		b.us_dest = (uint16_t)ss_file_read_le(file, pos + 4, 2);
-		uint16_t t = (uint16_t)ss_file_read_le(file, pos + 6, 2);
-		b.l_scale = (int32_t)ss_file_read_le(file, pos + 8, 4);
+		b.us_source = ss_file_read_le16(file, pos);
+		b.us_control = ss_file_read_le16(file, pos + 2);
+		b.us_dest = ss_file_read_le16(file, pos + 4);
+		uint16_t t = ss_file_read_le16(file, pos + 6);
+		b.l_scale = (int32_t)ss_file_read_le32(file, pos + 8);
 		pos += 12;
 
 		/*
@@ -816,13 +816,13 @@ SS_SoundBank *ss_dls_load(SS_File *main_file, bool riff64) {
 		if(strcmp(chunk.header, "ptbl") == 0) {
 			/*ss_file_skip(chunk.file, size_size); cbSize */
 			size_t pos = 4;
-			uint32_t cCues = (uint32_t)ss_file_read_le(chunk.file, pos, 4);
+			uint32_t cCues = ss_file_read_le32(chunk.file, pos);
 			pool_count = cCues;
 			pool_offsets = (uint32_t *)malloc(cCues * sizeof(uint32_t));
 			if(!pool_offsets) goto fail;
 			pos += 4;
 			for(uint32_t i = 0; i < cCues; i++, pos += 4)
-				pool_offsets[i] = (uint32_t)ss_file_read_le(chunk.file, pos, 4);
+				pool_offsets[i] = ss_file_read_le32(chunk.file, pos);
 
 		} else if(strcmp(chunk.header, "pgal") == 0) {
 			/* Proprietary MobileBAE instrument aliasing chunk.
@@ -876,9 +876,9 @@ SS_SoundBank *ss_dls_load(SS_File *main_file, bool riff64) {
 						if(!ss_riff_read_chunk(ins_list.file, &sub, false, riff64)) break;
 
 						if(strcmp(sub.header, "insh") == 0) {
-							uint32_t n_regions = (uint32_t)ss_file_read_le(sub.file, 0, 4);
-							uint32_t bank_val = (uint32_t)ss_file_read_le(sub.file, 4, 4);
-							uint32_t patch = (uint32_t)ss_file_read_le(sub.file, 8, 4);
+							uint32_t n_regions = ss_file_read_le32(sub.file, 0);
+							uint32_t bank_val = ss_file_read_le32(sub.file, 4);
+							uint32_t patch = ss_file_read_le32(sub.file, 8);
 							entry->bank_msb = (bank_val >> 8) & 0x7F;
 							entry->bank_lsb = bank_val & 0x7F;
 							entry->patch = patch & 0x7F;
@@ -916,22 +916,22 @@ SS_SoundBank *ss_dls_load(SS_File *main_file, bool riff64) {
 										                       false, riff64)) break;
 
 										if(strcmp(rs.header, "rgnh") == 0) {
-											rh.key_low = (uint16_t)ss_file_read_le(rs.file, 0, 2);
-											rh.key_high = (uint16_t)ss_file_read_le(rs.file, 2, 2);
-											rh.vel_low = (uint16_t)ss_file_read_le(rs.file, 4, 2);
-											rh.vel_high = (uint16_t)ss_file_read_le(rs.file, 6, 2);
-											rh.options = (uint16_t)ss_file_read_le(rs.file, 8, 2);
-											rh.key_group = (uint16_t)ss_file_read_le(rs.file, 10, 2);
+											rh.key_low = ss_file_read_le16(rs.file, 0);
+											rh.key_high = ss_file_read_le16(rs.file, 2);
+											rh.vel_low = ss_file_read_le16(rs.file, 4);
+											rh.vel_high = ss_file_read_le16(rs.file, 6);
+											rh.options = ss_file_read_le16(rs.file, 8);
+											rh.key_group = ss_file_read_le16(rs.file, 10);
 
 										} else if(strcmp(rs.header, "wsmp") == 0) {
 											parse_wsmp(rs.file, &ws, riff64);
 											has_wsmp = true;
 
 										} else if(strcmp(rs.header, "wlnk") == 0) {
-											/*ss_iba_read_le(&rs.data, 2); fusOptions */
-											/*ss_iba_read_le(&rs.data, 2); phase group */
-											/*ss_iba_read_le(&rs.data, 4); channel */
-											wave_index = (uint32_t)ss_file_read_le(rs.file, 8, 4);
+											/*ss_iba_read_le16(&rs.data); fusOptions */
+											/*ss_iba_read_le16(&rs.data); phase group */
+											/*ss_iba_read_le32(&rs.data); channel */
+											wave_index = ss_file_read_le32(rs.file, 8);
 
 										} else if(strcmp(rs.header, "LIST") == 0) {
 											char art_id[5];
@@ -1171,12 +1171,12 @@ SS_SoundBank *ss_dls_load(SS_File *main_file, bool riff64) {
 
 		/* Instrument alias records (8 bytes each) until EOF */
 		while(pos + 8 <= pgal_end) {
-			uint32_t alias_bank = (uint32_t)ss_file_read_le(pgal_file, pos, 2);
+			uint32_t alias_bank = (uint32_t)ss_file_read_le16(pgal_file, pos);
 			uint32_t alias_lsb = alias_bank & 0x7F;
 			uint32_t alias_msb = (alias_bank >> 7) & 0x7F;
 			uint32_t alias_prog = ss_file_read_u8(pgal_file, pos + 2);
 			/* pgal_file[pos + 3] should be 0 */
-			uint32_t input_bank = (uint32_t)ss_file_read_le(pgal_file, pos + 4, 2);
+			uint32_t input_bank = (uint32_t)ss_file_read_le16(pgal_file, pos + 4);
 			uint32_t input_lsb = input_bank & 0x7F;
 			uint32_t input_msb = (input_bank >> 7) & 0x7F;
 			uint32_t input_prog = ss_file_read_u8(pgal_file, pos + 6);
@@ -1552,12 +1552,12 @@ static bool parse_wave_pool(SS_File *waves_file,
 			if(!ss_riff_read_chunk(wave_list.file, &sub, false, riff64)) break;
 
 			if(strcmp(sub.header, "fmt ") == 0) {
-				fmt_tag = ss_file_read_le(sub.file, 0, 2);
-				num_channels = (uint16_t)ss_file_read_le(sub.file, 2, 2);
-				sample_rate = (uint32_t)ss_file_read_le(sub.file, 4, 4);
-				/*ss_file_read_le(sub.file, 8, 4); byte rate */
-				block_align = ss_file_read_le(sub.file, 12, 2); /* block align */
-				bits_per_sample = (uint16_t)ss_file_read_le(sub.file, 14, 2);
+				fmt_tag = ss_file_read_le16(sub.file, 0);
+				num_channels = ss_file_read_le16(sub.file, 2);
+				sample_rate = ss_file_read_le32(sub.file, 4);
+				/*ss_file_read_le32(sub.file, 8); byte rate */
+				block_align = ss_file_read_le16(sub.file, 12); /* block align */
+				bits_per_sample = ss_file_read_le16(sub.file, 14);
 			} else if(strcmp(sub.header, "data") == 0) {
 				pcm_data = sub.file;
 				pcm_len = ss_file_size(sub.file);
@@ -1589,7 +1589,7 @@ static bool parse_wave_pool(SS_File *waves_file,
 					while(ip + 8 <= list_size) {
 						char ifid[5];
 						ss_file_read_string(sub.file, ip, ifid, 4);
-						size_t ifsz = ss_file_read_le(sub.file, ip + 4, 4);
+						size_t ifsz = ss_file_read_le32(sub.file, ip + 4);
 						ip += 8;
 						if(ip + ifsz > list_size) break;
 						if(strcmp(ifid, "INAM") == 0 && ifsz > 0) {

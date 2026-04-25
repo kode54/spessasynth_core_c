@@ -32,7 +32,7 @@ static void rmidi_set_field(uint8_t **dst, size_t *dst_len,
 bool ss_midi_parse_rmidi(SS_MIDIFile *m, SS_File *file, size_t size) {
 	if(size < 12) return false;
 
-	size_t riff_size = ss_file_read_le(file, 4, 4);
+	size_t riff_size = ss_file_read_le32(file, 4);
 	char rmid_id[5];
 	ss_file_read_string(file, 8, rmid_id, 4);
 
@@ -54,7 +54,7 @@ bool ss_midi_parse_rmidi(SS_MIDIFile *m, SS_File *file, size_t size) {
 
 	if(strcmp(data_id, "data") != 0) return false;
 
-	size_t smf_chunk_size = ss_file_read_le(file, pos + 4, 4);
+	size_t smf_chunk_size = ss_file_read_le32(file, pos + 4);
 
 	pos += 8;
 
@@ -68,7 +68,7 @@ bool ss_midi_parse_rmidi(SS_MIDIFile *m, SS_File *file, size_t size) {
 	while(pos + 8 <= size) {
 		char chunk_id[5];
 		ss_file_read_string(file, pos, chunk_id, 4);
-		size_t csz = ss_file_read_le(file, pos + 4, 4);
+		size_t csz = ss_file_read_le32(file, pos + 4);
 		size_t cdata_start = pos + 8;
 		size_t cdata_end = cdata_start + csz;
 		if(cdata_end > size) cdata_end = size;
@@ -112,7 +112,7 @@ bool ss_midi_parse_rmidi(SS_MIDIFile *m, SS_File *file, size_t size) {
 			while(ip + 8 <= cdata_end) {
 				char ifid[5];
 				ss_file_read_string(file, ip, ifid, 4);
-				size_t ifsz = ss_file_read_le(file, ip + 4, 4);
+				size_t ifsz = ss_file_read_le32(file, ip + 4);
 				ip += 8;
 				size_t ifend = ip + ifsz;
 				if(ifend > cdata_end) ifend = cdata_end;
@@ -154,7 +154,7 @@ bool ss_midi_parse_rmidi(SS_MIDIFile *m, SS_File *file, size_t size) {
 				} else if(strcmp(ifid, "DBNK") == 0) {
 					/* 2-byte little-endian bank offset */
 					if(ifdlen >= 2)
-						m->bank_offset = (uint16_t)ss_file_read_le(file, ifd, 2);
+						m->bank_offset = ss_file_read_le16(file, ifd);
 					found_dbnk = true;
 				}
 #undef RMIDI_SET
