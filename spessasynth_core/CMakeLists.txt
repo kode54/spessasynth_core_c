@@ -29,6 +29,7 @@ set(SS_SOURCES
     src/midi/parsers/hmp.c
     src/midi/parsers/hmi.c
     src/midi/parsers/lds.c
+    src/midi/parsers/xmf.c
     src/soundbank/soundbank.c
     src/soundbank/dls_reader.c
     src/soundbank/soundfont_reader.c
@@ -130,6 +131,16 @@ if(SS_ENABLE_SF3_FLAC)
             message(WARNING "libFLAC not found — FLAC SF3 sample support disabled.")
         endif()
     endif()
+endif()
+
+# ── zlib (XMF compressed FileNodes) ──────────────────────────────────────────
+find_package(ZLIB)
+if(ZLIB_FOUND)
+    target_link_libraries(spessasynth PRIVATE ZLIB::ZLIB)
+    target_compile_definitions(spessasynth PRIVATE SS_HAVE_ZLIB=1)
+    message(STATUS "zlib found - compressed XMF FileNodes supported")
+else()
+    message(STATUS "zlib not found - compressed XMF FileNodes will not load")
 endif()
 
 # ── Math ─────────────────────────────────────────────────────────────────────

@@ -73,6 +73,16 @@ bool ss_midi_is_hmi(SS_File *file, size_t size);
  *  on malformed input. */
 bool ss_midi_parse_hmi(SS_MIDIFile *m, SS_File *file, size_t size);
 
+/** Detect an XMF / Mobile XMF file (RP-030 / RP-042). */
+bool ss_midi_is_xmf(SS_File *file, size_t size);
+
+/** Parse an XMF / Mobile XMF file.  Walks the header tree, extracts
+ *  the embedded SMF FileNode (delegating to ss_midi_parse_smf) and
+ *  any DLS FileNode (assigned as the embedded soundbank).  Compressed
+ *  FileNodes are inflated via zlib when SS_HAVE_ZLIB is defined.
+ *  Returns false on malformed input or unsupported references. */
+bool ss_midi_parse_xmf(SS_MIDIFile *m, SS_File *file, size_t size);
+
 /** Detect a Loudness Sound System (LDS) tracker file.  Needs a ".lds"
  *  filename extension since the format has no unambiguous magic. */
 bool ss_midi_is_lds(SS_File *file, size_t size, const char *file_name);
