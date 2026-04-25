@@ -9,12 +9,14 @@
 /* Begin PBXBuildFile section */
 		83B7F5C32F8696E000C57C20 /* libFLAC.14.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 83B7F5C22F8696E000C57C20 /* libFLAC.14.dylib */; };
 		83C37A4D2F9A0A4F0032167A /* libvorbisfile.3.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 83C37A4C2F9A0A4F0032167A /* libvorbisfile.3.dylib */; };
+		83C6A4B62F9C928E0067BA93 /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 83C6A4B52F9C928E0067BA93 /* libz.tbd */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		8346D3AA2F867F4900F3F5EC /* spessasynth_core.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = spessasynth_core.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		83B7F5C22F8696E000C57C20 /* libFLAC.14.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libFLAC.14.dylib; path = ../../../../ThirdParty/flac/lib/libFLAC.14.dylib; sourceTree = "<group>"; };
 		83C37A4C2F9A0A4F0032167A /* libvorbisfile.3.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libvorbisfile.3.dylib; path = ../../../../ThirdParty/vorbis/lib/libvorbisfile.3.dylib; sourceTree = "<group>"; };
+		83C6A4B52F9C928E0067BA93 /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -65,6 +67,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				83C6A4B62F9C928E0067BA93 /* libz.tbd in Frameworks */,
 				83C37A4D2F9A0A4F0032167A /* libvorbisfile.3.dylib in Frameworks */,
 				83B7F5C32F8696E000C57C20 /* libFLAC.14.dylib in Frameworks */,
 			);
@@ -93,6 +96,7 @@
 		83B7F5C12F8696E000C57C20 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				83C6A4B52F9C928E0067BA93 /* libz.tbd */,
 				83C37A4C2F9A0A4F0032167A /* libvorbisfile.3.dylib */,
 				83B7F5C22F8696E000C57C20 /* libFLAC.14.dylib */,
 			);
@@ -205,6 +209,7 @@
 					"$(inherited)",
 					"SS_HAVE_LIBFLAC=1",
 					"SS_HAVE_LIBVORBISFILE=1",
+					"SS_HAVE_ZLIB=1",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
@@ -248,6 +253,7 @@
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"SS_HAVE_LIBFLAC=1",
 					"SS_HAVE_LIBVORBISFILE=1",
+					"SS_HAVE_ZLIB=1",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
