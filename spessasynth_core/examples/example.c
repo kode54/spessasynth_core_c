@@ -192,7 +192,8 @@ int main(int argc, char *argv[]) {
 		.enable_effects = true,
 		.voice_cap = 512,
 		.interpolation = SS_INTERP_LINEAR,
-		.preload_samples = true
+		.preload_all_samples = false,
+		.preload_instruments = true
 	};
 
 	g_processor = ss_processor_create((int)deviceConfig.sampleRate, &opts);

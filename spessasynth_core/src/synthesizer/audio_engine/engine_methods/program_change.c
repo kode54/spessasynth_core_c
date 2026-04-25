@@ -18,6 +18,7 @@
 /* ── Program change ──────────────────────────────────────────────────────── */
 
 extern void ss_channel_reset_drum_params(SS_MIDIChannel *ch);
+extern void ss_preset_precache(SS_BasicPreset *p);
 
 void ss_channel_program_change(SS_MIDIChannel *ch, int program) {
 	if(ch->lock_preset) return;
@@ -35,6 +36,7 @@ void ss_channel_program_change(SS_MIDIChannel *ch, int program) {
 			ch->drum_channel = is_drum_preset;
 		}
 		ss_channel_reset_drum_params(ch);
+		if(ch->synth && ch->synth->options.preload_instruments) ss_preset_precache(p);
 		return;
 	}
 }

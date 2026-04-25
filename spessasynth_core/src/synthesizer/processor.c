@@ -117,6 +117,8 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 		proc->options.enable_effects = true;
 		proc->options.voice_cap = 512;
 		proc->options.interpolation = SS_INTERP_LINEAR;
+		proc->options.preload_all_samples = false;
+		proc->options.preload_instruments = true;
 	}
 
 	/* Master params defaults */
@@ -338,7 +340,7 @@ bool ss_processor_load_soundbank(SS_Processor *proc,
 		ss_filtered_banks_free(fbs, /*free_banks=*/false);
 		return false;
 	}
-	if(proc->options.preload_samples)
+	if(proc->options.preload_all_samples)
 		preload_filtered_banks_samples(fbs);
 	return true;
 }
@@ -349,7 +351,7 @@ bool ss_processor_load_filtered_banks(SS_Processor *proc,
 	if(!proc || !banks || !id) return false;
 	if(!proc_install_group(proc, banks, id, insert, /*external_banks=*/false))
 		return false;
-	if(proc->options.preload_samples)
+	if(proc->options.preload_all_samples)
 		preload_filtered_banks_samples(banks);
 	return true;
 }

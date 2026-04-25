@@ -1512,3 +1512,20 @@ SS_SoundBank *ss_soundbank_load(SS_File *file) {
 	if(res) soundbank_parse(res);
 	return res;
 }
+
+void ss_preset_precache(SS_BasicPreset *p) {
+	if(!p) return;
+	for(size_t z = 0; z < p->zone_count; z++) {
+		SS_PresetZone *zone = &p->zones[z];
+		SS_BasicInstrument *inst = zone->instrument;
+		if(inst) {
+			for(size_t iz = 0; iz < inst->zone_count; iz++) {
+				SS_InstrumentZone *instzone = &inst->zones[iz];
+				if(instzone->sample) {
+					/* No failure checking, the bank will still be loaded. */
+					ss_sample_decode(instzone->sample);
+				}
+			}
+		}
+	}
+}

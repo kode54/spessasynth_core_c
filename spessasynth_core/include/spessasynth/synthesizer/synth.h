@@ -385,7 +385,11 @@ typedef struct {
 	 * through the bank's instrument zones before returning.  Trades a
 	 * one-time load cost for a real-time-safe synthesis path (no
 	 * lazy Vorbis/FLAC decode on the audio thread). */
-	bool preload_samples;
+	bool preload_all_samples;
+	/* When true, preload a whole instrument on program change. Less
+	 * aggressive an option than the above, and matches what upstream
+	 * does by default. */
+	bool preload_instruments;
 } SS_ProcessorOptions;
 
 /* ── Event callback ──────────────────────────────────────────────────────── */
