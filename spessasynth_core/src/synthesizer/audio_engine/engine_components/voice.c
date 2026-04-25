@@ -20,10 +20,6 @@
 extern void ss_volume_envelope_init(SS_VolumeEnvelope *env,
                                     uint32_t sr, int initial_decay_cb);
 extern void ss_lowpass_filter_init(SS_LowpassFilter *f, uint32_t sr);
-extern bool ss_wavetable_get_sample(SS_Voice *v, float *out, int count,
-                                    SS_InterpolationType interp);
-extern bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
-                                       int count, float gain_target);
 /*extern void ss_volume_envelope_recalculate(SS_Voice *v,
                                            SS_VolumeEnvelope *env,
                                            const int16_t *mod_gens,
