@@ -357,7 +357,7 @@ json_value * json_boolean_new (int b)
    return value;
 }
 
-json_value * json_null_new ()
+json_value * json_null_new (void)
 {
    json_value * value = (json_value *) calloc (1, sizeof (json_builder_value));
    

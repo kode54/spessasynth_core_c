@@ -225,7 +225,7 @@ json_value * json_parse_ex (json_settings * settings,
 {
    json_char error [json_error_max];
    const json_char * end;
-   json_value * top, * root, * alloc = 0;
+   json_value * top, * root = NULL, * alloc = NULL;
    json_state state = { 0 };
    long flags;
    long num_digits = 0, num_e = 0;

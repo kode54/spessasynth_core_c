@@ -802,7 +802,7 @@ static int strpbrkn_all(const char *str, size_t size, const char *chrs) {
 
 	while(str < end && *chrs) {
 		while(str < end && *str != *chrs) ++str;
-		++str, ++chrs;
+		++str; ++chrs;
 	}
 
 	return str < end;
