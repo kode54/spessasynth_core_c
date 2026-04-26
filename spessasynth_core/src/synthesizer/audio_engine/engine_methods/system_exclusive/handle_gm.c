@@ -68,11 +68,11 @@ void ss_sysex_handle_gm(SS_Processor *proc, const uint8_t *data, size_t len, dou
 
 		case 0x08: /* MIDI Tuning Standard */
 		{
-			if(len < 5) break;
+			if(len < 4) break;
 			size_t idx = 4;
 			switch(data[3]) {
 				case 0x01: { /* Bulk Tuning Dump */
-					if(len < 384 + 4) break;
+					if(len < 384 + 4 + 16) break;
 					int program = (int)data[idx++];
 					/* skip 16-byte name */
 					idx += 16;
@@ -80,10 +80,16 @@ void ss_sysex_handle_gm(SS_Processor *proc, const uint8_t *data, size_t len, dou
 					if(!proc->master_params.tunings) {
 						proc->master_params.tunings =
 						(SS_TuningEntry **)calloc(128, sizeof(SS_TuningEntry *));
+						if(!proc->master_params.tunings) return;
 					}
 					if(!proc->master_params.tunings[program]) {
 						proc->master_params.tunings[program] =
-						(SS_TuningEntry *)calloc(128, sizeof(SS_TuningEntry));
+						(SS_TuningEntry *)malloc(128 * sizeof(SS_TuningEntry));
+						if(!proc->master_params.tunings[program]) return;
+						for(int n = 0; n < 128; n++) {
+							proc->master_params.tunings[program][n].midi_note = -1;
+							proc->master_params.tunings[program][n].cent_tuning = 0;
+						}
 					}
 					for(int n = 0; n < 128 && idx + 2 < len; n++) {
 						uint8_t b1 = data[idx++];
@@ -102,16 +108,22 @@ void ss_sysex_handle_gm(SS_Processor *proc, const uint8_t *data, size_t len, dou
 					break;
 				}
 				case 0x02: { /* Single Note Tuning Change */
-					if(len < 6) break;
+					if(len < 4 + 6) break;
 					int program = (int)data[idx++];
 					int num_notes = (int)data[idx++];
 					if(!proc->master_params.tunings) {
 						proc->master_params.tunings =
 						(SS_TuningEntry **)calloc(128, sizeof(SS_TuningEntry *));
+						if(!proc->master_params.tunings) return;
 					}
 					if(!proc->master_params.tunings[program]) {
 						proc->master_params.tunings[program] =
-						(SS_TuningEntry *)calloc(128, sizeof(SS_TuningEntry));
+						(SS_TuningEntry *)malloc(128 * sizeof(SS_TuningEntry));
+						if(!proc->master_params.tunings[program]) return;
+						for(int n = 0; n < 128; n++) {
+							proc->master_params.tunings[program][n].midi_note = -1;
+							proc->master_params.tunings[program][n].cent_tuning = 0;
+						}
 					}
 					for(int ni = 0; ni < num_notes && idx + 3 <= len; ni++) {
 						uint8_t key = data[idx++];
