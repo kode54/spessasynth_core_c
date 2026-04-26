@@ -387,7 +387,7 @@ bool ss_sample_decode(SS_BasicSample *s) {
 					for(size_t i = 0; i < frame_count; i++) {
 						int32_t sample = (int32_t)(((uint32_t)in16[i * 2] << 16) | ((uint32_t)in16[i * 2 + 1] << 24) | ((uint32_t)in8[i] << 8)); 
 						sample >>= 8;
-						out[i] = (float)sample / 16777216.0;
+						out[i] = (float)sample / 8388608.0;
 					}
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
