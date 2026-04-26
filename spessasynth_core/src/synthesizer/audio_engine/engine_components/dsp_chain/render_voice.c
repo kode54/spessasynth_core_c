@@ -82,6 +82,24 @@ bool ss_voice_render(SS_Voice *v,
 	float cents = (float)v->modulated_generators[SS_GEN_FINE_TUNE] + (float)ch->channel_octave_tuning[v->midi_note] + (float)ch->channel_tuning_cents + v->pitch_offset;
 	float semitones = (float)v->modulated_generators[SS_GEN_COARSE_TUNE];
 
+	/* MIDI tuning standard */
+	const int program = v->preset->program;
+	const SS_TuningEntry *tuning = NULL;
+	if(ch->synth) {
+		if(ch->synth->master_params.tunings &&
+		   ch->synth->master_params.tunings[program]) {
+			tuning = &ch->synth->master_params.tunings[program][v->real_key];
+		}
+	}
+	if(tuning) {
+		/* Tuning is encoded as key and cents offset
+		 * Override key, otherwise -1
+		 */
+		if(tuning->midi_note >= 0) target_key = tuning->midi_note;
+		/* Add microtonal tuning */
+		cents += tuning->cent_tuning;
+	}
+
 	/* Portamento */
 	if(v->portamento_from_key > -1) {
 		float elapsed = (float)((time_now - v->start_time) / v->portamento_duration);
