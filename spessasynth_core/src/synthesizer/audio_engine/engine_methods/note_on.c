@@ -154,8 +154,13 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	}
 
 	const int program = ch->preset->program;
-	const int tune = ch->synth->master_params.tunings ? ch->synth->master_params.tunings[program][real_key].midi_note : 0;
-	if(tune > 0) {
+	int tune = -1;
+	if(ch->synth &&
+	   ch->synth->master_params.tunings &&
+	   ch->synth->master_params.tunings[program]) {
+		tune = ch->synth->master_params.tunings[program][real_key].midi_note;
+	}
+	if(tune >= 0) {
 		internal_midi_note = tune;
 	}
 
