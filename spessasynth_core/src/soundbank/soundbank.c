@@ -1446,6 +1446,16 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 	return match;
 }
 
+static int compare_presets(const void *a, const void *b) {
+	SS_BasicPreset *aa = (SS_BasicPreset *)a;
+	SS_BasicPreset *bb = (SS_BasicPreset *)b;
+	if(aa->program != bb->program)
+		return (int)aa->program - (int)bb->program;
+	if(aa->bank_msb != bb->bank_msb)
+		return (int)aa->bank_msb - (int)bb->bank_msb;
+	return (int)aa->bank_lsb - (int)bb->bank_lsb;
+}
+
 static void soundbank_parse(SS_SoundBank *bank) {
 	bank->is_xg_bank = false;
 	// Definitions for XG:
@@ -1477,6 +1487,9 @@ static void soundbank_parse(SS_SoundBank *bank) {
 			}
 		}
 	}
+
+	/* Sort the instruments by matching priority */
+	qsort(bank->presets, bank->preset_count, sizeof(SS_BasicPreset), &compare_presets);
 }
 
 /* Forward declarations for the format-specific loaders */
