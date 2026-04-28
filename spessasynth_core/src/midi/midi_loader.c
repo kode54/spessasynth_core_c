@@ -587,3 +587,27 @@ void ss_midi_flush(SS_MIDIFile *m) {
 	if(!m) return;
 	midi_parse_internal(m);
 }
+
+/* ── GS detection ─────────────────────────────────────────────────────────── */
+
+bool ss_midi_has_gs(const SS_MIDIFile *m) {
+	if(!m) return false;
+	for(size_t ti = 0; ti < m->track_count; ti++) {
+		const SS_MIDITrack *t = &m->tracks[ti];
+		for(size_t ei = 0; ei < t->event_count; ei++) {
+			const SS_MIDIMessage *msg = &t->events[ei];
+			if(msg->status_byte == 0xf0) {
+				if(msg->data_length < 8) continue;
+				const uint8_t *data = msg->data;
+				if(data[3] != 0x12) continue;
+				if(data[2] == 0x42) {
+					if(data[4] == 0x00 && data[5] == 0x00 && data[6] == 0x7f && data[7] == 0)
+						return true;
+					if(data[4] == 0x40 && data[5] == 0x00 && data[6] == 0x7f && data[7] == 0)
+						return true;
+				}
+			}
+		}
+	}
+	return false;
+}

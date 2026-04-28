@@ -191,6 +191,9 @@ bool ss_midi_has_emidi(const SS_MIDIFile *midi);
  *  Returns the number of tracks removed. */
 size_t ss_midi_remove_emidi_non_gm(SS_MIDIFile *midi);
 
+/** Returns true if any track contains a GS SysEx reset */
+bool ss_midi_has_gs(const SS_MIDIFile *midi);
+
 #ifdef __cplusplus
 }
 #endif
