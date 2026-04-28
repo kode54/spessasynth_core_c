@@ -603,7 +603,7 @@ static SS_FilteredBanks *sflist_process(const json_value *sflist, const char *ba
 						++destination_found;
 					for(o = 0, p = item->u.object.length; o < p; ++o) {
 						int range_min = 0;
-						int range_max = 128;
+						int range_max = 127;
 						json_value *item2 = item->u.object.values[o].value;
 						const char *name2 = item->u.object.values[o].name;
 						if(strcmp(name2, "bank") && strcmp(name2, "program")) {
@@ -613,11 +613,8 @@ static SS_FilteredBanks *sflist_process(const json_value *sflist, const char *ba
 						if(item2->type != json_integer) {
 							sprintf(error_buf, "soundFont item #%u 'patchMappings' #%u '%s' '%s' is not an integer", i + 1, k + 1, name, name2);
 						}
-						if(!strcmp(name2, "program")) {
-							if(!strcmp(name, "destination"))
-								range_max = 65535;
-							else
-								range_max = 127;
+						if(!strcmp(name2, "bank")) {
+							range_max = 65535;
 						}
 						if(item2->u.integer < range_min || item2->u.integer > range_max) {
 							sprintf(error_buf, "soundFont item #%u 'patchMappings' #%u '%s' '%s' is out of range (expected %d-%d, got %" PRId64 ")", i + 1, k + 1, name, name2, range_min, range_max, item->u.integer);
