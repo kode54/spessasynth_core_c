@@ -1449,6 +1449,10 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 static int compare_presets(const void *a, const void *b) {
 	SS_BasicPreset *aa = (SS_BasicPreset *)a;
 	SS_BasicPreset *bb = (SS_BasicPreset *)b;
+	bool a_is_drum = aa->is_xg_drum || aa->is_gm_gs_drum;
+	bool b_is_drum = bb->is_xg_drum || bb->is_gm_gs_drum;
+	if(a_is_drum != b_is_drum)
+		return (int)a_is_drum - (int)b_is_drum;
 	if(aa->program != bb->program)
 		return (int)aa->program - (int)bb->program;
 	if(aa->bank_msb != bb->bank_msb)
