@@ -486,7 +486,7 @@ static bool sflist_process_patchmappings(SS_FilteredBank *out,
 	return true;
 }
 
-static SS_FilteredBanks *sflist_process(const json_value *sflist, const char *base_path, char *error_buf) {
+static SS_FilteredBanks *sflist_process(const json_value *sflist, const char *base_path, char *error_buf, sflist_open_callback font_open, void *open_context) {
 	char path_temp[32768];
 	const char *base_path_end = base_path + strlen(base_path) - 1;
 	unsigned int presets_to_allocate = 0;
@@ -688,7 +688,7 @@ static SS_FilteredBanks *sflist_process(const json_value *sflist, const char *ba
 			strcat(path_temp, path_ptr);
 			path_ptr = path_temp;
 		}
-		SS_File *bank_file = ss_file_open_from_file(path_ptr);
+		SS_File *bank_file = font_open(open_context, path_ptr);
 		bank = ss_soundbank_load(bank_file);
 		ss_file_close(bank_file);
 		if(!bank) {
@@ -805,7 +805,16 @@ static int strpbrkn_all(const char *str, size_t size, const char *chrs) {
 	return str < end;
 }
 
+static SS_File *open_file_ctx(void *context, const char *path) {
+	(void)context;
+	return ss_file_open_from_file(path);
+}
+
 SS_FilteredBanks *sflist_load(const char *sflist, size_t size, const char *base_path, char *error) {
+	return sflist_load_callback(sflist, size, base_path, error, &open_file_ctx, NULL);
+}
+
+SS_FilteredBanks *sflist_load_callback(const char *sflist, size_t size, const char *base_path, char *error, sflist_open_callback font_open, void *open_context) {
 	SS_FilteredBanks *rval;
 
 	json_value *list = 0;
@@ -835,7 +844,7 @@ SS_FilteredBanks *sflist_load(const char *sflist, size_t size, const char *base_
 		return 0;
 	}
 
-	rval = sflist_process(list, base_path, error);
+	rval = sflist_process(list, base_path, error, font_open, open_context);
 
 	json_builder_free(list);
 

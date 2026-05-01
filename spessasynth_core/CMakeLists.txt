@@ -77,7 +77,7 @@ else()
     add_library(spessasynth STATIC ${SS_SOURCES})
 endif()
 
-set_target_properties(spessasynth PROPERTIES VERSION 4.2.12 SOVERSION 3)
+set_target_properties(spessasynth PROPERTIES VERSION 4.2.12 SOVERSION 4)
 
 target_include_directories(spessasynth
     PUBLIC  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
