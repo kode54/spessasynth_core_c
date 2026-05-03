@@ -558,8 +558,8 @@ static SS_FilteredBanks *sflist_process(const json_value *sflist, const char *ba
 					sprintf(error_buf, "soundFont item #%u 'channels' #%u is not an integer", i + 1, k + 1);
 					goto error;
 				}
-				if(channel->u.integer < 1 || channel->u.integer > 48) {
-					sprintf(error_buf, "soundFont item #%u 'channels' #%u is out of range (wanted 1-48, got %" PRId64 ")", i + 1, k + 1, channel->u.integer);
+				if(channel->u.integer < 1 || channel->u.integer > 64) {
+					sprintf(error_buf, "soundFont item #%u 'channels' #%u is out of range (wanted 1-64, got %" PRId64 ")", i + 1, k + 1, channel->u.integer);
 					goto error;
 				}
 				if(prevchannel < 0 || channel->u.integer > (prevchannel + 1)) {
