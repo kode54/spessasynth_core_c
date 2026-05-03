@@ -886,7 +886,7 @@ bool ss_filtered_bank_build_one(SS_FilteredBank *out,
 		const SS_BasicPreset *p = &bank->presets[i];
 		if(src_prog >= 0 && p->program != src_prog) continue;
 		if(src_bank >= 0) {
-			int p_bank = p->bank_msb | (p->bank_lsb << 8);
+			int p_bank = p->bank_msb | (p->bank_lsb << 8) | (p->is_gm_gs_drum ? 128 : 0);
 			if(p_bank != src_bank) continue;
 		}
 

@@ -18,6 +18,13 @@ int main(void) {
           \"destination\": {\n\
             \"bank\": 0\n\
           }\n\
+        },\n\
+          \"source\": {\n\
+            \"bank\": 128\n\
+          },\n\
+          \"destination\": {\n\
+            \"bank\": 0\n\
+          }\n\
         }");
 
         for(int dest_program = 0; dest_program < 128; dest_program++) {
