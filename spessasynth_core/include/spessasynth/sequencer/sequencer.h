@@ -12,6 +12,12 @@
 #include "../synthesizer/synth.h"
 #endif
 
+#ifdef _MSC_VER
+#include "spessasynth_exports.h"
+#else
+#define SPESSASYNTH_EXPORTS
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -108,28 +114,28 @@ typedef struct {
 } SS_Sequencer;
 
 /** Create a sequencer that drives the built-in SS_Processor. */
-SS_Sequencer *ss_sequencer_create(SS_Processor *proc);
+SS_Sequencer SPESSASYNTH_EXPORTS *ss_sequencer_create(SS_Processor *proc);
 
 /** Create a sequencer that drives an external synthesizer via the
  *  callback table.  The caller is responsible for rendering audio
  *  using the dispatched MIDI commands; ss_sequencer_tick still needs
  *  to be called once per rendered quantum to advance song time. */
-SS_Sequencer *ss_sequencer_create_callbacks(const SS_SequencerCallbacks *cb);
+SS_Sequencer SPESSASYNTH_EXPORTS *ss_sequencer_create_callbacks(const SS_SequencerCallbacks *cb);
 
-void ss_sequencer_free(SS_Sequencer *seq);
+void SPESSASYNTH_EXPORTS ss_sequencer_free(SS_Sequencer *seq);
 
 /** Load a single MIDI file into the song list. */
-bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi);
+bool SPESSASYNTH_EXPORTS ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi);
 
 /** Clear the song list. */
-void ss_sequencer_clear(SS_Sequencer *seq);
+void SPESSASYNTH_EXPORTS ss_sequencer_clear(SS_Sequencer *seq);
 
-void ss_sequencer_play(SS_Sequencer *seq);
-void ss_sequencer_pause(SS_Sequencer *seq);
-void ss_sequencer_stop(SS_Sequencer *seq);
+void SPESSASYNTH_EXPORTS ss_sequencer_play(SS_Sequencer *seq);
+void SPESSASYNTH_EXPORTS ss_sequencer_pause(SS_Sequencer *seq);
+void SPESSASYNTH_EXPORTS ss_sequencer_stop(SS_Sequencer *seq);
 
 /** Set playback position in seconds. */
-void ss_sequencer_set_time(SS_Sequencer *seq, double seconds);
+void SPESSASYNTH_EXPORTS ss_sequencer_set_time(SS_Sequencer *seq, double seconds);
 
 /** Configure how many times the looped section plays (counting the
  *  initial pass).  Interpretation:
@@ -147,26 +153,26 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds);
  *   Reducing loop_count mid-song below the current loops_played starts
  *   the fade immediately.
  *  Default: 1. */
-void ss_sequencer_set_loop_count(SS_Sequencer *seq, int count);
+void SPESSASYNTH_EXPORTS ss_sequencer_set_loop_count(SS_Sequencer *seq, int count);
 
 /** Configure the post-loop fade duration in seconds.  Only used when
  *  loop_count is finite and the MIDI has loop markers.  Default: 7.0. */
-void ss_sequencer_set_fade_seconds(SS_Sequencer *seq, double seconds);
+void SPESSASYNTH_EXPORTS ss_sequencer_set_fade_seconds(SS_Sequencer *seq, double seconds);
 
 /** Manually advance to the next song, cancelling any pending loops or
  *  fade on the current one.  No-op at the end of the song list (the
  *  sequencer will report finished after the current tick instead). */
-void ss_sequencer_next(SS_Sequencer *seq);
+void SPESSASYNTH_EXPORTS ss_sequencer_next(SS_Sequencer *seq);
 
 /** Must be called once per audio render quantum, BEFORE ss_processor_render(). */
-void ss_sequencer_tick(SS_Sequencer *seq, uint32_t sample_count);
+void SPESSASYNTH_EXPORTS ss_sequencer_tick(SS_Sequencer *seq, uint32_t sample_count);
 
-bool ss_sequencer_is_finished(const SS_Sequencer *seq);
-double ss_sequencer_get_time(const SS_Sequencer *seq);
+bool SPESSASYNTH_EXPORTS ss_sequencer_is_finished(const SS_Sequencer *seq);
+double SPESSASYNTH_EXPORTS ss_sequencer_get_time(const SS_Sequencer *seq);
 
 /** Bleh, this is in case the sequencer is torn down after the processor is
  *  freed by the caller. Gotta prevent double-free. */
-void ss_sequencer_set_synthesizer(SS_Sequencer *seq, SS_Processor *proc);
+void SPESSASYNTH_EXPORTS ss_sequencer_set_synthesizer(SS_Sequencer *seq, SS_Processor *proc);
 
 #ifdef __cplusplus
 }

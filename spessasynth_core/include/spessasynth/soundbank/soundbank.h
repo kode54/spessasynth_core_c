@@ -14,6 +14,12 @@
 #include "soundbank_enums.h"
 #endif
 
+#ifdef _MSC_VER
+#include "spessasynth_exports.h"
+#else
+#define SPESSASYNTH_EXPORTS
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -35,8 +41,8 @@ typedef struct {
 	bool is_mod_wheel_modulator;
 } SS_Modulator;
 
-SS_Modulator ss_modulator_copy(const SS_Modulator *src);
-bool ss_modulator_is_identical(const SS_Modulator *a, const SS_Modulator *b);
+SS_Modulator SPESSASYNTH_EXPORTS ss_modulator_copy(const SS_Modulator *src);
+bool SPESSASYNTH_EXPORTS ss_modulator_is_identical(const SS_Modulator *a, const SS_Modulator *b);
 
 /* ── Generator ────────────────────────────────────────────────────────────── */
 
@@ -58,7 +64,7 @@ typedef struct {
 	size_t mod_count;
 } SS_Zone;
 
-void ss_zone_free(SS_Zone *z);
+void SPESSASYNTH_EXPORTS ss_zone_free(SS_Zone *z);
 
 /* ── Sample ───────────────────────────────────────────────────────────────── */
 
@@ -125,10 +131,10 @@ typedef struct SS_BasicSample {
 } SS_BasicSample;
 
 /** Decode compressed/s16le data into audio_data. No-op if already decoded. */
-bool ss_sample_decode(SS_BasicSample *s);
+bool SPESSASYNTH_EXPORTS ss_sample_decode(SS_BasicSample *s);
 
 /** Free all owned data inside the sample (does not free the struct itself). */
-void ss_sample_free_data(SS_BasicSample *s);
+void SPESSASYNTH_EXPORTS ss_sample_free_data(SS_BasicSample *s);
 
 /* ── Instrument zone ──────────────────────────────────────────────────────── */
 
@@ -150,7 +156,7 @@ typedef struct {
 	size_t zone_count;
 } SS_BasicInstrument;
 
-void ss_instrument_free(SS_BasicInstrument *inst);
+void SPESSASYNTH_EXPORTS ss_instrument_free(SS_BasicInstrument *inst);
 
 /* ── Preset zone ──────────────────────────────────────────────────────────── */
 
@@ -190,7 +196,7 @@ typedef struct SS_BasicPreset {
 	struct SS_SoundBank *parent_bank; /* non-owning */
 } SS_BasicPreset;
 
-void ss_preset_free(SS_BasicPreset *p);
+void SPESSASYNTH_EXPORTS ss_preset_free(SS_BasicPreset *p);
 
 /**
  * Collect all synthesis data (sample + merged generators/modulators) for a
@@ -203,7 +209,7 @@ int midi_note, int velocity,
 SS_SynthesisData **out_data /* heap-allocated array */
 );
 
-void ss_synthesis_data_free_array(SS_SynthesisData *data, size_t count);
+void SPESSASYNTH_EXPORTS ss_synthesis_data_free_array(SS_SynthesisData *data, size_t count);
 
 /* ── SoundBank ────────────────────────────────────────────────────────────── */
 
@@ -234,8 +240,8 @@ typedef struct SS_SoundBank {
 	bool is_xg_bank;
 } SS_SoundBank;
 
-SS_SoundBank *ss_soundbank_new(void);
-void ss_soundbank_free(SS_SoundBank *bank);
+SS_SoundBank SPESSASYNTH_EXPORTS *ss_soundbank_new(void);
+void SPESSASYNTH_EXPORTS ss_soundbank_free(SS_SoundBank *bank);
 
 /**
  * Filter/remap rule applied to a source SS_SoundBank to produce an
@@ -281,13 +287,13 @@ typedef struct SS_FilteredBanks {
  * On success, allocates out->presets with the filtered/remapped copies.
  * Returns false and leaves *out untouched on OOM.
  */
-bool ss_filtered_bank_build_one(SS_FilteredBank *out,
-                                SS_SoundBank *bank,
-                                const SS_FilteredBankRule *rule);
+bool SPESSASYNTH_EXPORTS ss_filtered_bank_build_one(SS_FilteredBank *out,
+                                                    SS_SoundBank *bank,
+                                                    const SS_FilteredBankRule *rule);
 
 /** Release the presets array inside a single SS_FilteredBank and zero it.
  *  Does NOT free parent_bank. */
-void ss_filtered_bank_dispose(SS_FilteredBank *fb);
+void SPESSASYNTH_EXPORTS ss_filtered_bank_dispose(SS_FilteredBank *fb);
 
 /**
  * Build an SS_FilteredBanks from one source bank and N rules.
@@ -295,16 +301,16 @@ void ss_filtered_bank_dispose(SS_FilteredBank *fb);
  * ({-1,-1,0,0,0,0}) so every call produces at least one entry.
  * On OOM returns NULL.
  */
-SS_FilteredBanks *ss_filtered_banks_build(SS_SoundBank *bank,
-                                          const SS_FilteredBankRule *rules,
-                                          size_t rule_count);
+SS_FilteredBanks SPESSASYNTH_EXPORTS *ss_filtered_banks_build(SS_SoundBank *bank,
+                                                              const SS_FilteredBankRule *rules,
+                                                              size_t rule_count);
 
 /**
  * Free an SS_FilteredBanks.  When free_banks is true, each underlying
  * SS_SoundBank is ss_soundbank_free'd exactly once even if referenced
  * by multiple fbanks.
  */
-void ss_filtered_banks_free(SS_FilteredBanks *fbs, bool free_banks);
+void SPESSASYNTH_EXPORTS ss_filtered_banks_free(SS_FilteredBanks *fbs, bool free_banks);
 
 /**
  * Find a preset from an array of filtered banks.  Mirrors
@@ -315,7 +321,7 @@ void ss_filtered_banks_free(SS_FilteredBanks *fbs, bool free_banks);
  * fbanks whose [minimum_channel, minimum_channel+channel_count) range
  * doesn't include target_channel are skipped.
  */
-SS_BasicPreset *ss_filtered_banks_find_preset(
+SS_BasicPreset SPESSASYNTH_EXPORTS *ss_filtered_banks_find_preset(
 SS_FilteredBank *const *fbanks,
 size_t fbank_count,
 int target_channel,
@@ -332,7 +338,7 @@ bool is_drum_channel);
  * Capital tone fallback will fail seriously if using this to single
  * step multiple banks.
  */
-SS_BasicPreset *ss_soundbank_find_preset(
+SS_BasicPreset SPESSASYNTH_EXPORTS *ss_soundbank_find_preset(
 SS_SoundBank *bank,
 uint16_t bank_offset,
 uint8_t program,
@@ -345,7 +351,7 @@ bool is_drum_channel);
  * Find a preset from multiple banks, using capital tone fallback
  * Otherwise, same parameters as the above function.
  */
-SS_BasicPreset *ss_soundbanks_find_preset(
+SS_BasicPreset SPESSASYNTH_EXPORTS *ss_soundbanks_find_preset(
 SS_SoundBank **banks,
 const uint16_t *bank_offsets,
 size_t bank_count,
@@ -359,7 +365,7 @@ bool is_drum_channel);
  * Load a SoundFont2/SF3 or DLS soundbank from a raw buffer.
  * Caller is responsible for calling ss_soundbank_free() when done.
  */
-SS_SoundBank *ss_soundbank_load(SS_File *file);
+SS_SoundBank SPESSASYNTH_EXPORTS *ss_soundbank_load(SS_File *file);
 
 /* ── Default SF2 modulators list ─────────────────────────────────────────── */
 

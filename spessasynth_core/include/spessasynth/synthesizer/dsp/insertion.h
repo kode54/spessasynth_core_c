@@ -4,6 +4,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef _MSC_VER
+#include "spessasynth_exports.h"
+#else
+#define SPESSASYNTH_EXPORTS
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -52,9 +58,9 @@ typedef struct SS_InsertionProcessor {
  * Returns NULL if type is unknown or allocation fails.
  * maxBufferSize is the maximum samples per process() call (used by PhAutoWah).
  */
-SS_InsertionProcessor *ss_insertion_create(uint32_t type,
-                                           uint32_t sampleRate,
-                                           uint32_t maxBufferSize);
+SS_InsertionProcessor SPESSASYNTH_EXPORTS *ss_insertion_create(uint32_t type,
+                                                               uint32_t sampleRate,
+                                                               uint32_t maxBufferSize);
 
 /** Convenience wrapper to free a processor. */
 static inline void ss_insertion_free(SS_InsertionProcessor *p) {

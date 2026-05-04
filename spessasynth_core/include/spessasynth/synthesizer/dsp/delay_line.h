@@ -1,6 +1,12 @@
 #ifndef SS_DELAY_LINE_H
 #define SS_DELAY_LINE_H
 
+#ifdef _MSC_VER
+#include "spessasynth_exports.h"
+#else
+#define SPESSASYNTH_EXPORTS
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -16,12 +22,12 @@ typedef struct {
 	unsigned int time;
 } SS_DelayLine;
 
-SS_DelayLine *ss_delay_line_create(unsigned int maxDelay);
-void ss_delay_line_process(SS_DelayLine *delayLine,
-                           const float *in, float *out,
-                           int sample_count);
-void ss_delay_line_clear(SS_DelayLine *delayLine);
-void ss_delay_line_free(SS_DelayLine *delayLine);
+SS_DelayLine SPESSASYNTH_EXPORTS *ss_delay_line_create(unsigned int maxDelay);
+void SPESSASYNTH_EXPORTS ss_delay_line_process(SS_DelayLine *delayLine,
+                                               const float *in, float *out,
+                                               int sample_count);
+void SPESSASYNTH_EXPORTS ss_delay_line_clear(SS_DelayLine *delayLine);
+void SPESSASYNTH_EXPORTS ss_delay_line_free(SS_DelayLine *delayLine);
 
 #ifdef __cplusplus
 }

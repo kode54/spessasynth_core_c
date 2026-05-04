@@ -20,6 +20,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _MSC_VER
+#include "spessasynth_exports.h"
+#else
+#define SPESSASYNTH_EXPORTS
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -36,8 +42,8 @@ typedef struct SS_File SS_File;
  will be necessary to release it only after freeing any SS_SoundBanks which own it.
  */
 
-SS_File *ss_file_open_from_memory(const uint8_t *buffer, size_t size, bool owned);
-SS_File *ss_file_open_from_file(const char *path);
+SS_File SPESSASYNTH_EXPORTS *ss_file_open_from_memory(const uint8_t *buffer, size_t size, bool owned);
+SS_File SPESSASYNTH_EXPORTS *ss_file_open_from_file(const char *path);
 
 /*
  The following callbacks will be guaranteed to be synchronized to only happen
@@ -66,47 +72,47 @@ typedef struct SS_File_ReaderCallbacks {
 	size_t (*read_bytes)(void *context, uint8_t *out, size_t count);
 } SS_File_ReaderCallbacks;
 
-SS_File *ss_file_open_from_callbacks(SS_File_ReaderCallbacks *callbacks, void *context);
+SS_File SPESSASYNTH_EXPORTS *ss_file_open_from_callbacks(SS_File_ReaderCallbacks *callbacks, void *context);
 
-SS_File *ss_file_open_blank_memory(void);
-bool ss_file_retrieve_memory(SS_File *file, uint8_t **out, size_t *out_size);
+SS_File SPESSASYNTH_EXPORTS *ss_file_open_blank_memory(void);
+bool SPESSASYNTH_EXPORTS ss_file_retrieve_memory(SS_File *file, uint8_t **out, size_t *out_size);
 
-SS_File *ss_file_open_blank_file(const char *path);
+SS_File SPESSASYNTH_EXPORTS *ss_file_open_blank_file(const char *path);
 
-SS_File *ss_file_dup(SS_File *file);
+SS_File SPESSASYNTH_EXPORTS *ss_file_dup(SS_File *file);
 
-SS_File *ss_file_slice(SS_File *file, size_t offset, size_t size);
+SS_File SPESSASYNTH_EXPORTS *ss_file_slice(SS_File *file, size_t offset, size_t size);
 
-void ss_file_close(SS_File *file);
+void SPESSASYNTH_EXPORTS ss_file_close(SS_File *file);
 
-size_t ss_file_remaining(SS_File *file);
-size_t ss_file_size(SS_File *file);
-void ss_file_seek(SS_File *file, size_t offset);
-size_t ss_file_tell(SS_File *file);
-void ss_file_skip(SS_File *file, size_t skip);
+size_t SPESSASYNTH_EXPORTS ss_file_remaining(SS_File *file);
+size_t SPESSASYNTH_EXPORTS ss_file_size(SS_File *file);
+void SPESSASYNTH_EXPORTS ss_file_seek(SS_File *file, size_t offset);
+size_t SPESSASYNTH_EXPORTS ss_file_tell(SS_File *file);
+void SPESSASYNTH_EXPORTS ss_file_skip(SS_File *file, size_t skip);
 
-uint8_t ss_file_read_u8(SS_File *file, size_t offset);
-size_t ss_file_read_le(SS_File *file, size_t offset, size_t byte_count);
-size_t ss_file_read_be(SS_File *file, size_t offset, size_t byte_count);
-size_t ss_file_read_vlq(SS_File *file, size_t offset);
-void ss_file_read_bytes(SS_File *file, size_t offset, uint8_t *out, size_t count);
-void ss_file_read_string(SS_File *file, size_t offset, char *out, size_t count);
+uint8_t SPESSASYNTH_EXPORTS ss_file_read_u8(SS_File *file, size_t offset);
+size_t SPESSASYNTH_EXPORTS ss_file_read_le(SS_File *file, size_t offset, size_t byte_count);
+size_t SPESSASYNTH_EXPORTS ss_file_read_be(SS_File *file, size_t offset, size_t byte_count);
+size_t SPESSASYNTH_EXPORTS ss_file_read_vlq(SS_File *file, size_t offset);
+void SPESSASYNTH_EXPORTS ss_file_read_bytes(SS_File *file, size_t offset, uint8_t *out, size_t count);
+void SPESSASYNTH_EXPORTS ss_file_read_string(SS_File *file, size_t offset, char *out, size_t count);
 
-bool ss_file_write_u8(SS_File *file, uint8_t v);
-bool ss_file_write_le(SS_File *file, size_t v, size_t byte_count);
-bool ss_file_write_be(SS_File *file, size_t v, size_t byte_count);
-bool ss_file_write_vlq(SS_File *file, size_t v);
-bool ss_file_write_bytes(SS_File *file, const uint8_t *src, size_t count);
-bool ss_file_write_string(SS_File *file, const char *s, size_t count);
+bool SPESSASYNTH_EXPORTS ss_file_write_u8(SS_File *file, uint8_t v);
+bool SPESSASYNTH_EXPORTS ss_file_write_le(SS_File *file, size_t v, size_t byte_count);
+bool SPESSASYNTH_EXPORTS ss_file_write_be(SS_File *file, size_t v, size_t byte_count);
+bool SPESSASYNTH_EXPORTS ss_file_write_vlq(SS_File *file, size_t v);
+bool SPESSASYNTH_EXPORTS ss_file_write_bytes(SS_File *file, const uint8_t *src, size_t count);
+bool SPESSASYNTH_EXPORTS ss_file_write_string(SS_File *file, const char *s, size_t count);
 
 /* Static size helpers, should be faster */
-uint16_t ss_file_read_le16(SS_File *file, size_t offset);
-uint32_t ss_file_read_le24(SS_File *file, size_t offset);
-uint32_t ss_file_read_le32(SS_File *file, size_t offset);
+uint16_t SPESSASYNTH_EXPORTS ss_file_read_le16(SS_File *file, size_t offset);
+uint32_t SPESSASYNTH_EXPORTS ss_file_read_le24(SS_File *file, size_t offset);
+uint32_t SPESSASYNTH_EXPORTS ss_file_read_le32(SS_File *file, size_t offset);
 
-uint16_t ss_file_read_be16(SS_File *file, size_t offset);
-uint32_t ss_file_read_be24(SS_File *file, size_t offset);
-uint32_t ss_file_read_be32(SS_File *file, size_t offset);
+uint16_t SPESSASYNTH_EXPORTS ss_file_read_be16(SS_File *file, size_t offset);
+uint32_t SPESSASYNTH_EXPORTS ss_file_read_be24(SS_File *file, size_t offset);
+uint32_t SPESSASYNTH_EXPORTS ss_file_read_be32(SS_File *file, size_t offset);
 
 #ifdef __cplusplus
 }

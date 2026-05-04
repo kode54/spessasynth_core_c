@@ -13,6 +13,12 @@
 #include "spessasynth/utils/file.h"
 #endif
 
+#ifdef _MSC_VER
+#include "spessasynth_exports.h"
+#else
+#define SPESSASYNTH_EXPORTS
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -28,7 +34,7 @@ typedef struct {
 } SS_MIDIMessage;
 
 /** Free the data buffer inside a message (does not free the struct itself). */
-void ss_midi_message_free_data(SS_MIDIMessage *msg);
+void SPESSASYNTH_EXPORTS ss_midi_message_free_data(SS_MIDIMessage *msg);
 
 /* ── A single MIDI track ─────────────────────────────────────────────────── */
 
@@ -42,10 +48,10 @@ typedef struct {
 	size_t event_capacity;
 } SS_MIDITrack;
 
-SS_MIDITrack *ss_midi_track_new(void);
-void ss_midi_track_clear(SS_MIDITrack *track);
-bool ss_midi_track_push_event(SS_MIDITrack *track, SS_MIDIMessage msg);
-void ss_midi_track_delete_event(SS_MIDITrack *track, size_t index);
+SS_MIDITrack SPESSASYNTH_EXPORTS *ss_midi_track_new(void);
+void SPESSASYNTH_EXPORTS ss_midi_track_clear(SS_MIDITrack *track);
+bool SPESSASYNTH_EXPORTS ss_midi_track_push_event(SS_MIDITrack *track, SS_MIDIMessage msg);
+void SPESSASYNTH_EXPORTS ss_midi_track_delete_event(SS_MIDITrack *track, size_t index);
 
 /* ── Tempo change entry ───────────────────────────────────────────────────── */
 
@@ -93,7 +99,7 @@ typedef struct {
 	size_t midi_encoding_len;
 } SS_RMIDIInfo;
 
-void ss_rmidi_info_free(SS_RMIDIInfo *info);
+void SPESSASYNTH_EXPORTS ss_rmidi_info_free(SS_RMIDIInfo *info);
 
 /* ── The MIDI file ────────────────────────────────────────────────────────── */
 
@@ -137,23 +143,23 @@ typedef struct {
 	char file_name[512];
 } SS_MIDIFile;
 
-SS_MIDIFile *ss_midi_new(void);
-void ss_midi_free(SS_MIDIFile *midi);
+SS_MIDIFile SPESSASYNTH_EXPORTS *ss_midi_new(void);
+void SPESSASYNTH_EXPORTS ss_midi_free(SS_MIDIFile *midi);
 
 /** Parse a MIDI/RMIDI/XMF file from a raw buffer. Returns NULL on error. */
-SS_MIDIFile *ss_midi_load(SS_File *file, const char *file_name);
+SS_MIDIFile SPESSASYNTH_EXPORTS *ss_midi_load(SS_File *file, const char *file_name);
 
 /** Serialize to Standard MIDI File format.  Caller must free() the buffer. */
-bool ss_midi_write(const SS_MIDIFile *midi, SS_File *file);
+bool SPESSASYNTH_EXPORTS ss_midi_write(const SS_MIDIFile *midi, SS_File *file);
 
 /** Convert MIDI ticks to seconds using the embedded tempo map. */
-double ss_midi_ticks_to_seconds(const SS_MIDIFile *midi, size_t ticks);
+double SPESSASYNTH_EXPORTS ss_midi_ticks_to_seconds(const SS_MIDIFile *midi, size_t ticks);
 
 /** Convert seconds to absolute MIDI ticks using the embedded tempo map. */
-size_t ss_seconds_to_midi_tick(const SS_MIDIFile *m, double seconds);
+size_t SPESSASYNTH_EXPORTS ss_seconds_to_midi_tick(const SS_MIDIFile *m, double seconds);
 
 /** Rebuild internal caches (tempo map, loop, ports, name). Call after editing. */
-void ss_midi_flush(SS_MIDIFile *midi);
+void SPESSASYNTH_EXPORTS ss_midi_flush(SS_MIDIFile *midi);
 
 /* ── EMIDI (Extended MIDI) classification and filtering ──────────────────── */
 
@@ -176,12 +182,12 @@ typedef enum {
 } SS_EMIDIKind;
 
 /** Classify a single track by its EMIDI CC 110 designations. */
-SS_EMIDIKind ss_midi_track_emidi_kind(const SS_MIDITrack *track);
+SS_EMIDIKind SPESSASYNTH_EXPORTS ss_midi_track_emidi_kind(const SS_MIDITrack *track);
 
 /** Returns true when any track in the file contains at least one EMIDI
  *  track-designation event (CC 110), regardless of whether its target is
  *  GM or not.  Useful to decide whether to run EMIDI filtering at all. */
-bool ss_midi_has_emidi(const SS_MIDIFile *midi);
+bool SPESSASYNTH_EXPORTS ss_midi_has_emidi(const SS_MIDIFile *midi);
 
 /** Drop tracks whose EMIDI CC 110 designation marks them as targeting a
  *  non-GM synthesizer.  Tracks without CC 110 or with GM-compatible
@@ -189,10 +195,10 @@ bool ss_midi_has_emidi(const SS_MIDIFile *midi);
  *  invoke ss_midi_flush to refresh derived caches (duration, loop, etc.).
  *
  *  Returns the number of tracks removed. */
-size_t ss_midi_remove_emidi_non_gm(SS_MIDIFile *midi);
+size_t SPESSASYNTH_EXPORTS ss_midi_remove_emidi_non_gm(SS_MIDIFile *midi);
 
 /** Returns true if any track contains a GS SysEx reset */
-bool ss_midi_has_gs(const SS_MIDIFile *midi);
+bool SPESSASYNTH_EXPORTS ss_midi_has_gs(const SS_MIDIFile *midi);
 
 #ifdef __cplusplus
 }

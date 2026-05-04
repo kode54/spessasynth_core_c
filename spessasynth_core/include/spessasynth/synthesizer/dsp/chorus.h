@@ -8,6 +8,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#ifdef _MSC_VER
+#include "spessasynth_exports.h"
+#else
+#define SPESSASYNTH_EXPORTS
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -43,27 +49,27 @@ typedef struct {
 	float feedbackGain;
 } SS_Chorus;
 
-SS_Chorus *ss_chorus_create(float sampleRate, int maxBufferSize);
-void ss_chorus_clear(SS_Chorus *chorus);
-void ss_chorus_free(SS_Chorus *chorus);
+SS_Chorus SPESSASYNTH_EXPORTS *ss_chorus_create(float sampleRate, int maxBufferSize);
+void SPESSASYNTH_EXPORTS ss_chorus_clear(SS_Chorus *chorus);
+void SPESSASYNTH_EXPORTS ss_chorus_free(SS_Chorus *chorus);
 
-void ss_chorus_set_send_level_to_reverb(SS_Chorus *chorus, unsigned char value);
-void ss_chorus_set_send_level_to_delay(SS_Chorus *chorus, unsigned char value);
-void ss_chorus_set_pre_lowpass(SS_Chorus *e, unsigned char value);
-void ss_chorus_set_depth(SS_Chorus *chorus, unsigned char value);
-void ss_chorus_set_delay(SS_Chorus *chorus, unsigned char value);
-void ss_chorus_set_feedback(SS_Chorus *chorus, unsigned char value);
-void ss_chorus_set_rate(SS_Chorus *chorus, unsigned char value);
-void ss_chorus_set_level(SS_Chorus *chorus, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_chorus_set_send_level_to_reverb(SS_Chorus *chorus, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_chorus_set_send_level_to_delay(SS_Chorus *chorus, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_chorus_set_pre_lowpass(SS_Chorus *e, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_chorus_set_depth(SS_Chorus *chorus, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_chorus_set_delay(SS_Chorus *chorus, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_chorus_set_feedback(SS_Chorus *chorus, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_chorus_set_rate(SS_Chorus *chorus, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_chorus_set_level(SS_Chorus *chorus, unsigned char value);
 
-void ss_chorus_set_macro(SS_Chorus *chorus, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_chorus_set_macro(SS_Chorus *chorus, unsigned char value);
 
-void ss_chorus_process(SS_Chorus *chorus,
-                       const float *input,
-                       float *outputL, float *outputR,
-                       float *outputReverb,
-                       float *outputDelay,
-                       int sample_count);
+void SPESSASYNTH_EXPORTS ss_chorus_process(SS_Chorus *chorus,
+                                           const float *input,
+                                           float *outputL, float *outputR,
+                                           float *outputReverb,
+                                           float *outputDelay,
+                                           int sample_count);
 
 #ifdef __cplusplus
 }

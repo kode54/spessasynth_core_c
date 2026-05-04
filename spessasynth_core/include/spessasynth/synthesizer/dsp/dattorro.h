@@ -1,6 +1,12 @@
 #ifndef SS_DATTORRO_H
 #define SS_DATTORRO_H
 
+#ifdef _MSC_VER
+#include "spessasynth_exports.h"
+#else
+#define SPESSASYNTH_EXPORTS
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -14,11 +20,11 @@ typedef struct {
 	unsigned int mask;
 } SS_DattorroDelayLine;
 
-SS_DattorroDelayLine *ss_dattorro_delay_line_create(
+SS_DattorroDelayLine SPESSASYNTH_EXPORTS *ss_dattorro_delay_line_create(
 double delay, float sampleRate);
-void ss_dattorro_delay_line_free(
+void SPESSASYNTH_EXPORTS ss_dattorro_delay_line_free(
 SS_DattorroDelayLine *delayLine);
-void ss_dattorro_delay_line_clear(
+void SPESSASYNTH_EXPORTS ss_dattorro_delay_line_clear(
 SS_DattorroDelayLine *delayLine);
 
 /* ── Dattoro Reverb type ─────────────────────────────────────────────────── */
@@ -43,13 +49,13 @@ typedef struct {
 	SS_DattorroDelayLine **delays;
 } SS_DattorroReverb;
 
-SS_DattorroReverb *ss_dattorro_reverb_create(float sampleRate);
-void ss_dattorro_reverb_clear(SS_DattorroReverb *reverb);
-void ss_dattorro_reverb_free(SS_DattorroReverb *reverb);
-void ss_dattorro_reverb_process(SS_DattorroReverb *reverb,
-                                const float *input,
-                                float *outputLeft, float *outputRight,
-                                int sample_count);
+SS_DattorroReverb SPESSASYNTH_EXPORTS *ss_dattorro_reverb_create(float sampleRate);
+void SPESSASYNTH_EXPORTS ss_dattorro_reverb_clear(SS_DattorroReverb *reverb);
+void SPESSASYNTH_EXPORTS ss_dattorro_reverb_free(SS_DattorroReverb *reverb);
+void SPESSASYNTH_EXPORTS ss_dattorro_reverb_process(SS_DattorroReverb *reverb,
+                                                    const float *input,
+                                                    float *outputLeft, float *outputRight,
+                                                    int sample_count);
 
 #ifdef __cplusplus
 }

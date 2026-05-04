@@ -7,6 +7,12 @@
 #include "spessasynth/synthesizer/dsp/delay_line.h"
 #endif
 
+#ifdef _MSC_VER
+#include "spessasynth_exports.h"
+#else
+#define SPESSASYNTH_EXPORTS
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -49,28 +55,28 @@ typedef struct SS_Delay {
 	float reverb_gain;
 } SS_Delay;
 
-SS_Delay *ss_delay_create(float sample_rate, int max_buffer_size);
-void ss_delay_clear(SS_Delay *delay);
-void ss_delay_free(SS_Delay *delay);
+SS_Delay SPESSASYNTH_EXPORTS *ss_delay_create(float sample_rate, int max_buffer_size);
+void SPESSASYNTH_EXPORTS ss_delay_clear(SS_Delay *delay);
+void SPESSASYNTH_EXPORTS ss_delay_free(SS_Delay *delay);
 
-void ss_delay_process(SS_Delay *delay,
-                      const float *input,
-                      float *outputL, float *outputR,
-                      float *reverb,
-                      int sample_count);
+void SPESSASYNTH_EXPORTS ss_delay_process(SS_Delay *delay,
+                                          const float *input,
+                                          float *outputL, float *outputR,
+                                          float *reverb,
+                                          int sample_count);
 
-void ss_delay_set_send_level_to_reverb(SS_Delay *delay, unsigned char value);
-void ss_delay_set_pre_lowpass(SS_Delay *delay, unsigned char value);
-void ss_delay_set_level_right(SS_Delay *delay, unsigned char value);
-void ss_delay_set_level(SS_Delay *delay, unsigned char value);
-void ss_delay_set_level_center(SS_Delay *delay, unsigned char value);
-void ss_delay_set_level_left(SS_Delay *delay, unsigned char value);
-void ss_delay_set_feedback(SS_Delay *delay, unsigned char value);
-void ss_delay_set_time_ratio_right(SS_Delay *delay, unsigned char value);
-void ss_delay_set_time_ratio_left(SS_Delay *delay, unsigned char value);
-void ss_delay_set_time_center(SS_Delay *delay, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_delay_set_send_level_to_reverb(SS_Delay *delay, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_delay_set_pre_lowpass(SS_Delay *delay, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_delay_set_level_right(SS_Delay *delay, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_delay_set_level(SS_Delay *delay, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_delay_set_level_center(SS_Delay *delay, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_delay_set_level_left(SS_Delay *delay, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_delay_set_feedback(SS_Delay *delay, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_delay_set_time_ratio_right(SS_Delay *delay, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_delay_set_time_ratio_left(SS_Delay *delay, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_delay_set_time_center(SS_Delay *delay, unsigned char value);
 
-void ss_delay_set_macro(SS_Delay *delay, unsigned char value);
+void SPESSASYNTH_EXPORTS ss_delay_set_macro(SS_Delay *delay, unsigned char value);
 
 #ifdef __cplusplus
 }

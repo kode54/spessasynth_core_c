@@ -8,6 +8,12 @@
 #ifndef SS_SYNC_PRIMITIVES_H
 #define SS_SYNC_PRIMITIVES_H
 
+#ifdef _MSC_VER
+#include "spessasynth_exports.h"
+#else
+#define SPESSASYNTH_EXPORTS
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -22,11 +28,11 @@ extern "C" {
 
 typedef struct SS_Mutex SS_Mutex;
 
-SS_Mutex *ss_mutex_create(void);
-void ss_mutex_free(SS_Mutex *mutex);
+SS_Mutex SPESSASYNTH_EXPORTS *ss_mutex_create(void);
+void SPESSASYNTH_EXPORTS ss_mutex_free(SS_Mutex *mutex);
 
-void ss_mutex_enter(SS_Mutex *mutex);
-void ss_mutex_leave(SS_Mutex *mutex);
+void SPESSASYNTH_EXPORTS ss_mutex_enter(SS_Mutex *mutex);
+void SPESSASYNTH_EXPORTS ss_mutex_leave(SS_Mutex *mutex);
 
 #ifdef __cplusplus
 }

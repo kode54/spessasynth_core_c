@@ -19,6 +19,12 @@
 #include "dsp/reverb.h"
 #endif
 
+#ifdef _MSC_VER
+#include "spessasynth_exports.h"
+#else
+#define SPESSASYNTH_EXPORTS
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -70,12 +76,12 @@ typedef struct {
 	uint32_t sample_rate;
 } SS_LowpassFilter;
 
-void ss_lowpass_filter_init(SS_LowpassFilter *f, uint32_t sample_rate);
-void ss_lowpass_filter_apply(SS_LowpassFilter *f,
-                             const int16_t *modulated_generators,
-                             float *buffer, int count,
-                             float fc_excursion, float smoothing,
-                             float gain, float gain_inc);
+void SPESSASYNTH_EXPORTS ss_lowpass_filter_init(SS_LowpassFilter *f, uint32_t sample_rate);
+void SPESSASYNTH_EXPORTS ss_lowpass_filter_apply(SS_LowpassFilter *f,
+                                                 const int16_t *modulated_generators,
+                                                 float *buffer, int count,
+                                                 float fc_excursion, float smoothing,
+                                                 float gain, float gain_inc);
 
 /* ── Volume envelope ─────────────────────────────────────────────────────── */
 
@@ -158,11 +164,11 @@ typedef struct {
 	bool is_active;
 } SS_DynamicModulatorSystem;
 
-void ss_dynamic_modulator_system_init(SS_DynamicModulatorSystem *dms);
-void ss_dynamic_modulator_system_free(SS_DynamicModulatorSystem *dms);
-void ss_dynamic_modulator_system_setup_receiver(SS_DynamicModulatorSystem *dms,
-                                                uint8_t addr3, uint8_t data,
-                                                uint16_t source, bool is_bipolar);
+void SPESSASYNTH_EXPORTS ss_dynamic_modulator_system_init(SS_DynamicModulatorSystem *dms);
+void SPESSASYNTH_EXPORTS ss_dynamic_modulator_system_free(SS_DynamicModulatorSystem *dms);
+void SPESSASYNTH_EXPORTS ss_dynamic_modulator_system_setup_receiver(SS_DynamicModulatorSystem *dms,
+                                                                    uint8_t addr3, uint8_t data,
+                                                                    uint16_t source, bool is_bipolar);
 
 /* ── Voice ───────────────────────────────────────────────────────────────── */
 
@@ -223,16 +229,16 @@ typedef struct SS_Voice {
 	int override_release_vol_env;
 } SS_Voice;
 
-SS_Voice *ss_voice_create(uint32_t sample_rate,
-                          const SS_BasicPreset *preset,
-                          const SS_AudioSample *audio_sample,
-                          int midi_note, int velocity,
-                          double current_time, int target_key, int real_key,
-                          const int16_t *generators,
-                          const SS_Modulator *modulators, size_t mod_count,
-                          const SS_DynamicModulatorSystem *dms);
-/*SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int real_key);*/
-void ss_voice_free(SS_Voice *v);
+SS_Voice SPESSASYNTH_EXPORTS *ss_voice_create(uint32_t sample_rate,
+                                              const SS_BasicPreset *preset,
+                                              const SS_AudioSample *audio_sample,
+                                              int midi_note, int velocity,
+                                              double current_time, int target_key, int real_key,
+                                              const int16_t *generators,
+                                              const SS_Modulator *modulators, size_t mod_count,
+                                              const SS_DynamicModulatorSystem *dms);
+/*SS_Voice SPESSASYNTH_EXPORTS *ss_voice_copy(const SS_Voice *src, double current_time, int real_key);*/
+void SPESSASYNTH_EXPORTS ss_voice_free(SS_Voice *v);
 
 /* ── Custom controller indices ───────────────────────────────────────────── */
 
@@ -350,29 +356,29 @@ typedef struct SS_MIDIChannel {
 	struct SS_Processor *synth; /* non-owning back-pointer */
 } SS_MIDIChannel;
 
-SS_MIDIChannel *ss_channel_new(int channel_number, struct SS_Processor *synth);
-void ss_channel_free(SS_MIDIChannel *ch);
-void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time);
-void ss_channel_note_off(SS_MIDIChannel *ch, int note, double time);
-void ss_channel_all_notes_off(SS_MIDIChannel *ch, double time);
-void ss_channel_all_sound_off(SS_MIDIChannel *ch);
-void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time);
-void ss_channel_program_change(SS_MIDIChannel *ch, int program);
-void ss_channel_pitch_wheel(SS_MIDIChannel *ch, int value, int midi_note, double time);
-void ss_channel_reset_controllers(SS_MIDIChannel *ch);
+SS_MIDIChannel SPESSASYNTH_EXPORTS *ss_channel_new(int channel_number, struct SS_Processor *synth);
+void SPESSASYNTH_EXPORTS ss_channel_free(SS_MIDIChannel *ch);
+void SPESSASYNTH_EXPORTS ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time);
+void SPESSASYNTH_EXPORTS ss_channel_note_off(SS_MIDIChannel *ch, int note, double time);
+void SPESSASYNTH_EXPORTS ss_channel_all_notes_off(SS_MIDIChannel *ch, double time);
+void SPESSASYNTH_EXPORTS ss_channel_all_sound_off(SS_MIDIChannel *ch);
+void SPESSASYNTH_EXPORTS ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time);
+void SPESSASYNTH_EXPORTS ss_channel_program_change(SS_MIDIChannel *ch, int program);
+void SPESSASYNTH_EXPORTS ss_channel_pitch_wheel(SS_MIDIChannel *ch, int value, int midi_note, double time);
+void SPESSASYNTH_EXPORTS ss_channel_reset_controllers(SS_MIDIChannel *ch);
 
 /**
  * Render all voices in this channel into output buffers.
  * out_left/out_right/reverb_left/reverb_right/chorus_left/chorus_right are float
  * buffers of length sample_count.  They are mixed into (not cleared).
  */
-void ss_channel_render(SS_MIDIChannel *ch,
-                       double time_now,
-                       float *out_left, float *out_right,
-                       float *reverb,
-                       float *chorus,
-                       float *delay,
-                       uint32_t sample_count);
+void SPESSASYNTH_EXPORTS ss_channel_render(SS_MIDIChannel *ch,
+                                           double time_now,
+                                           float *out_left, float *out_right,
+                                           float *reverb,
+                                           float *chorus,
+                                           float *delay,
+                                           uint32_t sample_count);
 
 /* ── Synth processor options ─────────────────────────────────────────────── */
 
@@ -515,36 +521,36 @@ typedef struct SS_Processor {
  *
  * The insert variable declares that the bank should be inserted at the top of the list.
  */
-SS_Processor *ss_processor_create(uint32_t sample_rate,
-                                  const SS_ProcessorOptions *opts);
-void ss_processor_free(SS_Processor *proc);
+SS_Processor SPESSASYNTH_EXPORTS *ss_processor_create(uint32_t sample_rate,
+                                                      const SS_ProcessorOptions *opts);
+void SPESSASYNTH_EXPORTS ss_processor_free(SS_Processor *proc);
 
-SS_SoundBank *ss_processor_get_soundbank(SS_Processor *proc, const char *id);
-bool ss_processor_load_soundbank(SS_Processor *proc,
-                                 SS_SoundBank *bank, const char *id, int offset,
-                                 bool insert);
+SS_SoundBank SPESSASYNTH_EXPORTS *ss_processor_get_soundbank(SS_Processor *proc, const char *id);
+bool SPESSASYNTH_EXPORTS ss_processor_load_soundbank(SS_Processor *proc,
+                                                     SS_SoundBank *bank, const char *id, int offset,
+                                                     bool insert);
 /**
  * Register a pre-built SS_FilteredBanks (e.g. from sflist_load) under an ID.
  * Ownership of `banks` transfers to the processor on success.  On removal,
  * the underlying SS_SoundBanks are freed unless remove is called with
  * dontfree=true.
  */
-bool ss_processor_load_filtered_banks(SS_Processor *proc,
-                                      SS_FilteredBanks *banks, const char *id,
-                                      bool insert);
-bool ss_processor_remove_soundbank(SS_Processor *proc, const char *id, bool dontfree);
+bool SPESSASYNTH_EXPORTS ss_processor_load_filtered_banks(SS_Processor *proc,
+                                                          SS_FilteredBanks *banks, const char *id,
+                                                          bool insert);
+bool SPESSASYNTH_EXPORTS ss_processor_remove_soundbank(SS_Processor *proc, const char *id, bool dontfree);
 
 /**
  * Resolve a preset across all currently registered bank groups, honoring
  * each filtered bank's channel range.  target_channel may be -1 to
  * ignore channel filtering.
  */
-SS_BasicPreset *ss_processor_resolve_preset(SS_Processor *proc,
-                                            int target_channel,
-                                            uint8_t program,
-                                            uint16_t bank_msb,
-                                            uint16_t bank_lsb,
-                                            bool is_drum);
+SS_BasicPreset SPESSASYNTH_EXPORTS *ss_processor_resolve_preset(SS_Processor *proc,
+                                                                int target_channel,
+                                                                uint8_t program,
+                                                                uint16_t bank_msb,
+                                                                uint16_t bank_lsb,
+                                                                bool is_drum);
 
 /**
  * Main render call. Mixes into the provided float buffers.
@@ -558,51 +564,51 @@ SS_BasicPreset *ss_processor_resolve_preset(SS_Processor *proc,
  *
  * These functions clear the buffer automatically first.
  */
-void ss_processor_render(SS_Processor *proc,
-                         float *out_left, float *out_right,
-                         uint32_t sample_count);
+void SPESSASYNTH_EXPORTS ss_processor_render(SS_Processor *proc,
+                                             float *out_left, float *out_right,
+                                             uint32_t sample_count);
 
-void ss_processor_render_interleaved(SS_Processor *proc,
-                                     float *out, uint32_t sample_count);
+void SPESSASYNTH_EXPORTS ss_processor_render_interleaved(SS_Processor *proc,
+                                                         float *out, uint32_t sample_count);
 /**
  * These event functions all accept an absolute timestamp, `t`, which is in seconds
  * elapsed since the creation of the SS_Processor.
  */
-void ss_processor_note_on(SS_Processor *proc, int ch, int note, int vel, double t);
-void ss_processor_note_off(SS_Processor *proc, int ch, int note, double t);
-void ss_processor_control_change(SS_Processor *proc, int ch, int cc, int val, double t);
-void ss_processor_program_change(SS_Processor *proc, int ch, int program, double t);
-void ss_processor_pitch_wheel(SS_Processor *proc, int ch, int value, int midi_note, double t);
-void ss_processor_channel_pressure(SS_Processor *proc, int ch, int pressure, double t);
-void ss_processor_poly_pressure(SS_Processor *proc, int ch, int note, int pressure, double t);
+void SPESSASYNTH_EXPORTS ss_processor_note_on(SS_Processor *proc, int ch, int note, int vel, double t);
+void SPESSASYNTH_EXPORTS ss_processor_note_off(SS_Processor *proc, int ch, int note, double t);
+void SPESSASYNTH_EXPORTS ss_processor_control_change(SS_Processor *proc, int ch, int cc, int val, double t);
+void SPESSASYNTH_EXPORTS ss_processor_program_change(SS_Processor *proc, int ch, int program, double t);
+void SPESSASYNTH_EXPORTS ss_processor_pitch_wheel(SS_Processor *proc, int ch, int value, int midi_note, double t);
+void SPESSASYNTH_EXPORTS ss_processor_channel_pressure(SS_Processor *proc, int ch, int pressure, double t);
+void SPESSASYNTH_EXPORTS ss_processor_poly_pressure(SS_Processor *proc, int ch, int note, int pressure, double t);
 
 /*
  * This function takes a pointer to the inner message, not counting the leading 0xf0
  * or trailing 0xf7. It is up to the caller to validate that those are present in the
  * source, but exclude them when passing the buffer and size to this message.
  */
-void ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, double t);
+void SPESSASYNTH_EXPORTS ss_processor_sysex(SS_Processor *proc, const uint8_t *data, size_t len, double t);
 
 /**
  * This reset takes place immediately, but does not reset the internal absolute
  * time position of the synthesizer, which counts up monotonically every time
  * samples are rendered.
  */
-void ss_processor_system_reset(SS_Processor *proc);
+void SPESSASYNTH_EXPORTS ss_processor_system_reset(SS_Processor *proc);
 
 /**
  * This optional callback will receive events every time either the above event
  * functions are used, or every time a SysEx or N/RPN message triggers one of
  * the above events.
  */
-void ss_processor_set_event_callback(SS_Processor *proc,
-                                     SS_EventCallback cb, void *userdata);
+void SPESSASYNTH_EXPORTS ss_processor_set_event_callback(SS_Processor *proc,
+                                                         SS_EventCallback cb, void *userdata);
 
 /**
  * One time initialization. It is best if this is called manually, especially
  * if multiple instances of the Processor are ever used in different threads.
  */
-void ss_unit_converter_init(void);
+void SPESSASYNTH_EXPORTS ss_unit_converter_init(void);
 
 #ifdef __cplusplus
 }

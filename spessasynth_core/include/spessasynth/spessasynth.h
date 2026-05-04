@@ -70,6 +70,12 @@
 #include "utils/riff_chunk.h"
 #endif
 
+#ifdef _MSC_VER
+#include "spessasynth_exports.h"
+#else
+#define SPESSASYNTH_EXPORTS
+#endif
+
 /* ── WAV writer ──────────────────────────────────────────────────────────── */
 
 #ifdef __cplusplus
@@ -92,13 +98,13 @@ typedef struct {
  * The returned buffer is heap-allocated; caller must free() it.
  * Returns true on success.
  */
-bool ss_wav_write(const float *const *channels,
-                  uint32_t num_channels,
-                  uint32_t num_samples,
-                  uint32_t sample_rate,
-                  const SS_WavWriteOptions *opts,
-                  uint8_t **out_data,
-                  size_t *out_size);
+bool SPESSASYNTH_EXPORTS ss_wav_write(const float *const *channels,
+                                      uint32_t num_channels,
+                                      uint32_t num_samples,
+                                      uint32_t sample_rate,
+                                      const SS_WavWriteOptions *opts,
+                                      uint8_t **out_data,
+                                      size_t *out_size);
 
 #ifdef __cplusplus
 }

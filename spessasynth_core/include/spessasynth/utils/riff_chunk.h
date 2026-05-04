@@ -7,6 +7,12 @@
 #include "file.h"
 #endif
 
+#ifdef _MSC_VER
+#include "spessasynth_exports.h"
+#else
+#define SPESSASYNTH_EXPORTS
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -29,14 +35,14 @@ typedef struct {
  *
  * Returns true on success, false on underflow.
  */
-bool ss_riff_read_chunk(SS_File *iba, SS_RIFFChunk *out, bool skip_size, bool riff64);
+bool SPESSASYNTH_EXPORTS ss_riff_read_chunk(SS_File *iba, SS_RIFFChunk *out, bool skip_size, bool riff64);
 
 /** Convenience: read a chunk and verify its header equals expected_header. */
-bool ss_riff_read_chunk_expect(SS_File *file, SS_RIFFChunk *out,
-                               const char *expected_header,
-                               bool riff64);
+bool SPESSASYNTH_EXPORTS ss_riff_read_chunk_expect(SS_File *file, SS_RIFFChunk *out,
+                                                   const char *expected_header,
+                                                   bool riff64);
 
-void ss_riff_close_chunk(SS_RIFFChunk *chunk);
+void SPESSASYNTH_EXPORTS ss_riff_close_chunk(SS_RIFFChunk *chunk);
 
 #ifdef __cplusplus
 }
