@@ -25,19 +25,19 @@ typedef struct SS_DelayTimeSegment {
 } SS_DelayTimeSegment;
 
 static const SS_DelayTimeSegment delay_time_segments[] = {
-	{ 0x01, 0x14, 0.1, 0.1 },
-	{ 0x14, 0x23, 2, 0.2 },
-	{ 0x23, 0x2d, 5, 0.5 },
-	{ 0x2d, 0x37, 10, 1 },
-	{ 0x37, 0x46, 20, 2 },
-	{ 0x46, 0x50, 50, 5 },
-	{ 0x50, 0x5a, 100, 10 },
-	{ 0x5a, 0x69, 200, 20 },
-	{ 0x69, 0x74, 500, 50 }
+	{ 0x01, 0x14, 0.1f, 0.1f },
+	{ 0x14, 0x23, 2.0f, 0.2f },
+	{ 0x23, 0x2d, 5.0f, 0.5f },
+	{ 0x2d, 0x37, 10.0f, 1.0f },
+	{ 0x37, 0x46, 20.0f, 2.0f },
+	{ 0x46, 0x50, 50.0f, 5.0f },
+	{ 0x50, 0x5a, 100.0f, 10.0f },
+	{ 0x5a, 0x69, 200.0f, 20.0f },
+	{ 0x69, 0x74, 500.0f, 50.0f }
 };
 static const size_t delay_time_segments_count = sizeof(delay_time_segments) / sizeof(delay_time_segments[0]);
 
-static const float DELAY_GAIN = 1.66;
+static const float DELAY_GAIN = 1.66f;
 
 SS_Delay *ss_delay_create(float sample_rate, int max_buffer_size) {
 	SS_Delay *delay = (SS_Delay *)calloc(1, sizeof(*delay));
@@ -63,7 +63,7 @@ SS_Delay *ss_delay_create(float sample_rate, int max_buffer_size) {
 	delay->delay_pre_lpf = (float *)calloc(max_buffer_size, sizeof(float));
 	if(!delay->delay_pre_lpf) goto out_of_memory;
 
-	delay->delay_center_time = 0.34 * sample_rate;
+	delay->delay_center_time = 0.34f * sample_rate;
 
 	/* All delays are capped at 1s */
 	const int i_sample_rate = (int)round(sample_rate);
@@ -102,7 +102,7 @@ void ss_delay_free(SS_Delay *delay) {
 
 void ss_delay_set_send_level_to_reverb(SS_Delay *delay, unsigned char value) {
 	delay->parameters.send_level_to_reverb = value;
-	delay->reverb_gain = (float)value / 127.0;
+	delay->reverb_gain = (float)value / 127.0f;
 }
 
 void ss_delay_set_pre_lowpass(SS_Delay *delay, unsigned char value) {
@@ -110,15 +110,15 @@ void ss_delay_set_pre_lowpass(SS_Delay *delay, unsigned char value) {
 
 	// GS sure loves weird mappings, huh?
 	// Maps to around 8000-300 Hz
-	delay->preLPFfc = 8000.0 * pow(0.63, (float)value);
-	const float decay = exp((-2.0 * M_PI * delay->preLPFfc) / delay->sample_rate);
-	delay->preLPFa = 1.0 - decay;
+	delay->preLPFfc = 8000.0f * powf(0.63f, (float)value);
+	const float decay = expf((float)((-2.0f * M_PI * delay->preLPFfc) / delay->sample_rate));
+	delay->preLPFa = 1.0f - decay;
 }
 
 static void ss_delay_update_gain(SS_Delay *delay) {
-	delay->delayCenter->gain = (float)delay->parameters.level_center / 127.0;
-	delay->delayLeft->gain = (float)delay->parameters.level_left / 127.0;
-	delay->delayRight->gain = (float)delay->parameters.level_right / 127.0;
+	delay->delayCenter->gain = (float)delay->parameters.level_center / 127.0f;
+	delay->delayLeft->gain = (float)delay->parameters.level_left / 127.0f;
+	delay->delayRight->gain = (float)delay->parameters.level_right / 127.0f;
 }
 
 void ss_delay_set_level_right(SS_Delay *delay, unsigned char value) {
@@ -128,7 +128,7 @@ void ss_delay_set_level_right(SS_Delay *delay, unsigned char value) {
 
 void ss_delay_set_level(SS_Delay *delay, unsigned char value) {
 	delay->parameters.level = value;
-	delay->gain = ((float)value / 127.0) * DELAY_GAIN;
+	delay->gain = ((float)value / 127.0f) * DELAY_GAIN;
 }
 
 void ss_delay_set_level_center(SS_Delay *delay, unsigned char value) {
@@ -149,7 +149,7 @@ void ss_delay_set_feedback(SS_Delay *delay, unsigned char value) {
 	/* -64 means max at inverted phase, so feedback of -1 it is!
 	 * Use 66 for it to not be infinite
 	 */
-	delay->delayCenter->feedback = ((float)value - 64.0) / 66.0;
+	delay->delayCenter->feedback = ((float)value - 64.0f) / 66.0f;
 }
 
 void ss_delay_set_time_ratio_right(SS_Delay *delay, unsigned char value) {
@@ -159,8 +159,8 @@ void ss_delay_set_time_ratio_right(SS_Delay *delay, unsigned char value) {
 	 * The resolution is 100/24(%).
 	 * Turn that into multiplier
 	 */
-	delay->delay_right_multiplier = (float)value * (100.0 / 2400.0);
-	delay->delayRight->time = delay->delay_center_time * delay->delay_right_multiplier;
+	delay->delay_right_multiplier = (float)value * (100.0f / 2400.0f);
+	delay->delayRight->time = (unsigned int)(delay->delay_center_time * delay->delay_right_multiplier);
 }
 
 void ss_delay_set_time_ratio_left(SS_Delay *delay, unsigned char value) {
@@ -170,14 +170,14 @@ void ss_delay_set_time_ratio_left(SS_Delay *delay, unsigned char value) {
 	 * The resolution is 100/24(%).
 	 * Turn that into multiplier
 	 */
-	delay->delay_left_multiplier = (float)value * (100.0 / 2400.0);
-	delay->delayLeft->time = delay->delay_center_time * delay->delay_left_multiplier;
+	delay->delay_left_multiplier = (float)value * (100.0f / 2400.0f);
+	delay->delayLeft->time = (unsigned int)(delay->delay_center_time * delay->delay_left_multiplier);
 }
 
 void ss_delay_set_time_center(SS_Delay *delay, unsigned char value) {
 	delay->parameters.time_center = value;
 
-	float delayMs = 0.1;
+	float delayMs = 0.1f;
 	for(size_t i = 0; i < delay_time_segments_count; i++) {
 		const SS_DelayTimeSegment *segment = &delay_time_segments[i];
 		if(value >= segment->start && value < segment->end) {
@@ -187,12 +187,12 @@ void ss_delay_set_time_center(SS_Delay *delay, unsigned char value) {
 			break;
 		}
 	}
-	delay->delay_center_time = delay->sample_rate * (delayMs / 1000.0);
-	if(delay->delay_center_time < 2.0) delay->delay_center_time = 2.0;
+	delay->delay_center_time = delay->sample_rate * (delayMs / 1000.0f);
+	if(delay->delay_center_time < 2.0f) delay->delay_center_time = 2.0f;
 
-	delay->delayCenter->time = delay->delay_center_time;
-	delay->delayLeft->time = delay->delay_center_time * delay->delay_left_multiplier;
-	delay->delayRight->time = delay->delay_center_time * delay->delay_right_multiplier;
+	delay->delayCenter->time = (unsigned int)delay->delay_center_time;
+	delay->delayLeft->time = (unsigned int)(delay->delay_center_time * delay->delay_left_multiplier);
+	delay->delayRight->time = (unsigned int)(delay->delay_center_time * delay->delay_right_multiplier);
 }
 
 void ss_delay_set_macro(SS_Delay *delay, unsigned char value) {

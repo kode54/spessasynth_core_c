@@ -63,7 +63,7 @@ int ssVorbisClose(void *datasource) {
 long ssVorbisTell(void *datasource) {
 	SS_FileVorbis *file = (SS_FileVorbis *)datasource;
 
-	return file->offset;
+	return (long)file->offset;
 }
 
 bool ss_vorbis_decode(SS_BasicSample *s) {
@@ -109,7 +109,7 @@ bool ss_vorbis_decode(SS_BasicSample *s) {
 		return false;
 	}
 
-	long totalFrames = ov_pcm_total(&vorbisRef, -1);
+	long totalFrames = (long)ov_pcm_total(&vorbisRef, -1);
 
 	long seekFrame = partial_sample ? (long)s->audio_file_sample_offset : 0;
 	long maxFrame = partial_sample ? (long)s->audio_file_sample_count : totalFrames;

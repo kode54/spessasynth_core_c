@@ -135,7 +135,7 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 
 	/* MIDI volume */
 	ss_processor_set_midi_volume(proc, 1.0);
-	proc->pan_left = proc->pan_right = cos(M_PI / 4.0); /* Center */
+	proc->pan_left = proc->pan_right = cosf(M_PI / 4.0f); /* Center */
 
 	/* Smoothing factors — scale relative to 44 100 Hz reference */
 	float sr_scale = 44100.0f / (float)sample_rate;
@@ -640,5 +640,5 @@ void ss_processor_set_midi_volume(SS_Processor *proc, float volume) {
 	/* GM2 specification, section 4.1: volume is squared.
 	 * Though, according to my own testing, Math.E seems like a better choice
 	 */
-	proc->midi_volume = pow(volume, M_E);
+	proc->midi_volume = powf(volume, M_E);
 }

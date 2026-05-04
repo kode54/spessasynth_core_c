@@ -199,7 +199,7 @@ void ss_lowpass_filter_apply(SS_LowpassFilter *f,
 		/* Apply filter and THEN gain */
 		/* Per SF2 spec apply order, also see */
 		/* https://github.com/FluidSynth/fluidsynth/issues/1427 */
-		buffer[i] = filtered * gain;
+		buffer[i] = (float)filtered * gain;
 		gain += gain_inc;
 	}
 

@@ -100,8 +100,8 @@ void ss_reverb_free(SS_Reverb *reverb) {
 
 static void ss_reverb_update_feedback(SS_Reverb *reverb) {
 	const SS_ReverbParams *p = &reverb->parameters;
-	const float x = (float)p->delayFeedback / 127.0;
-	const float exp = 1.0 - powf(1.0 - x, 1.9f);
+	const float x = (float)p->delayFeedback / 127.0f;
+	const float exp = 1.0f - powf(1.0f - x, 1.9f);
 	if(p->character == 6) {
 		reverb->delayLeft->feedback = exp * 0.73f;
 	} else {
@@ -112,23 +112,23 @@ static void ss_reverb_update_feedback(SS_Reverb *reverb) {
 
 static void ss_reverb_update_lowpass(SS_Reverb *reverb) {
 	const SS_ReverbParams *p = &reverb->parameters;
-	const float preLPF = 0.1 + (float)(7 - p->preLowpass) / 14.0 + reverb->characterLPFCoefficient;
-	reverb->dattorro->preLPF = (preLPF < 1.0) ? preLPF : 1.0;
+	const float preLPF = 0.1f + (float)(7 - p->preLowpass) / 14.0f + reverb->characterLPFCoefficient;
+	reverb->dattorro->preLPF = (preLPF < 1.0f) ? preLPF : 1.0f;
 }
 
 static void ss_reverb_update_gain(SS_Reverb *reverb) {
 	const SS_ReverbParams *p = &reverb->parameters;
-	reverb->dattorro->gain = ((float)p->level / 348.0) * reverb->characterGainCoefficient;
-	reverb->delayGain = ((float)p->level / 127.0) * 1.5;
+	reverb->dattorro->gain = ((float)p->level / 348.0f) * reverb->characterGainCoefficient;
+	reverb->delayGain = ((float)p->level / 127.0f) * 1.5f;
 }
 
 static void ss_reverb_update_time(SS_Reverb *reverb) {
 	const SS_ReverbParams *p = &reverb->parameters;
-	const float t = (float)p->time / 127.0;
-	reverb->dattorro->decay = reverb->characterTimeCoefficient * (0.05 + 0.65 * t);
+	const float t = (float)p->time / 127.0f;
+	reverb->dattorro->decay = reverb->characterTimeCoefficient * (0.05f + 0.65f * t);
 	// Delay at 127 is exactly 0.4468 seconds
 	// The minimum value (delay 0) seems to be 21 samples
-	const unsigned int calcSamples = (unsigned int)(t * reverb->sampleRate * 0.4468);
+	const unsigned int calcSamples = (unsigned int)(t * reverb->sampleRate * 0.4468f);
 	const unsigned int timeSamples = (calcSamples > 21) ? calcSamples : 21;
 	if(p->character == 7) {
 		// Half the delay time
@@ -147,18 +147,18 @@ void ss_reverb_set_delay_feedback(SS_Reverb *reverb, unsigned char delayFeedback
 void ss_reverb_set_character(SS_Reverb *reverb, unsigned char character) {
 	if(!reverb) return;
 	reverb->parameters.character = character;
-	reverb->dattorro->damping = 0.005;
+	reverb->dattorro->damping = 0.005f;
 	reverb->characterTimeCoefficient = 1;
 	reverb->characterGainCoefficient = 1;
 	reverb->characterLPFCoefficient = 0;
 
 	SS_DattorroReverb *dattorro = reverb->dattorro;
-	dattorro->inputDiffusion[0] = 0.75;
-	dattorro->inputDiffusion[1] = 0.625;
-	dattorro->decayDiffusion[0] = 0.7;
-	dattorro->decayDiffusion[1] = 0.5;
-	dattorro->excursionRate = 0.5;
-	dattorro->excursionDepth = 0.7;
+	dattorro->inputDiffusion[0] = 0.75f;
+	dattorro->inputDiffusion[1] = 0.625f;
+	dattorro->decayDiffusion[0] = 0.7f;
+	dattorro->decayDiffusion[1] = 0.5f;
+	dattorro->excursionRate = 0.5f;
+	dattorro->excursionDepth = 0.7f;
 
 	// Tested all characters on level = 64, preset: Hall2
 	// File: gs_reverb_character_test.ts, compare spessasynth to SC-VA
@@ -166,58 +166,58 @@ void ss_reverb_set_character(SS_Reverb *reverb, unsigned char character) {
 	switch(character) {
 		case 0: {
 			// Room1
-			dattorro->damping = 0.85;
-			reverb->characterTimeCoefficient = 0.9;
-			reverb->characterGainCoefficient = 0.7;
-			reverb->characterLPFCoefficient = 0.2;
+			dattorro->damping = 0.85f;
+			reverb->characterTimeCoefficient = 0.9f;
+			reverb->characterGainCoefficient = 0.7f;
+			reverb->characterLPFCoefficient = 0.2f;
 			break;
 		}
 
 		case 1: {
 			// Room2
-			dattorro->damping = 0.2;
-			reverb->characterGainCoefficient = 0.5;
+			dattorro->damping = 0.2f;
+			reverb->characterGainCoefficient = 0.5f;
 			reverb->characterTimeCoefficient = 1;
-			dattorro->decayDiffusion[1] = 0.64;
-			dattorro->decayDiffusion[0] = 0.6;
-			reverb->characterLPFCoefficient = 0.2;
+			dattorro->decayDiffusion[1] = 0.64f;
+			dattorro->decayDiffusion[0] = 0.6f;
+			reverb->characterLPFCoefficient = 0.2f;
 			break;
 		}
 
 		case 2: {
 			// Room3
-			dattorro->damping = 0.56;
-			reverb->characterGainCoefficient = 0.55;
+			dattorro->damping = 0.56f;
+			reverb->characterGainCoefficient = 0.55f;
 			reverb->characterTimeCoefficient = 1;
-			dattorro->decayDiffusion[1] = 0.64;
-			dattorro->decayDiffusion[0] = 0.6;
-			reverb->characterLPFCoefficient = 0.1;
+			dattorro->decayDiffusion[1] = 0.64f;
+			dattorro->decayDiffusion[0] = 0.6f;
+			reverb->characterLPFCoefficient = 0.1f;
 			break;
 		}
 
 		case 3: {
 			// Hall1
-			dattorro->damping = 0.6;
+			dattorro->damping = 0.6f;
 			reverb->characterGainCoefficient = 1;
 			reverb->characterLPFCoefficient = 0;
-			dattorro->decayDiffusion[1] = 0.7;
-			dattorro->decayDiffusion[0] = 0.66;
+			dattorro->decayDiffusion[1] = 0.7f;
+			dattorro->decayDiffusion[0] = 0.66f;
 			break;
 		}
 
 		case 4: {
 			// Hall2
-			reverb->characterGainCoefficient = 0.75;
-			dattorro->damping = 0.2;
-			reverb->characterLPFCoefficient = 0.2;
+			reverb->characterGainCoefficient = 0.75f;
+			dattorro->damping = 0.2f;
+			reverb->characterLPFCoefficient = 0.2f;
 			break;
 		}
 
 		case 5: {
 			// Plate
-			reverb->characterGainCoefficient = 0.55;
-			dattorro->damping = 0.65;
-			reverb->characterTimeCoefficient = 0.5;
+			reverb->characterGainCoefficient = 0.55f;
+			dattorro->damping = 0.65f;
+			reverb->characterTimeCoefficient = 0.5f;
 			break;
 		}
 	}
@@ -240,7 +240,7 @@ void ss_reverb_set_time(SS_Reverb *reverb, unsigned char time) {
 void ss_reverb_set_pre_delay_time(SS_Reverb *reverb, unsigned char preDelayTime) {
 	if(!reverb) return;
 	reverb->parameters.preDelayTime = preDelayTime;
-	reverb->dattorro->preDelay = ((float)preDelayTime / 1000.0) * reverb->sampleRate;
+	reverb->dattorro->preDelay = (unsigned int)(((float)preDelayTime / 1000.0f) * reverb->sampleRate);
 }
 
 void ss_reverb_set_level(SS_Reverb *reverb, unsigned char level) {
@@ -252,9 +252,9 @@ void ss_reverb_set_level(SS_Reverb *reverb, unsigned char level) {
 void ss_reverb_set_pre_lowpass(SS_Reverb *reverb, unsigned char preLowpass) {
 	if(!reverb) return;
 	reverb->parameters.preLowpass = preLowpass;
-	reverb->preLPFfc = 8000.0 * powf(0.63f, (float)preLowpass);
-	const float decay = expf((-2.0 * M_PI * reverb->preLPFfc) / reverb->sampleRate);
-	reverb->preLPFa = 1.0 - decay;
+	reverb->preLPFfc = 8000.0f * powf(0.63f, (float)preLowpass);
+	const float decay = expf((float)((-2.0f * M_PI * reverb->preLPFfc) / reverb->sampleRate));
+	reverb->preLPFa = 1.0f - decay;
 	ss_reverb_update_lowpass(reverb);
 }
 

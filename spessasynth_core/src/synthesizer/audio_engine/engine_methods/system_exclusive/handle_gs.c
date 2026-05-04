@@ -389,7 +389,7 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 									// 0-16384
 									if(len < 9) return;
 									const int tune = (data << 7) | (syx[8] & 0x7f);
-									const float tuneCents = (float)(tune - 8192) / 81.92;
+									const float tuneCents = (float)(tune - 8192) / 81.92f;
 									ss_channel_set_tuning(mch, tuneCents);
 									break;
 								}
@@ -492,8 +492,8 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 									 * If the source is a mod wheel, it's a strange way of setting the modulation depth
 									 * Testcase: J-Cycle.mid (it affects gm.dls which uses LFO1 for modulation)
 									 */
-									const float cents = ((float)data / 127.0) * 600.0;
-									mch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] = cents / 50.0;
+									const float cents = ((float)data / 127.0f) * 600.0f;
+									mch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] = cents / 50.0f;
 									break;
 								}
 								ss_dynamic_modulator_system_setup_receiver(&mch->dms, addr3, data, SS_MIDCON_MODULATION_WHEEL, false);
@@ -601,7 +601,7 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 								SS_MIDIChannel *mch = proc->midi_channels[ch];
 								if(!mch || mch->drum_map != map) continue;
 								/* Apply same thing: SC-55 uses 100 cents, SC-88 and above is 50 */
-								mch->drum_params[drum_key].pitch = pitch * (mch->bank_lsb == 1 ? 100 : 50);
+								mch->drum_params[drum_key].pitch = (float)(pitch * (mch->bank_lsb == 1 ? 100 : 50));
 							}
 							break;
 						}

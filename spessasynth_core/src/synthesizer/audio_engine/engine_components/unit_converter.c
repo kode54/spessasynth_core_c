@@ -163,38 +163,38 @@ static float get_modulator_curve_value(int transform, SS_ModulatorCurveType curv
 		case SS_MODCURVE_LINEAR:
 			if(is_bipolar) {
 				/* Bipolar curve */
-				return value * 2.0 - 1.0;
+				return value * 2.0f - 1.0f;
 			}
 			return value;
 
 		case SS_MODCURVE_SWITCH:
 			/* Switch */
-			value = value > 0.5 ? 1 : 0;
+			value = value > 0.5f ? 1.0f : 0;
 			if(is_bipolar) {
 				/* Multiply */
-				return value * 2.0 - 1.0;
+				return value * 2.0f - 1.0f;
 			}
 			return value;
 
 		case SS_MODCURVE_CONCAVE:
 			/* Look up the value */
 			if(is_bipolar) {
-				value = value * 2.0 - 1.0;
+				value = value * 2.0f - 1.0f;
 				if(value < 0) {
-					return value >= -1.0 ? -concave[(int)(value * (float)-MODULATOR_RESOLUTION)] : -1.0;
+					return value >= -1.0f ? -concave[(int)(value * (float)-MODULATOR_RESOLUTION)] : -1.0f;
 				}
 			}
-			return value <= 1.0 ? concave[(int)(value * (float)MODULATOR_RESOLUTION)] : 1.0;
+			return value <= 1.0f ? concave[(int)(value * (float)MODULATOR_RESOLUTION)] : 1.0f;
 
 		case SS_MODCURVE_CONVEX:
 			/* Look up the value */
 			if(is_bipolar) {
-				value = value * 2.0 - 1.0;
+				value = value * 2.0f - 1.0f;
 				if(value < 0) {
-					return value >= -1.0 ? -convex[(int)(value * (float)-MODULATOR_RESOLUTION)] : -1.0;
+					return value >= -1.0f ? -convex[(int)(value * (float)-MODULATOR_RESOLUTION)] : -1.0f;
 				}
 			}
-			return value <= 1.0 ? convex[(int)(value * (float)MODULATOR_RESOLUTION)] : 1.0;
+			return value <= 1.0f ? convex[(int)(value * (float)MODULATOR_RESOLUTION)] : 1.0f;
 	}
 
 	/* Should never be reached */
@@ -208,8 +208,8 @@ void init_modcurve_table(void) {
 	convex[0] = 0;
 	convex[MODULATOR_RESOLUTION] = 1;
 	for(int i = 1; i < MODULATOR_RESOLUTION; i++) {
-		const float x = ((-200.0 * 2.0) / 960.0) * log10((float)i / (float)MODULATOR_RESOLUTION);
-		convex[i] = 1.0 - x;
+		const float x = ((-200.0f * 2.0f) / 960.0f) * log10f((float)i / (float)MODULATOR_RESOLUTION);
+		convex[i] = 1.0f - x;
 		concave[MODULATOR_RESOLUTION - i] = x;
 	}
 	for(int curve_type = 0; curve_type < MOD_CURVE_TYPES_AMOUNT; curve_type++) {
@@ -230,7 +230,7 @@ float ss_modcurve_get_value(int transform_type, SS_ModulatorCurveType curve_type
 
 /* ── Pan tables ─────────────────────────────────────────────────────────── */
 
-static const float HALF_PI = M_PI / 2.0;
+static const float HALF_PI = (float)(M_PI / 2.0f);
 
 enum { MIN_PAN = -500 };
 enum { MAX_PAN = 500 };
@@ -247,8 +247,8 @@ void ss_init_pan_table(void) {
 		/* Clamp to 0-1 */
 		const float realPan = (float)(pan - MIN_PAN) / (float)PAN_RESOLUTION;
 		const int tableIndex = pan - MIN_PAN;
-		ss_panTableLeft[tableIndex] = cos(HALF_PI * realPan);
-		ss_panTableRight[tableIndex] = sin(HALF_PI * realPan);
+		ss_panTableLeft[tableIndex] = cosf(HALF_PI * realPan);
+		ss_panTableRight[tableIndex] = sinf(HALF_PI * realPan);
 	}
 	pan_table_initialized = true;
 }

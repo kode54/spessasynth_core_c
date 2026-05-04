@@ -87,9 +87,9 @@ static float ss_dattorro_delay_line_read_cubic_at(SS_DattorroReverb *reverb, int
 	            x2 = delayLine->buffer[intOffset++ & mask],
 	            x3 = delayLine->buffer[intOffset & mask];
 
-	const float a = (3.0 * (x1 - x2) - x0 + x3) / 2.0,
-	            b = 2.0 * x2 + x0 - (5.0 * x1 + x3) / 2.0,
-	            c = (x2 - x0) / 2.0;
+	const float a = (3.0f * (x1 - x2) - x0 + x3) / 2.0f,
+	            b = 2.0f * x2 + x0 - (5.0f * x1 + x3) / 2.0f,
+	            c = (x2 - x0) / 2.0f;
 
 	return ((a * frac + b) * frac + c) * frac + x1;
 }
@@ -181,9 +181,9 @@ void ss_dattorro_reverb_process(SS_DattorroReverb *reverb, const float *input, f
 	const float dc = reverb->decay;
 	const float ft = reverb->decayDiffusion[0];
 	const float st = reverb->decayDiffusion[1];
-	const float dp = 1.0 - reverb->damping;
+	const float dp = 1.0f - reverb->damping;
 	const float ex = reverb->excursionRate / reverb->sampleRate;
-	const float ed = (reverb->excursionDepth * reverb->sampleRate) / 1000.0;
+	const float ed = (reverb->excursionDepth * reverb->sampleRate) / 1000.0f;
 	const short *taps = reverb->taps;
 
 	const unsigned int blockStart = reverb->pDWrite;
@@ -218,8 +218,8 @@ void ss_dattorro_reverb_process(SS_DattorroReverb *reverb, const float *input, f
 
 		// Excursions
 		// Could be optimized?
-		const float exc = ed * (1.0 + cos(reverb->excPhase * 6.28f));
-		const float exc2 = ed * (1.0 + sin(reverb->excPhase * 6.2847f));
+		const float exc = ed * (1.0f + cosf(reverb->excPhase * 6.28f));
+		const float exc2 = ed * (1.0f + sinf(reverb->excPhase * 6.2847f));
 
 		// Left loop
 		float temp = delayWrite(4, split + dc * delayRead(11) + ft * delayReadCAt(4, exc)); // Tank diffuse 1

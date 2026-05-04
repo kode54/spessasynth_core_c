@@ -29,7 +29,7 @@ void ss_sysex_handle_gm(SS_Processor *proc, const uint8_t *data, size_t len, dou
 			switch(data[3]) {
 				case 0x01: { /* Master Volume */
 					uint16_t vol = (uint16_t)((data[5] << 7) | data[4]);
-					ss_processor_set_midi_volume(proc, (float)vol / 16384.0);
+					ss_processor_set_midi_volume(proc, (float)vol / 16384.0f);
 					break;
 				}
 				case 0x02: { /* Master Balance / Pan */

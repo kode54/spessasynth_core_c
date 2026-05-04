@@ -335,7 +335,7 @@ bool ss_sample_decode(SS_BasicSample *s) {
 					float *out = s->audio_data;
 					ss_file_read_bytes(s->audio_file, 0, temp, frame_count * block_align);
 					for(size_t i = 0; i < frame_count; i++)
-						out[i] = ((float)in[i * block_align] - 128.0) / 128.0;
+						out[i] = ((float)in[i * block_align] - 128.0f) / 128.0f;
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
 				}
@@ -355,7 +355,7 @@ bool ss_sample_decode(SS_BasicSample *s) {
 					ss_file_read_bytes(s->audio_file, 0, temp, frame_count * block_align);
 					for(size_t i = 0; i < frame_count; i++) {
 						int16_t sample = (int16_t)((uint16_t)in[i * block_align] | ((uint16_t)in[i * block_align + 1] << 8));
-						out[i] = ((float)sample) / 32768.0;
+						out[i] = ((float)sample) / 32768.0f;
 					}
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
@@ -387,7 +387,7 @@ bool ss_sample_decode(SS_BasicSample *s) {
 					for(size_t i = 0; i < frame_count; i++) {
 						int32_t sample = (int32_t)(((uint32_t)in16[i * 2] << 16) | ((uint32_t)in16[i * 2 + 1] << 24) | ((uint32_t)in8[i] << 8)); 
 						sample >>= 8;
-						out[i] = (float)sample / 8388608.0;
+						out[i] = (float)sample / 8388608.0f;
 					}
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
@@ -433,7 +433,7 @@ bool ss_sample_decode(SS_BasicSample *s) {
 						const int16_t s16sample = input > 127 ? mantissa : -mantissa;
 
 						/* Convert to floating point */
-						out[i] = (float)s16sample / 32768.0;
+						out[i] = (float)s16sample / 32768.0f;
 					}
 					memset(s->audio_data + frame_count, 0, SS_SAMPLE_COUNT_BUMP * sizeof(float));
 					s->audio_data_length = frame_count;
@@ -558,7 +558,7 @@ bool ss_sample_decode(SS_BasicSample *s) {
 
 		const uint8_t *src = s->u8_data;
 		for(size_t i = 0; i < sample_count; i++) {
-			s->audio_data[i] = ((float)src[i] - 128.0) / 128.0;
+			s->audio_data[i] = ((float)src[i] - 128.0f) / 128.0f;
 		}
 		ss_mutex_leave(s->mutex);
 		return true;
@@ -731,6 +731,7 @@ size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
 			if(!iz->sample) continue;
 
 			if(count >= capacity) {
+				size_t old_capacity = capacity;
 				capacity *= 2;
 				SS_SynthesisData *tmp = (SS_SynthesisData *)realloc(
 				result, capacity * sizeof(SS_SynthesisData));
@@ -740,6 +741,7 @@ size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
 					*out_data = NULL;
 					return 0;
 				}
+				memset(tmp + old_capacity, 0, (capacity - old_capacity) * sizeof(SS_SynthesisData));
 				result = tmp;
 			}
 

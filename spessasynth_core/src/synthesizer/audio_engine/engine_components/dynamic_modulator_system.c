@@ -133,65 +133,65 @@ void ss_dynamic_modulator_system_setup_receiver(SS_DynamicModulatorSystem *dms,
 
 		case 0x01: {
 			/* Cutoff */
-			set_modulator(dms, source, SS_GEN_INITIAL_FILTER_FC, centeredNormalized * 9600, is_bipolar);
+			set_modulator(dms, source, SS_GEN_INITIAL_FILTER_FC, (int16_t)(centeredNormalized * 9600.0f), is_bipolar);
 			break;
 		}
 
 		case 0x02: {
 			/* Amplitude */
 			/* Generator is 1/10% */
-			set_modulator(dms, source, SS_GEN_AMPLITUDE, centeredNormalized * 1000, is_bipolar);
+			set_modulator(dms, source, SS_GEN_AMPLITUDE, (int16_t)(centeredNormalized * 1000.0f), is_bipolar);
 			break;
 		}
 
 		case 0x03: {
 			/* LFO1 rate */
 			/* Generator is 1/100Hz */
-			set_modulator(dms, source, SS_GEN_VIB_LFO_RATE, centeredNormalized * 1000, is_bipolar);
+			set_modulator(dms, source, SS_GEN_VIB_LFO_RATE, (int16_t)(centeredNormalized * 1000.0f), is_bipolar);
 			break;
 		}
 
 		case 0x04: {
-			set_modulator(dms, source, SS_GEN_VIB_LFO_TO_PITCH, normalizedNotCentered * 600, is_bipolar);
+			set_modulator(dms, source, SS_GEN_VIB_LFO_TO_PITCH, (int16_t)(normalizedNotCentered * 600.0f), is_bipolar);
 			break;
 		}
 
 		case 0x05: {
 			/* LFO1 filter depth */
-			set_modulator(dms, source, SS_GEN_VIB_LFO_TO_FILTER_FC, normalizedNotCentered * 2400, is_bipolar);
+			set_modulator(dms, source, SS_GEN_VIB_LFO_TO_FILTER_FC, (int16_t)(normalizedNotCentered * 2400.0f), is_bipolar);
 			break;
 		}
 
 		case 0x06: {
 			/* LFO1 amplitude depth */
 			/* Generator is 1/10% */
-			set_modulator(dms, source, SS_GEN_VIB_LFO_AMPLITUDE_DEPTH, normalizedNotCentered * 1000, is_bipolar);
+			set_modulator(dms, source, SS_GEN_VIB_LFO_AMPLITUDE_DEPTH, (int16_t)(normalizedNotCentered * 1000.0f), is_bipolar);
 			break;
 		}
 
 		case 0x07: {
 			/* LFO1 rate */
 			/* Generator is 1/100Hz */
-			set_modulator(dms, source, SS_GEN_MOD_LFO_RATE, centeredNormalized * 1000, is_bipolar);
+			set_modulator(dms, source, SS_GEN_MOD_LFO_RATE, (int16_t)(centeredNormalized * 1000.0f), is_bipolar);
 			break;
 		}
 
 		case 0x08: {
 			/* LFO2 pitch depth */
-			set_modulator(dms, source, SS_GEN_MOD_LFO_TO_PITCH, normalizedNotCentered * 600, is_bipolar);
+			set_modulator(dms, source, SS_GEN_MOD_LFO_TO_PITCH, (int16_t)(normalizedNotCentered * 600.0f), is_bipolar);
 			break;
 		}
 
 		case 0x09: {
 			/* LFO2 filter depth */
-			set_modulator(dms, source, SS_GEN_MOD_LFO_TO_FILTER_FC, normalizedNotCentered * 2400, is_bipolar);
+			set_modulator(dms, source, SS_GEN_MOD_LFO_TO_FILTER_FC, (int16_t)(normalizedNotCentered * 2400.0f), is_bipolar);
 			break;
 		}
 
 		case 0x0a: {
 			/* LFO2 amplitude depth */
 			/* Generator is 1/10% */
-			set_modulator(dms, source, SS_GEN_MOD_LFO_AMPLITUDE_DEPTH, normalizedNotCentered * 1000, is_bipolar);
+			set_modulator(dms, source, SS_GEN_MOD_LFO_AMPLITUDE_DEPTH, (int16_t)(normalizedNotCentered * 1000.0f), is_bipolar);
 			break;
 		}
 	}

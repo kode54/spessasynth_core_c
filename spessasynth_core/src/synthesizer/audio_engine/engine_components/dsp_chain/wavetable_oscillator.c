@@ -149,8 +149,8 @@ static float itpSinc(const float *buf, double pos, double incr, size_t loop_end,
 	double sample = 0.;
 	double fpos = 3. + frac; // 3.5 is the center position
 
-	int min = (double)-radius / scale + fpos - 0.5;
-	int max = (double)radius / scale + fpos + 0.5;
+	int min = (int)((double)-radius / scale + fpos - 0.5);
+	int max = (int)((double)radius / scale + fpos + 0.5);
 
 	if(min < 0) min = 0;
 	if(max > 8) max = 8;

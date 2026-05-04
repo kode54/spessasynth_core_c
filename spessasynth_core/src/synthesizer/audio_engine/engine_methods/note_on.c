@@ -72,9 +72,9 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	if(ch->is_muted) return;
 
 	const int real_key =
-	note +
+	(int)(note +
 	ch->channel_transpose_key_shift +
-	ch->custom_controllers[SS_CUSTOM_CTRL_KEY_SHIFT];
+	ch->custom_controllers[SS_CUSTOM_CTRL_KEY_SHIFT]);
 	int internal_midi_note = real_key;
 
 	if(real_key > 127 || real_key < 0) {
@@ -98,7 +98,7 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		/* A value of one means the initial portamento */
 		if(porta_control > 0) {
 			const int diff = abs(internal_midi_note - porta_control);
-			portamento_duration = ss_portamento_time_to_seconds(portamento_time, diff);
+			portamento_duration = ss_portamento_time_to_seconds((float)portamento_time, (float)diff);
 			portamento_from_key = porta_control;
 		}
 		/* Set portamento control to previous value */
@@ -299,11 +299,11 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		32768;
 
 		/* Clamp the sample offsets */
-		const signed long lastSample = audio.sample_data_len - 1;
+		const signed long lastSample = (long)(audio.sample_data_len - 1);
 		voice->sample.cursor = clamp_long(cursorStartOffset, 0, lastSample);
 		voice->sample.end = clamp_long(lastSample + endOffset, 0, lastSample);
-		voice->sample.loop_start = clamp_long(audio.loop_start + loopStartOffset, 0, lastSample);
-		voice->sample.loop_end = clamp_long(audio.loop_end + loopEndOffset, 0, lastSample);
+		voice->sample.loop_start = clamp_long((long)audio.loop_start + loopStartOffset, 0, lastSample);
+		voice->sample.loop_end = clamp_long((long)audio.loop_end + loopEndOffset, 0, lastSample);
 
 		// Swap loops if needed
 		if(voice->sample.loop_end < voice->sample.loop_start) {

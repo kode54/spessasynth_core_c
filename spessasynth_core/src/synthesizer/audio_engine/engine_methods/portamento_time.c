@@ -22,20 +22,20 @@ typedef struct SS_PortamentoLookup {
 
 static const SS_PortamentoLookup portamento_lookup_table[] = {
 	{ 0, 0.0 },
-	{ 1, 0.006 },
-	{ 2, 0.023 },
-	{ 4, 0.05 },
-	{ 8, 0.11 },
-	{ 16, 0.25 },
-	{ 32, 0.5 },
-	{ 64, 2.06 },
-	{ 80, 4.2 },
-	{ 96, 8.4 },
-	{ 112, 19.5 },
-	{ 116, 26.7 },
-	{ 120, 40.0 },
-	{ 124, 80.0 },
-	{ 127, 480.0 }
+	{ 1, 0.006f },
+	{ 2, 0.023f },
+	{ 4, 0.05f },
+	{ 8, 0.11f },
+	{ 16, 0.25f },
+	{ 32, 0.5f },
+	{ 64, 2.06f },
+	{ 80, 4.2f },
+	{ 96, 8.4f },
+	{ 112, 19.5f },
+	{ 116, 26.7f },
+	{ 120, 40.0f },
+	{ 124, 80.0f },
+	{ 127, 480.0f }
 };
 static const int portamento_lookup_table_count = sizeof(portamento_lookup_table) / sizeof(portamento_lookup_table[0]);
 
@@ -74,5 +74,5 @@ static float ss_portamento_get_lookup(int time) {
 }
 
 float ss_portamento_time_to_seconds(float portamento_time, float distance) {
-	return ss_portamento_get_lookup(portamento_time) * (distance / 36.0);
+	return ss_portamento_get_lookup((int)portamento_time) * (distance / 36.0f);
 }

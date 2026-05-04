@@ -29,7 +29,7 @@ static float tc2Sec(float timecents) {
 	 * Testcase: MS_Basic-v0.2.1.sf2 Bass & Lead
 	 */
 	if(timecents <= -10114) return 0;
-	return ss_timecents_to_seconds(timecents);
+	return ss_timecents_to_seconds((int)timecents);
 }
 
 void ss_modulation_envelope_recalculate(SS_ModulationEnvelope *env,
@@ -47,15 +47,15 @@ void ss_modulation_envelope_recalculate(SS_ModulationEnvelope *env,
 	env->attack_duration = tc2Sec(mod_gens[SS_GEN_ATTACK_MOD_ENV]);
 
 	int decay_key_exc = (60 - midi_note) * mod_gens[SS_GEN_KEYNUM_TO_MOD_ENV_DECAY];
-	double decay_time = tc2Sec(mod_gens[SS_GEN_DECAY_MOD_ENV] + decay_key_exc);
-	env->decay_duration = decay_time * (1.0 - env->sustain_level);
+	double decay_time = tc2Sec((float)(mod_gens[SS_GEN_DECAY_MOD_ENV] + decay_key_exc));
+	env->decay_duration = decay_time * (1.0f - env->sustain_level);
 
 	int hold_key_exc = (60 - midi_note) * mod_gens[SS_GEN_KEYNUM_TO_MOD_ENV_HOLD];
-	env->hold_duration = tc2Sec(hold_key_exc + mod_gens[SS_GEN_HOLD_MOD_ENV]);
+	env->hold_duration = tc2Sec((float)(hold_key_exc + mod_gens[SS_GEN_HOLD_MOD_ENV]));
 
 	int rel_tc = mod_gens[SS_GEN_RELEASE_MOD_ENV];
 	if(rel_tc < -7200) rel_tc = -7200;
-	double rel_time = tc2Sec(rel_tc);
+	double rel_time = tc2Sec((float)rel_tc);
 	env->release_duration = rel_time * env->release_start_level;
 
 	env->delay_end = start_time + tc2Sec(mod_gens[SS_GEN_DELAY_MOD_ENV]);
@@ -99,8 +99,8 @@ float ss_modulation_envelope_get_value(const SS_ModulationEnvelope *env,
 		if(e->release_start_level == 0) {
 			return 0;
 		}
-		float value = (1.0 - (current_time - e->release_start_time) / e->release_duration) * e->release_start_level;
-		if(value < 0.0) value = 0.0;
+		float value = (float)((1.0 - (current_time - e->release_start_time) / e->release_duration) * e->release_start_level);
+		if(value < 0.0f) value = 0.0f;
 		return value;
 	}
 
@@ -119,7 +119,7 @@ float ss_modulation_envelope_get_value(const SS_ModulationEnvelope *env,
 		e->current_value = 1;
 	} else if(current_time < e->decay_end) {
 		/* Decay: linear ramp from 1 to sustain level */
-		e->current_value = (1.0 - (e->decay_end - current_time) / e->decay_duration) * (e->sustain_level - 1.0) + 1.0;
+		e->current_value = (float)((1.0 - (e->decay_end - current_time) / e->decay_duration) * (e->sustain_level - 1.0) + 1.0);
 	} else {
 		/* Sustain: stay at sustain level */
 		e->current_value = e->sustain_level;

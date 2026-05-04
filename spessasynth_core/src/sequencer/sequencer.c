@@ -423,7 +423,7 @@ static void dispatch_master_volume(SS_Sequencer *seq, float value) {
 static void dispatch_port_select(SS_Sequencer *seq, int port, double t) {
 	uint8_t syx[2] = { 0xF5, (uint8_t)((port & 0x0F) + 1) };
 	dispatch_midi(seq, syx, 2, t);
-	seq->ports_active |= 1 << port;
+	seq->ports_active |= 1ULL << port;
 }
 
 /** Dispatch a voice event (non-meta, non-SysEx) via the sink. */
@@ -809,7 +809,7 @@ static void dispatch_reset(SS_Sequencer *seq) {
 		ss_processor_system_reset(seq->proc);
 	if(seq->callbacks.midi_command) {
 		for(int i = 0; i < 4; i++) {
-			if((seq->ports_active & (1 << i)) != 0) {
+			if((seq->ports_active & (1ULL << i)) != 0) {
 				dispatch_port_select(seq, i, seq->base_time);
 				dispatch_midi(seq, syx_reset_gm, sizeof(syx_reset_gm), seq->base_time);
 			}
@@ -821,7 +821,7 @@ static void dispatch_all_notes_off(SS_Sequencer *seq) {
 	if(seq->proc) {
 		for(int ch = 0; ch < seq->proc->channel_count; ch++) {
 			int port = ch >> 4;
-			if((seq->ports_active & (1 << port)) != 0) {
+			if((seq->ports_active & (1ULL << port)) != 0) {
 				SS_MIDIChannel *c = seq->proc->midi_channels[ch];
 				if(c) ss_channel_all_notes_off(c, seq->base_time);
 			}
@@ -829,7 +829,7 @@ static void dispatch_all_notes_off(SS_Sequencer *seq) {
 	}
 	if(seq->callbacks.midi_command) {
 		for(int i = 0; i < 4; i++) {
-			if((seq->ports_active & (1 << i)) != 0) {
+			if((seq->ports_active & (1ULL << i)) != 0) {
 				dispatch_port_select(seq, i, seq->base_time);
 				for(int ch = 0; ch < 16; ch++) {
 					uint8_t msg[3];

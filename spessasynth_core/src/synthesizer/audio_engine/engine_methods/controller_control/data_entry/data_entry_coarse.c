@@ -36,14 +36,14 @@ and stays on until the next system-reset.
 It was implemented very early in SpessaSynth's development,
 because I wanted support for Touhou MIDIs :-)
  */
-#define addDefaultVibrato                \
-	if(                                  \
-	ch->channel_vibrato.delay == 0 &&    \
-	ch->channel_vibrato.rate == 0 &&     \
-	ch->channel_vibrato.depth == 0) {    \
-		ch->channel_vibrato.depth = 50;  \
-		ch->channel_vibrato.rate = 8;    \
-		ch->channel_vibrato.delay = 0.6; \
+#define addDefaultVibrato                  \
+	if(                                    \
+	ch->channel_vibrato.delay == 0 &&      \
+	ch->channel_vibrato.rate == 0 &&       \
+	ch->channel_vibrato.depth == 0) {      \
+		ch->channel_vibrato.depth = 50.0f; \
+		ch->channel_vibrato.rate = 8.0f;   \
+		ch->channel_vibrato.delay = 0.6f;  \
 	}
 
 	switch(ch->data_entry_state) {
@@ -78,18 +78,18 @@ because I wanted support for Touhou MIDIs :-)
 					/* Pitch range */
 					const bool is_gs = ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_GS;
 					const bool is_50cent = is_gs && ch->bank_lsb != 1;
-					const float range = is_50cent ? 50.0 : 100.0;
-					ch->drum_params[nrpn_fine].pitch = (((float)val) - 64.0) * range;
+					const float range = is_50cent ? 50.0f : 100.0f;
+					ch->drum_params[nrpn_fine].pitch = (((float)val) - 64.0f) * range;
 					break;
 				}
 
 				case SS_NRPN_GS_MSB_DRUM_PITCH_FINE: {
-					ch->drum_params[nrpn_fine].pitch += ((float)val) - 64.0;
+					ch->drum_params[nrpn_fine].pitch += ((float)val) - 64.0f;
 					break;
 				}
 
 				case SS_NRPN_GS_MSB_DRUM_TVA_LEVEL:
-					ch->drum_params[nrpn_fine].gain = ((float)val) / 127.0;
+					ch->drum_params[nrpn_fine].gain = ((float)val) / 127.0f;
 					break;
 
 				case SS_NRPN_GS_MSB_DRUM_PANPOT:
@@ -97,15 +97,15 @@ because I wanted support for Touhou MIDIs :-)
 					break;
 
 				case SS_NRPN_GS_MSB_DRUM_REVERB_SEND:
-					ch->drum_params[nrpn_fine].reverb_gain = ((float)val) / 127.0;
+					ch->drum_params[nrpn_fine].reverb_gain = ((float)val) / 127.0f;
 					break;
 
 				case SS_NRPN_GS_MSB_DRUM_CHORUS_SEND:
-					ch->drum_params[nrpn_fine].chorus_gain = ((float)val) / 127.0;
+					ch->drum_params[nrpn_fine].chorus_gain = ((float)val) / 127.0f;
 					break;
 
 				case SS_NRPN_GS_MSB_DRUM_DELAY_SEND:
-					ch->drum_params[nrpn_fine].delay_gain = ((float)val) / 127.0;
+					ch->drum_params[nrpn_fine].delay_gain = ((float)val) / 127.0f;
 					if(ch->synth) ch->synth->delay_active = true;
 					break;
 
@@ -129,7 +129,7 @@ because I wanted support for Touhou MIDIs :-)
 								return;
 							}
 							addDefaultVibrato;
-							ch->channel_vibrato.rate = ((float)val / 64.0) * 8.0;
+							ch->channel_vibrato.rate = ((float)val / 64.0f) * 8.0f;
 							break;
 
 						case SS_NRPN_GS_LSB_VIBRATO_DEPTH:
@@ -138,7 +138,7 @@ because I wanted support for Touhou MIDIs :-)
 								return;
 							}
 							addDefaultVibrato;
-							ch->channel_vibrato.depth = (float)val / 2.0;
+							ch->channel_vibrato.depth = (float)val / 2.0f;
 							break;
 
 						case SS_NRPN_GS_LSB_VIBRATO_DELAY:
@@ -147,7 +147,7 @@ because I wanted support for Touhou MIDIs :-)
 								return;
 							}
 							addDefaultVibrato;
-							ch->channel_vibrato.delay = (float)val / 64.0 / 3.0;
+							ch->channel_vibrato.delay = (float)val / 64.0f / 3.0f;
 							break;
 
 						case SS_NRPN_GS_LSB_TVF_FILTER_CUTOFF:
@@ -210,7 +210,7 @@ because I wanted support for Touhou MIDIs :-)
 				case SS_RPN_COARSE_TUNING: {
 					/* Semitones */
 					const int semitones = val - 64;
-					ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_TUNING_SEMITONES, semitones);
+					ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_TUNING_SEMITONES, (float)semitones);
 					break;
 				}
 
@@ -224,7 +224,7 @@ because I wanted support for Touhou MIDIs :-)
 
 					/* Modulation depth */
 				case SS_RPN_MODULATION_DEPTH:
-					ss_channel_set_modulation_depth(ch, (float)val * 100.0);
+					ss_channel_set_modulation_depth(ch, (float)val * 100.0f);
 					break;
 
 				case SS_RPN_RESET_PARAMETERS:

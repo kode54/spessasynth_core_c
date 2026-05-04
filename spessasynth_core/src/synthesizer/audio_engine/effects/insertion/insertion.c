@@ -975,7 +975,7 @@ static void aw_process(SS_InsertionProcessor *self,
 	}
 	e->phase = phase;
 	e->last_fc = last_fc;
-	e->envelope = env;
+	e->envelope = (float)env;
 }
 
 static void aw_set_param(SS_InsertionProcessor *self, int p, int v) {

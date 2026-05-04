@@ -51,14 +51,14 @@ void ss_channel_data_entry_fine(SS_MIDIChannel *ch, int val, double time) {
 					/* Grab the data and shift */
 					const int coarse = (int)ch->custom_controllers[SS_CUSTOM_CTRL_TUNING];
 					const int final_tuning = (coarse << 7) | val;
-					ss_channel_set_tuning(ch, (float)final_tuning * 0.01220703125); /* Multiply by 8192 / 100 (cent increments)) */
+					ss_channel_set_tuning(ch, (float)((float)final_tuning * 0.01220703125)); /* Multiply by 8192 / 100 (cent increments)) */
 					break;
 				}
 
 				/* Modulation depth */
 				case SS_RPN_MODULATION_DEPTH: {
-					const float current_depth_cents = ch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] * 50.0;
-					const float cents = current_depth_cents + ((float)val / 128.0) * 100.0;
+					const float current_depth_cents = ch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] * 50.0f;
+					const float cents = current_depth_cents + ((float)val / 128.0f) * 100.0f;
 					ss_channel_set_modulation_depth(ch, cents);
 					break;
 				}

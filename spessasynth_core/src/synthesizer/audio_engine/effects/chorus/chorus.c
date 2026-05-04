@@ -91,12 +91,12 @@ void ss_chorus_free(SS_Chorus *chorus) {
 
 void ss_chorus_set_send_level_to_reverb(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.sendLevelToReverb = value;
-	chorus->reverbGain = (float)value / 127.0;
+	chorus->reverbGain = (float)value / 127.0f;
 }
 
 void ss_chorus_set_send_level_to_delay(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.sendLevelToDelay = value;
-	chorus->delayGain = (float)value / 127.0;
+	chorus->delayGain = (float)value / 127.0f;
 }
 
 void ss_chorus_set_pre_lowpass(SS_Chorus *chorus, unsigned char value) {
@@ -104,8 +104,8 @@ void ss_chorus_set_pre_lowpass(SS_Chorus *chorus, unsigned char value) {
 	// GS sure loves weird mappings, huh?
 	// Maps to around 8000-300 Hz
 	chorus->preLPFfc = 8000.0f * powf(0.63f, (float)value);
-	const float decay = expf((-2.0f * M_PI * chorus->preLPFfc) / chorus->sampleRate);
-	chorus->preLPFa = 1.0 - decay;
+	const float decay = expf((float)((-2.0f * M_PI * chorus->preLPFfc) / chorus->sampleRate));
+	chorus->preLPFa = 1.0f - decay;
 }
 
 void ss_chorus_set_depth(SS_Chorus *chorus, unsigned char value) {
@@ -121,18 +121,18 @@ void ss_chorus_set_delay(SS_Chorus *chorus, unsigned char value) {
 
 void ss_chorus_set_feedback(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.feedback = value;
-	chorus->feedbackGain = (float)value / 128.0;
+	chorus->feedbackGain = (float)value / 128.0f;
 }
 
 void ss_chorus_set_rate(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.rate = value;
-	const float rate = 15.5 * ((float)value / 127.0);
+	const float rate = 15.5f * ((float)value / 127.0f);
 	chorus->rateInc = rate / chorus->sampleRate;
 }
 
 void ss_chorus_set_level(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.level = value;
-	chorus->gain = ((float)value / 127.0) * 1.3;
+	chorus->gain = ((float)value / 127.0f) * 1.3f;
 }
 
 void ss_chorus_set_macro(SS_Chorus *chorus, unsigned char value) {
@@ -273,10 +273,10 @@ void ss_chorus_process(SS_Chorus *chorus,
 		}
 
 		// Triangle LFO (GS uses triangle)
-		const float lfo = 2.0 * fabs(phase - 0.5);
+		const float lfo = 2.0f * fabsf(phase - 0.5f);
 
 		// Read position
-		const float dL = max(1.0, min(delay + lfo * depth, bufferLen));
+		const float dL = max(1.0f, min(delay + lfo * depth, bufferLen));
 		float readPosL = (float)write - dL;
 		if(readPosL < 0.0) readPosL += (float)bufferLen;
 
@@ -285,23 +285,23 @@ void ss_chorus_process(SS_Chorus *chorus,
 		unsigned int x1 = x0 + 1;
 		if(x1 >= bufferLen) x1 -= bufferLen;
 		float frac = readPosL - (float)x0;
-		const float outL = bufferL[x0] * (1.0 - frac) + bufferL[x1] * frac;
+		const float outL = bufferL[x0] * (1.0f - frac) + bufferL[x1] * frac;
 
 		// Write input sample
 		bufferL[write] = inputSample + outL * feedback;
 
 		// Same for the right line (shared buffer for now for testing)
-		const float dR = max(1.0, min(delay + (1.0 - lfo) * depth, bufferLen));
+		const float dR = max(1.0f, min(delay + (1.0f - lfo) * depth, bufferLen));
 		float readPosR = (float)write - dR;
 		if(readPosR < 0.0) readPosR += (float)bufferLen;
-		readPosR = fmod(readPosR, (float)bufferLen);
+		readPosR = fmodf(readPosR, (float)bufferLen);
 
 		// Linear interpolation
 		x0 = (unsigned int)readPosR;
 		x1 = x0 + 1;
 		if(x1 >= bufferLen) x1 -= bufferLen;
 		frac = readPosR - (float)x0;
-		const float outR = bufferR[x0] * (1.0 - frac) + bufferR[x1] * frac;
+		const float outR = bufferR[x0] * (1.0f - frac) + bufferR[x1] * frac;
 
 		// Write input sample
 		bufferR[write] = inputSample + outR * feedback;
@@ -311,7 +311,7 @@ void ss_chorus_process(SS_Chorus *chorus,
 		*outputR++ += outR * gain;
 
 		// Mono downmix for effects
-		const float mono = (outL + outR) / 2.0;
+		const float mono = (outL + outR) / 2.0f;
 
 		// Mix other effects outputs
 		if(outReverb) {

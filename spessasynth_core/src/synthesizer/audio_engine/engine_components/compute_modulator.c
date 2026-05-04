@@ -109,7 +109,7 @@ void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch,
 
 		if(m->transform_type == SS_MODTRANS_ABSOLUTE) {
 			/* Abs value */
-			val = fabs(val);
+			val = fabsf(val);
 		}
 
 		/* Default resonant modulator: track separately */
@@ -128,7 +128,7 @@ void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch,
 			if(new_val > 32767) new_val = 32767;
 			if(new_val < -32768) new_val = -32768;
 			v->modulated_generators[m->dest_enum] = (int16_t)new_val;
-			val = new_val;
+			val = (float)new_val;
 		}
 		/* Update stored current_value (for snapshot purposes) */
 		((SS_Modulator *)m)->current_value = val;

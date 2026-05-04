@@ -70,7 +70,7 @@ void ss_volume_envelope_recalculate(SS_Voice *v,
 
 	/* Sustain */
 	int sustain_raw = mod_gens[SS_GEN_SUSTAIN_VOL_ENV];
-	if(sustain_raw > CB_SILENCE) sustain_raw = CB_SILENCE;
+	if(sustain_raw > CB_SILENCE) sustain_raw = (int)CB_SILENCE;
 	env->sustain_cb = (double)sustain_raw;
 
 	/* Attack duration */
@@ -83,7 +83,7 @@ void ss_volume_envelope_recalculate(SS_Voice *v,
 	int key_num_addition = (60 - v->target_key) *
 	                       mod_gens[SS_GEN_KEYNUM_TO_VOL_ENV_DECAY];
 	const double fraction = env->sustain_cb / CB_SILENCE;
-	env->decay_duration = timecents_to_samples(mod_gens[SS_GEN_DECAY_VOL_ENV] + key_num_addition, env->sample_rate) * fraction;
+	env->decay_duration = (uint64_t)(timecents_to_samples(mod_gens[SS_GEN_DECAY_VOL_ENV] + key_num_addition, env->sample_rate) * fraction);
 
 	/* Calculate absolute end times for the values */
 	env->delay_end = timecents_to_samples(mod_gens[SS_GEN_DELAY_VOL_ENV], env->sample_rate);
@@ -112,10 +112,10 @@ void ss_volume_envelope_start_release(SS_Voice *v,
                                       double start_time) {
 	env->release_start_time_samples = env->sample_time;
 
-	float timecents = v->override_release_vol_env ? v->override_release_vol_env : mod_gens[SS_GEN_RELEASE_VOL_ENV];
+	float timecents = v->override_release_vol_env ? (float)v->override_release_vol_env : (float)mod_gens[SS_GEN_RELEASE_VOL_ENV];
 	if(timecents < -7200) timecents = -7200;
 
-	env->release_duration = timecents_to_samples(timecents, env->sample_rate);
+	env->release_duration = timecents_to_samples((int)timecents, env->sample_rate);
 
 	if(env->entered_release) {
 		/* The envelope is already in release, but we request an update
@@ -141,9 +141,9 @@ void ss_volume_envelope_start_release(SS_Voice *v,
 		 */
 		const int key_num_addition = (60 - v->target_key) * mod_gens[SS_GEN_KEYNUM_TO_VOL_ENV_DECAY];
 
-		env->decay_duration = timecents_to_samples(mod_gens[SS_GEN_DECAY_VOL_ENV] + key_num_addition, env->sample_rate) * fraction;
+		env->decay_duration = (uint64_t)(timecents_to_samples(mod_gens[SS_GEN_DECAY_VOL_ENV] + key_num_addition, env->sample_rate) * fraction);
 
-		double release_start_cb;
+		double release_start_cb = CB_SILENCE;
 		switch(env->state) {
 			case SS_VOLENV_DELAY:
 				/* Delay phase: no sound is produced */
@@ -194,7 +194,7 @@ void ss_volume_envelope_start_release(SS_Voice *v,
 	 * (changing from release start to -100dB instead of from peak to -100dB)
 	 */
 	const double release_fraction = (CB_SILENCE - env->release_start_cb) / CB_SILENCE;
-	env->release_duration *= release_fraction;
+	env->release_duration = (uint64_t)((double)env->release_duration * release_fraction);
 	/* Voice may be off instantly
 	 * Testcase: mono mode
 	 */
@@ -228,7 +228,7 @@ bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
 
 		/* Linearly ramp down decibels */
 		env->attenuation_cb = ((double)elapsed_release / (double)release_duration) * cb_difference + release_start_cb;
-		env->output_gain = ss_centibel_attenuation_to_gain(env->attenuation_cb) * gain_target;
+		env->output_gain = ss_centibel_attenuation_to_gain((float)env->attenuation_cb) * gain_target;
 		return env->attenuation_cb < PERCEIVED_CB_SILENCE;
 	}
 
@@ -252,7 +252,7 @@ bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
 					/* Set current attenuation to peak as its invalid during this phase */
 					env->attenuation_cb = 0;
 					/* Special case: linear gain ramp instead of linear db ramp */
-					const float linear_gain = 1.0 - (double)(attack_end - sample_time) / (double)attack_duration;
+					const float linear_gain = (float)(1.0 - (double)(attack_end - sample_time) / (double)attack_duration);
 					env->output_gain = linear_gain * gain_target;
 					return true;
 				}
@@ -275,7 +275,7 @@ bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
 				if(sample_time < decay_end) {
 					/* Linear centibel ramp down to sustain */
 					env->attenuation_cb = (1.0 - (double)(decay_end - sample_time) / (double)decay_duration) * sustain_cb;
-					env->output_gain = gain_target * ss_centibel_attenuation_to_gain(env->attenuation_cb);
+					env->output_gain = gain_target * ss_centibel_attenuation_to_gain((float)env->attenuation_cb);
 					return true;
 				}
 				env->state++;
@@ -293,7 +293,7 @@ bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
 
 				/* Sustain phase: stay at sustain */
 				env->attenuation_cb = sustain_cb;
-				env->output_gain = gain_target * ss_centibel_attenuation_to_gain(sustain_cb);
+				env->output_gain = gain_target * ss_centibel_attenuation_to_gain((float)sustain_cb);
 				return true;
 			}
 		}

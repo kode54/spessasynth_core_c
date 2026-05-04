@@ -275,12 +275,12 @@ bool ss_voice_render(SS_Voice *v,
 	const float gain_right = pan_right * output_gain;
 
 	if(ch->synth && ch->synth->delay_active && delay) {
-		const int delaySend = ch->midi_controllers[SS_MIDCON_VARIATION_DEPTH] * v->delay_send;
+		const int delaySend = (int)(ch->midi_controllers[SS_MIDCON_VARIATION_DEPTH] * v->delay_send);
 		if(delaySend > 0) {
 			const float delayGain =
 			output_gain *
 			ch->synth->master_params.delay_gain *
-			((float)(delaySend >> 7) / 127.0);
+			((float)(delaySend >> 7) / 127.0f);
 			for(int i = 0; i < sample_count; i++) {
 				const float s = delayGain * buf[i];
 				delay[i] += s;
@@ -295,7 +295,7 @@ bool ss_voice_render(SS_Voice *v,
 	}
 
 	if(reverb && reverb_amt > 0) {
-		const float reverb_gain = output_gain * (reverb_amt / 1000.0);
+		const float reverb_gain = output_gain * (reverb_amt / 1000.0f);
 		for(int i = 0; i < sample_count; i++) {
 			float s = buf[i];
 			reverb[i] += s * reverb_gain;
@@ -303,7 +303,7 @@ bool ss_voice_render(SS_Voice *v,
 	}
 
 	if(chorus && chorus_amt > 0) {
-		const float chorus_gain = output_gain * (chorus_amt / 1000.0);
+		const float chorus_gain = output_gain * (chorus_amt / 1000.0f);
 		for(int i = 0; i < sample_count; i++) {
 			float s = buf[i];
 			chorus[i] += s * chorus_gain;
