@@ -19,6 +19,7 @@ int main(void) {
             \"bank\": 0\n\
           }\n\
         },\n\
+        {\n\
           \"source\": {\n\
             \"bank\": 128\n\
           },\n\
