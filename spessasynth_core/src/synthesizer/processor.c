@@ -409,9 +409,9 @@ static void ss_processor_render_internal(SS_Processor *proc,
 	float *chr = chorus;
 	float *dly = delay;
 
-	proc->total_voices = 0;
+	proc->voice_count = 0;
 
-	double time_now = proc->current_synth_time;
+	double time_now = proc->current_time;
 
 	for(int i = 0; i < proc->channel_count; i++) {
 		SS_MIDIChannel *ch = proc->midi_channels[i];
@@ -432,11 +432,11 @@ static void ss_processor_render_internal(SS_Processor *proc,
 			                  sample_count);
 		}
 
-		proc->total_voices += (int)ch->voice_count;
+		proc->voice_count += (int)ch->voice_count;
 	}
 
 	/* Advance time */
-	proc->current_synth_time += (double)sample_count / (double)proc->sample_rate;
+	proc->current_time += (double)sample_count / (double)proc->sample_rate;
 }
 
 void ss_processor_render(SS_Processor *proc,

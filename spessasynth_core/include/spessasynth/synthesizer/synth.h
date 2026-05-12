@@ -471,8 +471,8 @@ typedef struct SS_Processor {
 	size_t bank_group_count;
 	size_t bank_group_allocated;
 
-	int total_voices;
-	double current_synth_time; /* seconds */
+	int voice_count;
+	double current_time; /* seconds */
 
 	SS_Reverb *reverb;
 	SS_Chorus *chorus;

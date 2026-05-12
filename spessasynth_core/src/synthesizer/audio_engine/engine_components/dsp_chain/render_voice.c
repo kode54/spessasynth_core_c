@@ -343,6 +343,7 @@ void ss_channel_render(SS_MIDIChannel *ch,
 		                (int)sample_count, interp,
 		                vol_smoothing, filter_smoothing, pan_smoothing);
 	}
+	int voice_count = ch->voice_count;
 	ss_channel_remove_finished_voices(ch);
-	if(proc) proc->total_voices -= (proc->total_voices > (int)ch->voice_count) ? (int)(ch->voice_count - ch->voice_count) : 0;
+	if(proc) proc->voice_count -= (proc->voice_count > (int)ch->voice_count) ? (int)(voice_count - ch->voice_count) : 0;
 }

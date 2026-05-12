@@ -342,7 +342,7 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		}
 
 		channel_add_voice(ch, voice);
-		if(proc) proc->total_voices++;
+		if(proc) proc->voice_count++;
 	}
 
 	ss_synthesis_data_free_array(synth_data, sd_count);
