@@ -28,6 +28,16 @@ extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomContro
 extern void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
 extern void ss_processor_set_midi_volume(SS_Processor *proc, float volume);
 
+/*
+ * Handles a GS system exclusive
+ * http://www.bandtrax.com.au/sysex.htm
+ * https://cdn.roland.com/assets/media/pdf/SC-8850_OM.pdf
+ * @param proc
+ * @param syx
+ * @param len
+ * @param t
+ * @param channel_offset
+ */
 void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, double t, int channel_offset) {
 	if(len < 8) return;
 
@@ -286,7 +296,7 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 						/* This is an individual part (channel) parameter
 						 * Determine the channel
 						 * Note that: 0 means channel 9 (drums), and only then 1 means channel 0, 2 channel 1, etc.
-						 * SC-88Pro manual page 196
+						 * SC-8850 manual, page 237
 						 */
 						uint8_t efx_part = a2 & 0x0F;
 						int efx_ch = GS_PART_TO_CHANNEL[efx_part] + channel_offset;
@@ -541,10 +551,11 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 
 					/* Patch Parameter Tone Map */
 					if(a2 >> 4 == 4) {
-						// This is an individual part (channel) parameter
-						// Determine the channel
-						// Note that: 0 means channel 9 (drums), and only then 1 means channel 0, 2 channel 1, etc.
-						// SC-88Pro manual page 196
+						/* This is an individual part (channel) parameter
+						 * Determine the channel
+						 * Note that: 0 means channel 9 (drums), and only then 1 means channel 0, 2 channel 1, etc.
+						 * SC-8850 manual, page 237
+						 */
 						uint8_t part_idx = a2 & 0x0F;
 						int channel_idx = GS_PART_TO_CHANNEL[part_idx] + channel_offset;
 						if(channel_idx < 0 || channel_idx >= proc->channel_count) return;
