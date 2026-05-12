@@ -37,29 +37,25 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 		switch(syx[2]) {
 			/* GS */
 			case 0x42: {
-				const uint8_t addr1 = syx[4];
-				const uint8_t addr2 = syx[5];
-				const uint8_t addr3 = syx[6];
+				const uint8_t a1 = syx[4];
+				const uint8_t a2 = syx[5];
+				const uint8_t a3 = syx[6];
 
 				/* Sanity check */
 				const uint8_t data = syx[7] > 127 ? 127 : syx[7];
 
 				/* SYSTEM MODE SET */
-				if(
-				addr1 == 0 &&
-				addr2 == 0 &&
-				addr3 == 0x7f &&
-				data == 0x00) {
+				if(a1 == 0 && a2 == 0 && a3 == 0x7f && data == 0x00) {
 					proc->master_params.midi_system = SS_SYSTEM_GS;
 					ss_processor_system_reset(proc);
 					return;
 				}
 
 				/* Patch parameter */
-				if(addr1 == 0x40) {
+				if(a1 == 0x40) {
 					/* System parameter */
-					if(addr2 == 0x00) {
-						switch(addr3) {
+					if(a2 == 0x00) {
+						switch(a3) {
 							/* Roland GS master tune */
 							case 0x00: {
 								if(len < 11) return;
@@ -103,10 +99,10 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 					}
 
 					/* Part Parameter, Patch Common (Effects) */
-					if(addr2 == 0x01) {
-						const bool is_reverb = addr3 >= 0x30 && addr3 <= 0x37;
-						const bool is_chorus = addr3 >= 0x38 && addr3 <= 0x40;
-						const bool is_delay = addr3 >= 0x50 && addr3 <= 0x5a;
+					if(a2 == 0x01) {
+						const bool is_reverb = a3 >= 0x30 && a3 <= 0x37;
+						const bool is_chorus = a3 >= 0x38 && a3 <= 0x40;
+						const bool is_delay = a3 >= 0x50 && a3 <= 0x5a;
 						/* Disable effect editing if locked */
 						if(is_reverb && !proc->master_params.reverb_enabled)
 							return;
@@ -117,9 +113,8 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 						/*
 						 0x40 - chorus to delay; any delay param activates delay
 						 */
-						if(addr3 == 0x40 || is_delay)
-							proc->delay_active = true;
-						switch(addr3) {
+						proc->delay_active = proc->delay_active || (a3 == 0x40 || is_delay);
+						switch(a3) {
 							default:
 								/* Unsupported preset */
 								break;
@@ -246,20 +241,20 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 					}
 
 					/* EFX Parameter */
-					if(addr2 == 0x03) {
-						if(addr3 >= 0x03 && addr3 <= 0x16) {
+					if(a2 == 0x03) {
+						if(a3 >= 0x03 && a3 <= 0x16) {
 							if(proc->insertion) {
-								proc->insertion->set_parameter(proc->insertion, (int)addr3, (int)data);
+								proc->insertion->set_parameter(proc->insertion, (int)a3, (int)data);
 							}
 							return;
-						} else if(addr3 >= 0x17 && addr3 <= 0x19) {
+						} else if(a3 >= 0x17 && a3 <= 0x19) {
 							if(proc->insertion) {
 								const float valueNormalized = ((float)data / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
-								if(addr3 == 0x17)
+								if(a3 == 0x17)
 									proc->insertion->send_level_to_reverb = valueNormalized;
-								else if(addr3 == 0x18)
+								else if(a3 == 0x18)
 									proc->insertion->send_level_to_chorus = valueNormalized;
-								else if(addr3 == 0x19) {
+								else if(a3 == 0x19) {
 									proc->delay_active = true;
 									proc->insertion->send_level_to_delay = valueNormalized;
 								}
@@ -267,7 +262,7 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 							return;
 						}
 
-						if(addr3 == 0x00) {
+						if(a3 == 0x00) {
 							/* EFX Type: 16-bit MSB<<8|LSB */
 							if(len < 9) return;
 							uint32_t efx_type = ((uint32_t)data << 8) | (uint32_t)syx[8];
@@ -287,18 +282,18 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 					}
 
 					/* Patch Parameters */
-					if(addr2 >> 4 == 1) {
+					if(a2 >> 4 == 1) {
 						/* This is an individual part (channel) parameter
 						 * Determine the channel
 						 * Note that: 0 means channel 9 (drums), and only then 1 means channel 0, 2 channel 1, etc.
 						 * SC-88Pro manual page 196
 						 */
-						uint8_t efx_part = addr2 & 0x0F;
+						uint8_t efx_part = a2 & 0x0F;
 						int efx_ch = GS_PART_TO_CHANNEL[efx_part] + channel_offset;
 						if(efx_ch >= 0 && efx_ch < proc->channel_count) {
 							SS_MIDIChannel *mch = proc->midi_channels[efx_ch];
 
-							switch(addr3) {
+							switch(a3) {
 								default:
 									/* This is some other GS sysex... */
 									return;
@@ -471,22 +466,22 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 						return;
 					}
 
-					if(addr2 >> 4 == 2) {
+					if(a2 >> 4 == 2) {
 						/* Patch Parameter controllers */
-						uint8_t part_idx = addr2 & 0x0F;
+						uint8_t part_idx = a2 & 0x0F;
 						int channel_idx = GS_PART_TO_CHANNEL[part_idx] + channel_offset;
 						if(channel_idx < 0 || channel_idx >= proc->channel_count) return;
 
 						SS_MIDIChannel *mch = proc->midi_channels[channel_idx];
 
-						switch(addr3 & 0xf0) {
+						switch(a3 & 0xf0) {
 							default:
 								/* Not recognized */
 								break;
 
 							case 0x00: {
 								/* Modulation wheel */
-								if((addr3 & 0x0f) == 0x04) {
+								if((a3 & 0x0f) == 0x04) {
 									/* LFO1 Pitch depth
 									 * Special case:
 									 * If the source is a mod wheel, it's a strange way of setting the modulation depth
@@ -496,13 +491,13 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 									mch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] = cents / 50.0f;
 									break;
 								}
-								ss_dynamic_modulator_system_setup_receiver(&mch->dms, addr3, data, SS_MIDCON_MODULATION_WHEEL, false);
+								ss_dynamic_modulator_system_setup_receiver(&mch->dms, a3, data, SS_MIDCON_MODULATION_WHEEL, false);
 								break;
 							}
 
 							case 0x10: {
 								/* Pitch wheel */
-								if((addr3 & 0x0f) == 0x00) {
+								if((a3 & 0x0f) == 0x00) {
 									/* See https://github.com/spessasus/SpessaSynth/issues/154
 									 * Pitch control
 									 * Special case:
@@ -513,31 +508,31 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 									mch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = centeredValue << 7;
 									break;
 								}
-								ss_dynamic_modulator_system_setup_receiver(&mch->dms, addr3, data, NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL, true);
+								ss_dynamic_modulator_system_setup_receiver(&mch->dms, a3, data, NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL, true);
 								break;
 							}
 
 							case 0x20: {
 								/* Channel pressure */
-								ss_dynamic_modulator_system_setup_receiver(&mch->dms, addr3, data, NON_CC_INDEX_OFFSET + SS_MODSRC_CHANNEL_PRESSURE, false);
+								ss_dynamic_modulator_system_setup_receiver(&mch->dms, a3, data, NON_CC_INDEX_OFFSET + SS_MODSRC_CHANNEL_PRESSURE, false);
 								break;
 							}
 
 							case 0x30: {
 								/* Poly pressure */
-								ss_dynamic_modulator_system_setup_receiver(&mch->dms, addr3, data, NON_CC_INDEX_OFFSET + SS_MODSRC_POLY_PRESSURE, false);
+								ss_dynamic_modulator_system_setup_receiver(&mch->dms, a3, data, NON_CC_INDEX_OFFSET + SS_MODSRC_POLY_PRESSURE, false);
 								break;
 							}
 
 							case 0x40: {
 								/* CC1 */
-								ss_dynamic_modulator_system_setup_receiver(&mch->dms, addr3, data, mch->cc1, false);
+								ss_dynamic_modulator_system_setup_receiver(&mch->dms, a3, data, mch->cc1, false);
 								break;
 							}
 
 							case 0x50: {
 								/* CC2 */
-								ss_dynamic_modulator_system_setup_receiver(&mch->dms, addr3, data, mch->cc2, false);
+								ss_dynamic_modulator_system_setup_receiver(&mch->dms, a3, data, mch->cc2, false);
 								break;
 							}
 						}
@@ -545,18 +540,18 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 					}
 
 					/* Patch Parameter Tone Map */
-					if(addr2 >> 4 == 4) {
+					if(a2 >> 4 == 4) {
 						// This is an individual part (channel) parameter
 						// Determine the channel
 						// Note that: 0 means channel 9 (drums), and only then 1 means channel 0, 2 channel 1, etc.
 						// SC-88Pro manual page 196
-						uint8_t part_idx = addr2 & 0x0F;
+						uint8_t part_idx = a2 & 0x0F;
 						int channel_idx = GS_PART_TO_CHANNEL[part_idx] + channel_offset;
 						if(channel_idx < 0 || channel_idx >= proc->channel_count) return;
 
 						SS_MIDIChannel *mch = proc->midi_channels[channel_idx];
 
-						switch(addr3) {
+						switch(a3) {
 							default:
 								/* This is some other GS sysex... */
 								break;
@@ -580,10 +575,10 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 				}
 
 				/* Drum setup */
-				if(addr1 == 0x41) {
-					const int map = (addr2 >> 4) + 1;
-					const int drum_key = addr3;
-					const int param = addr2 & 0x0f;
+				if(a1 == 0x41) {
+					const int map = (a2 >> 4) + 1;
+					const int drum_key = a3;
+					const int param = a2 & 0x0f;
 					switch(param) {
 						default:
 							/* Not recognized */
@@ -705,7 +700,7 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 			/* Some Roland */
 			case 0x16: {
 				if(syx[4] == 0x10) {
-					/* This is a roland master volume message */
+					/* This is a Roland master volume message */
 					ss_processor_set_midi_volume(proc, (float)syx[7] / 100.0f);
 					return;
 				} else {
