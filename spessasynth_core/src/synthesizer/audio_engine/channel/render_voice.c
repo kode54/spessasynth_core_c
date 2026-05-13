@@ -191,10 +191,14 @@ bool ss_voice_render(SS_Voice *v,
 	volume_excursion_cb -= v->resonance_offset;
 
 	/* ── Playback rate ────────────────────────────────────────────────── */
-	int cents_total = (int)(cents + semitones * 100.0f);
-	if(cents_total != v->current_tuning_cents) {
-		v->current_tuning_cents = cents_total;
-		v->current_tuning_calculated = pow(2.0, (double)cents_total / 1200.0);
+	const double cents_total = (int)(cents + semitones * 100.0f);
+	const double cents_rounded = round(cents_total);
+	/* Round for testing if equal,
+	 * But let's allow sub-microtonal tunings, because why not? :-)
+	 */
+	if(cents_rounded != v->current_tuning_cents) {
+		v->current_tuning_cents = cents_rounded;
+		v->current_tuning_calculated = pow(2.0, cents_total / 1200.0);
 	}
 
 	/* ── Gain ────────────────────────────────────────────────────────── */
