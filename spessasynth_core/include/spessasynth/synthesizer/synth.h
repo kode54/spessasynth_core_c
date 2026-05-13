@@ -343,9 +343,16 @@ typedef struct SS_MIDIChannel {
 	bool per_note_pitch; /* true when MIDI 2.0 per-note pitch wheel is active */
 	int16_t pitch_wheels[128]; /* per-note pitch wheel values (0..16383, 8192 = center) */
 
-	int8_t last_note; /* The last pressed note on this channel. -1 means none. */
+	/* The last pressed note on this channel.
+	 * -1 means none.
+	 * This is not a standard paramter and is strictly internal,
+     * mostly because we don't want to send events for every note on message.
+     * It can be set with Portamento Control CC anyway.
+	 */
+	int8_t last_note;
 	/* If the portamento should be executed once regardless of Portamento on/off.
 	 * Adhering to the MIDI spec, CC#84 ignores on/off.
+	 * This is also not a standard parameter for the same reason as `last_note`
 	 */
 	bool portamento_force;
 
