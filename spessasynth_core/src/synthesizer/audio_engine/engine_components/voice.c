@@ -40,7 +40,7 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
                           const SS_BasicPreset *preset,
                           const SS_AudioSample *audio_sample,
                           int midi_note, int velocity,
-                          double current_time, int target_key, int real_key,
+                          double current_time, int target_key, int sound_bank_key,
                           const int16_t *generators,
                           const SS_Modulator *modulators, size_t mod_count,
                           const SS_DynamicModulatorSystem *dms) {
@@ -54,7 +54,7 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
 	v->start_time = current_time;
 	v->is_active = true;
 	v->target_key = target_key;
-	v->real_key = real_key;
+	v->sound_bank_key = sound_bank_key;
 	v->release_start_time = INFINITY;
 	v->current_tuning_calculated = 1.0;
 	v->portamento_from_key = -1;
@@ -131,7 +131,7 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
 /* ── Copy ────────────────────────────────────────────────────────────────── */
 
 #if 0
-SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int real_key) {
+SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int sound_bank_key) {
 	SS_Voice *v = (SS_Voice *)calloc(1, sizeof(SS_Voice));
 	if(!v) return NULL;
 
@@ -149,7 +149,7 @@ SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int real_key) 
 	v->volume_env.can_end_on_silent_sustain = src->volume_env.can_end_on_silent_sustain;
 
 	v->start_time = current_time;
-	v->real_key = real_key;
+	v->sound_bank_key = sound_bank_key;
 	v->release_start_time = INFINITY;
 	v->is_in_release = false;
 	v->is_active = true;

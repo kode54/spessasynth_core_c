@@ -19,11 +19,11 @@ extern SS_Voice *ss_voice_create(uint32_t sr,
                                  const SS_BasicPreset *preset,
                                  const SS_AudioSample *audio_sample,
                                  int midi_note, int velocity,
-                                 double current_time, int target_key, int real_key,
+                                 double current_time, int target_key, int sound_bank_key,
                                  const int16_t *generators,
                                  const SS_Modulator *modulators, size_t mod_count,
                                  const SS_DynamicModulatorSystem *dms);
-/*extern SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int real_key);*/
+/*extern SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int sound_bank_key);*/
 extern void ss_voice_free(SS_Voice *v);
 extern void ss_voice_release(SS_Voice *v, double current_time, double min_note_length);
 extern void ss_voice_exclusive_release(SS_Voice *v, double current_time);

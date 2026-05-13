@@ -197,7 +197,7 @@ typedef struct SS_Voice {
 	int midi_note;
 	int pressure;
 	int target_key;
-	int real_key;
+	int sound_bank_key;
 
 	double start_time;
 	double release_start_time; /* INFINITY = not yet released */
@@ -235,11 +235,11 @@ SS_Voice SPESSASYNTH_EXPORTS *ss_voice_create(uint32_t sample_rate,
                                               const SS_BasicPreset *preset,
                                               const SS_AudioSample *audio_sample,
                                               int midi_note, int velocity,
-                                              double current_time, int target_key, int real_key,
+                                              double current_time, int target_key, int sound_bank_key,
                                               const int16_t *generators,
                                               const SS_Modulator *modulators, size_t mod_count,
                                               const SS_DynamicModulatorSystem *dms);
-/*SS_Voice SPESSASYNTH_EXPORTS *ss_voice_copy(const SS_Voice *src, double current_time, int real_key);*/
+/*SS_Voice SPESSASYNTH_EXPORTS *ss_voice_copy(const SS_Voice *src, double current_time, int sound_bank_key);*/
 void SPESSASYNTH_EXPORTS ss_voice_free(SS_Voice *v);
 
 /* ── Custom controller indices ───────────────────────────────────────────── */

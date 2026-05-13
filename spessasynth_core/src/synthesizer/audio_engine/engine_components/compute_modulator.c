@@ -65,7 +65,7 @@ static float get_source_value(const SS_MIDIChannel *ch, const SS_Voice *v,
 				raw = ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_CHANNEL_PRESSURE];
 				break; */
 			case SS_MODSRC_PITCH_WHEEL:
-				raw = ch->per_note_pitch ? (int)ch->pitch_wheels[v->real_key] : ch->midi_controllers[SS_MODSRC_PITCH_WHEEL + NON_CC_INDEX_OFFSET];
+				raw = ch->per_note_pitch ? (int)ch->pitch_wheels[v->midi_note] : ch->midi_controllers[SS_MODSRC_PITCH_WHEEL + NON_CC_INDEX_OFFSET];
 				break;
 			/* Also caught by the default case:
 			case SS_MODSRC_PITCH_WHEEL_RANGE:

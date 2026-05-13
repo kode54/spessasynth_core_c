@@ -88,7 +88,7 @@ bool ss_voice_render(SS_Voice *v,
 	if(ch->synth) {
 		if(ch->synth->master_params.tunings &&
 		   ch->synth->master_params.tunings[program]) {
-			tuning = &ch->synth->master_params.tunings[program][v->real_key];
+			tuning = &ch->synth->master_params.tunings[program][v->midi_note];
 		}
 	}
 	if(tuning) {

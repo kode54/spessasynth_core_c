@@ -71,14 +71,13 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	if(!ch->preset) return;
 	if(ch->is_muted) return;
 
-	const int real_key =
+	int sound_bank_note =
 	(int)(note +
 	ch->channel_transpose_key_shift +
 	ch->custom_controllers[SS_CUSTOM_CTRL_KEY_SHIFT] +
 	(ch->drum_channel ? 0 : (ch->synth ? ch->synth->master_params.master_pitch : 0)));
-	int internal_midi_note = real_key;
 
-	if(real_key > 127 || real_key < 0) {
+	if(sound_bank_note > 127 || sound_bank_note < 0) {
 		return;
 	}
 
@@ -93,14 +92,14 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	const bool can_apply_portamento = portamento_enabled && /* Enabled? */
 		!ch->drum_channel && /* Not a drum channel? */
 		previous_note >= 0 && /* Valid note? */
-		previous_note != real_key && /* Not the same note? */
+		previous_note != note && /* Not the same note? */
 		portamento_time > 0; /* Non-instant time? */
 
 	int porta_from_key = -1;
 	float porta_time = 0;
 
 	if(can_apply_portamento) {
-		const int key_distance = abs(real_key - previous_note);
+		const int key_distance = abs(note - previous_note);
 		porta_from_key = previous_note;
 		porta_time = ss_portamento_time_to_seconds((float)portamento_time, (float)key_distance);
 		ch->portamento_force = false;
@@ -109,7 +108,7 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	/* Always track the last note, even if portamento isn't applied.
 	 * See: https://github.com/spessasus/spessasynth_core/issues/77
 	 */
-	ch->last_note = real_key;
+	ch->last_note = note;
 
 	if(!ch->poly_mode) {
 		ss_channel_exclusive_release(ch, -1, time);
@@ -128,7 +127,7 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	float pan_override;
 
 	if(ch->drum_channel) {
-		const SS_DrumParameters *dp = &ch->drum_params[internal_midi_note];
+		const SS_DrumParameters *dp = &ch->drum_params[note];
 		if(!dp->rx_note_on) return;
 
 		drum_pitch_offset = dp->pitch;
@@ -166,10 +165,10 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	if(ch->synth &&
 	   ch->synth->master_params.tunings &&
 	   ch->synth->master_params.tunings[program]) {
-		tune = ch->synth->master_params.tunings[program][real_key].midi_note;
+		tune = ch->synth->master_params.tunings[program][note].midi_note;
 	}
 	if(tune >= 0) {
-		internal_midi_note = tune;
+		sound_bank_note = tune;
 	}
 
 	if(/*this.synthCore.masterParameters.monophonicRetriggerMode note implemented ||*/ ch->assign_mode == 0) {
@@ -178,7 +177,7 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 
 	/* Get synthesis data for this (note, velocity) */
 	SS_SynthesisData *synth_data = NULL;
-	size_t sd_count = ss_preset_get_synthesis_data(ch->preset, internal_midi_note, vel, &synth_data);
+	size_t sd_count = ss_preset_get_synthesis_data(ch->preset, sound_bank_note, vel, &synth_data);
 
 	SS_Processor *proc = ch->synth;
 
@@ -198,7 +197,7 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		int16_t generators[SS_GEN_COUNT];
 		memcpy(generators, sd->generators, sizeof(generators));
 
-		int target_key = real_key;
+		int target_key = sound_bank_note;
 		if(generators[SS_GEN_KEYNUM] > -1)
 			target_key = generators[SS_GEN_KEYNUM];
 
@@ -236,7 +235,7 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 			voice_vel = generators[SS_GEN_VELOCITY];
 
 		SS_Voice *voice = ss_voice_create(sr, ch->preset, &audio, note, voice_vel,
-		                                  time, target_key, real_key,
+		                                  time, target_key, sound_bank_note,
 		                                  generators,
 		                                  sd->modulators, sd->mod_count, dms);
 		if(!voice) continue;
