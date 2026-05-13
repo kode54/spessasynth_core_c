@@ -432,8 +432,9 @@ typedef struct {
 
 typedef enum {
 	SS_SYSTEM_GM = 0,
-	SS_SYSTEM_GS = 1,
-	SS_SYSTEM_XG = 2
+	SS_SYSTEM_GM2 = 1,
+	SS_SYSTEM_GS = 2,
+	SS_SYSTEM_XG = 3
 } SS_MIDISystem;
 
 typedef struct {
