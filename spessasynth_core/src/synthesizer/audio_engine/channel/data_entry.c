@@ -69,7 +69,7 @@ void ss_channel_data_entry(SS_MIDIChannel *ch, double time) {
 				case SS_RPN_FINE_TUNING: {
 					const int final_tuning = data_value - 8192;
 					/* Resolution is 100/8192 cents */
-					ss_channel_set_tuning(ch, (float)final_tuning / 81.92);
+					ss_channel_set_tuning(ch, (float)final_tuning / 81.92f);
 					break;
 				}
 
