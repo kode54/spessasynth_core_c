@@ -93,14 +93,13 @@ static double hzToCents(double hz) {
  * The excellent test files are available here, also collected and converted by mrbumpy409:
  * https://github.com/mrbumpy409/AWE32-midi-conversions
  */
-void ss_channel_nrpn_awe32(SS_MIDIChannel *ch, int awe_gen, int data_lsb, int data_msb, double time) {
-	int data_value = (data_msb << 7) | data_lsb;
+void ss_channel_nrpn_awe32(SS_MIDIChannel *ch, int param_lsb, int data_value, double time) {
 	/* Center the value
 	 * Though ranges reported as 0 to 127 only use LSB */
+	const uint8_t data_lsb = data_value & 0x7f;
 	data_value -= 8192;
-	if(awe_gen >= AWE_NRPN_GENERATOR_MAPPINGS_COUNT) return; /* Protect against crash */
-
-	const SS_GeneratorType generator = AWE_NRPN_GENERATOR_MAPPINGS[awe_gen];
+	if(param_lsb >= AWE_NRPN_GENERATOR_MAPPINGS_COUNT) return; /* Protect against crash */
+	const SS_GeneratorType generator = AWE_NRPN_GENERATOR_MAPPINGS[param_lsb];
 
 	float milliseconds, hertz, centibels, cents;
 	switch(generator) {

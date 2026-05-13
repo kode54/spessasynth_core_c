@@ -26,8 +26,7 @@ extern void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch,
 
 extern void ss_channel_reset_rp15(SS_MIDIChannel *ch, double time);
 
-void ss_channel_data_entry_coarse(SS_MIDIChannel *ch, int val, double time);
-void ss_channel_data_entry_fine(SS_MIDIChannel *ch, int val, double time);
+void ss_channel_data_entry(SS_MIDIChannel *ch, double time);
 
 void ss_channel_set_generator_offset(SS_MIDIChannel *ch, SS_GeneratorType gen, int val, double time) {
 	ch->generator_offsets[gen] = val;
@@ -78,10 +77,12 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 	if(cc < 0 || cc >= SS_MIDI_CONTROLLER_COUNT) return;
 	if(ch->locked_controllers[cc]) return;
 
+	/* Lsb controller values: append them as the lower nibble of the 14-bit value
+	 * Excluding bank select as it's handled separately
+	 */
 	if(
 	cc >= SS_MIDCON_MODULATION_WHEEL_LSB &&
-	cc <= SS_MIDCON_EFFECT_CONTROL_2_LSB &&
-	cc != SS_MIDCON_DATA_ENTRY_LSB) {
+	cc <= SS_MIDCON_EFFECT_CONTROL_2_LSB) {
 		const int actualCCNum = cc - 32;
 		if(ch->locked_controllers[actualCCNum]) {
 			return;
@@ -94,7 +95,11 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 		ss_channel_compute_modulators(ch, time);
 	}
 
-	ch->midi_controllers[cc] = (int16_t)(val << 7);
+	/* Apply the cc to the table (top 7 bits only, to not override LSB)
+	 * For consistency we also technically apply this to the LSB controllers directly,
+	 * But they are unused (except Parameter Numbers)
+	 */
+	ch->midi_controllers[cc] = (val << 7) | (ch->midi_controllers[cc] & 0x7f);
 
 	switch(cc) {
 		case SS_MIDCON_ALL_NOTES_OFF: /* all notes off */
@@ -160,11 +165,8 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 			break;
 
 		case SS_MIDCON_DATA_ENTRY_MSB:
-			ss_channel_data_entry_coarse(ch, val, time);
-			break;
-
 		case SS_MIDCON_DATA_ENTRY_LSB:
-			ss_channel_data_entry_fine(ch, val, time);
+			ss_channel_data_entry(ch, time);
 			break;
 
 		case SS_MIDCON_SUSTAIN_PEDAL: /* sustain pedal */

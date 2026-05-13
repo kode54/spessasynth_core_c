@@ -41,8 +41,7 @@ set(SS_SOURCES
     src/synthesizer/audio_engine/channel/dynamic_modulator_system.c
     src/synthesizer/audio_engine/channel/portamento_time.c
     src/synthesizer/audio_engine/channel/reset.c
-    src/synthesizer/audio_engine/channel/data_entry/data_entry_coarse.c
-    src/synthesizer/audio_engine/channel/data_entry/data_entry_fine.c
+    src/synthesizer/audio_engine/channel/data_entry/data_entry.c
     src/synthesizer/audio_engine/channel/data_entry/awe32.c
     src/synthesizer/audio_engine/engine_methods/system_exclusive.c
     src/synthesizer/audio_engine/engine_methods/system_exclusive/universal.c
