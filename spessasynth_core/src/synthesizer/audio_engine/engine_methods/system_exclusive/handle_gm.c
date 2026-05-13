@@ -50,8 +50,8 @@ void ss_sysex_handle_gm(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 				}
 				case 0x04: { /* Coarse Tuning */
 					const int semitones = (int)syx[5] - 64;
-					proc->master_params.master_tuning =
-					(float)(semitones * 100);
+					proc->master_params.master_pitch =
+					(float)(semitones);
 					break;
 				}
 			}
