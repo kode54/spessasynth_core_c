@@ -43,10 +43,11 @@ static inline uint64_t timecents_to_samples(int tc, uint32_t sample_rate) {
 /* ── ss_volume_envelope_init ─────────────────────────────────────────────── */
 
 void ss_volume_envelope_init(SS_VolumeEnvelope *env,
-                             uint32_t sample_rate, int initial_decay_cb) {
+                             uint32_t sample_rate, uint32_t buffer_size) {
 	/* Constructor parameters */
 	memset(env, 0, sizeof(*env));
 	env->sample_rate = sample_rate;
+	env->update_interval = buffer_size;
 }
 
 /* ── ss_volume_envelope_recalculate ──────────────────────────────────────── */
@@ -96,7 +97,7 @@ void ss_volume_envelope_recalculate(SS_Voice *v,
 	env->decay_end = env->decay_duration + env->hold_end;
 
 	/* If the voice has no attack or delay time, set current db to peak */
-	if(env->attack_end == 0) {
+	if(env->attack_end <= env->update_interval) {
 		/* This.attenuationCb = this.attenuationTarget; */
 		env->state = SS_VOLENV_HOLD;
 	}

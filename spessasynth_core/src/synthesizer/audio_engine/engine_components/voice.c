@@ -18,7 +18,7 @@
 #endif
 
 extern void ss_volume_envelope_init(SS_VolumeEnvelope *env,
-                                    uint32_t sr, int initial_decay_cb);
+                                    uint32_t sr, uint32_t buffer_size);
 extern void ss_lowpass_filter_init(SS_LowpassFilter *f, uint32_t sr);
 /*extern void ss_volume_envelope_recalculate(SS_Voice *v,
                                            SS_VolumeEnvelope *env,
@@ -119,8 +119,7 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
 	}
 
 	ss_lowpass_filter_init(&v->filter, sample_rate);
-	ss_volume_envelope_init(&v->volume_env, sample_rate,
-	                        generators[SS_GEN_SUSTAIN_VOL_ENV]);
+	ss_volume_envelope_init(&v->volume_env, sample_rate, SS_MAX_SOUND_CHUNK);
 
 	/* Store current_pan in generator units (-500..500) to match TS smoothing behaviour. */
 	/* Init to 0 and init properly at the first modulated offset after computing them. */

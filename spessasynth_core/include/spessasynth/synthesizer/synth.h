@@ -95,6 +95,7 @@ typedef enum {
 
 typedef struct {
 	uint32_t sample_rate;
+	uint32_t update_interval;
 	float output_gain;
 	double attenuation_cb;
 	SS_VolumeEnvelopeState state;
