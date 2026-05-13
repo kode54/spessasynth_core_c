@@ -191,7 +191,6 @@ typedef struct SS_BasicPreset {
 	uint8_t bank_msb;
 	uint8_t bank_lsb;
 	bool is_gm_gs_drum;
-	bool is_xg_drum;
 	SS_Zone global_zone;
 	SS_PresetZone *zones;
 	size_t zone_count;
@@ -204,6 +203,9 @@ typedef struct SS_BasicPreset {
 } SS_BasicPreset;
 
 void SPESSASYNTH_EXPORTS ss_preset_free(SS_BasicPreset *p);
+
+bool SPESSASYNTH_EXPORTS ss_preset_is_xg_drum(const SS_BasicPreset *p);
+bool SPESSASYNTH_EXPORTS ss_preset_is_drum(const SS_BasicPreset *p);
 
 /**
  * Collect all synthesis data (sample + merged generators/modulators) for a

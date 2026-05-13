@@ -1020,7 +1020,7 @@ SS_BasicPreset *ss_soundbanks_find_preset(SS_SoundBank **banks,
 		/* This shouldn't happen */
 		is_drum_channel = false;
 		bank_lsb = 0;
-		bank_msb = 127;
+		bank_msb = midi_system == SS_SYSTEM_GM2 ? 120 : 127;
 	}
 
 	const bool xgDrums = (bank_msb == 120 || bank_msb == 127) && isXG;
@@ -1048,7 +1048,7 @@ SS_BasicPreset *ss_soundbanks_find_preset(SS_SoundBank **banks,
 		 * Testcase: 4gmgsmt-sf2_04-compat.sf2
 		 * Only match if the preset declares itself as drums
 		 */
-		if(!xgDrums || (xgDrums && match->is_xg_drum)) {
+		if(!xgDrums || (xgDrums && ss_preset_is_xg_drum(match))) {
 			return match;
 		}
 	}
@@ -1071,7 +1071,7 @@ SS_BasicPreset *ss_soundbanks_find_preset(SS_SoundBank **banks,
 			SS_SoundBank *bank = banks[b];
 			for(size_t i = 0; i < bank->preset_count; i++) {
 				SS_BasicPreset *p = &bank->presets[i];
-				if(p->program == program && (p->is_gm_gs_drum || p->is_xg_drum)) {
+				if(p->program == program && ss_preset_is_drum(p)) {
 					return p;
 				}
 			}
@@ -1092,7 +1092,7 @@ SS_BasicPreset *ss_soundbanks_find_preset(SS_SoundBank **banks,
 			SS_SoundBank *bank = banks[b];
 			for(size_t i = 0; i < bank->preset_count; i++) {
 				SS_BasicPreset *p = &bank->presets[i];
-				if(p->is_gm_gs_drum || p->is_xg_drum) {
+				if(ss_preset_is_drum(p)) {
 					return p;
 				}
 			}
@@ -1104,7 +1104,7 @@ SS_BasicPreset *ss_soundbanks_find_preset(SS_SoundBank **banks,
 			SS_SoundBank *bank = banks[b];
 			for(size_t i = 0; i < bank->preset_count; i++) {
 				SS_BasicPreset *p = &bank->presets[i];
-				if(p->program == program && p->is_xg_drum) {
+				if(p->program == program && ss_preset_is_xg_drum(p)) {
 					return p;
 				}
 			}
@@ -1115,7 +1115,7 @@ SS_BasicPreset *ss_soundbanks_find_preset(SS_SoundBank **banks,
 			SS_SoundBank *bank = banks[b];
 			for(size_t i = 0; i < bank->preset_count; i++) {
 				SS_BasicPreset *p = &bank->presets[i];
-				if(p->program == program && (p->is_xg_drum || p->is_gm_gs_drum)) {
+				if(p->program == program && ss_preset_is_drum(p)) {
 					return p;
 				}
 			}
@@ -1126,7 +1126,7 @@ SS_BasicPreset *ss_soundbanks_find_preset(SS_SoundBank **banks,
 			SS_SoundBank *bank = banks[b];
 			for(size_t i = 0; i < bank->preset_count; i++) {
 				SS_BasicPreset *p = &bank->presets[i];
-				if(p->is_xg_drum) {
+				if(ss_preset_is_xg_drum(p)) {
 					return p;
 				}
 			}
@@ -1136,7 +1136,7 @@ SS_BasicPreset *ss_soundbanks_find_preset(SS_SoundBank **banks,
 			SS_SoundBank *bank = banks[b];
 			for(size_t i = 0; i < bank->preset_count; i++) {
 				SS_BasicPreset *p = &bank->presets[i];
-				if(p->is_xg_drum || p->is_gm_gs_drum) {
+				if(ss_preset_is_drum(p)) {
 					return p;
 				}
 			}
@@ -1153,7 +1153,7 @@ SS_BasicPreset *ss_soundbanks_find_preset(SS_SoundBank **banks,
 		uint8_t bank_offset_lsb = bank_offsets[b] & 0xff;
 		for(size_t i = 0; i < bank->preset_count; i++) {
 			SS_BasicPreset *p = &bank->presets[i];
-			if(p->program == program && !p->is_gm_gs_drum && !p->is_xg_drum) {
+			if(p->program == program && !ss_preset_is_drum(p)) {
 				size_t new_match_count = match_count + 1;
 				if(new_match_count > allocated_match_count) {
 					allocated_match_count = allocated_match_count ? allocated_match_count * 2 : 16;
@@ -1274,7 +1274,7 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 	if(is_drum_channel && isXG) {
 		is_drum_channel = false;
 		bank_lsb = 0;
-		bank_msb = 127;
+		bank_msb = midi_system == SS_SYSTEM_GM2 ? 120 : 127;
 	}
 
 	const bool xgDrums = (bank_msb == 120 || bank_msb == 127) && isXG;
@@ -1295,7 +1295,7 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 	}
 
 	if(match) {
-		if(!xgDrums || (xgDrums && match->is_xg_drum)) {
+		if(!xgDrums || (xgDrums && ss_preset_is_xg_drum(match))) {
 			return match;
 		}
 	}
@@ -1314,7 +1314,7 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 			if(!fbank_channel_match(fb, target_channel)) continue;
 			for(size_t i = 0; i < fb->preset_count; i++) {
 				SS_BasicPreset *p = &fb->presets[i];
-				if(p->program == program && (p->is_gm_gs_drum || p->is_xg_drum)) return p;
+				if(p->program == program && ss_preset_is_drum(p)) return p;
 			}
 		}
 		for(size_t b = 0; b < fbank_count; b++) {
@@ -1330,7 +1330,7 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 			if(!fbank_channel_match(fb, target_channel)) continue;
 			for(size_t i = 0; i < fb->preset_count; i++) {
 				SS_BasicPreset *p = &fb->presets[i];
-				if(p->is_gm_gs_drum || p->is_xg_drum) return p;
+				if(ss_preset_is_drum(p)) return p;
 			}
 		}
 	}
@@ -1341,7 +1341,7 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 			if(!fbank_channel_match(fb, target_channel)) continue;
 			for(size_t i = 0; i < fb->preset_count; i++) {
 				SS_BasicPreset *p = &fb->presets[i];
-				if(p->program == program && p->is_xg_drum) return p;
+				if(p->program == program && ss_preset_is_xg_drum(p)) return p;
 			}
 		}
 		for(size_t b = 0; b < fbank_count; b++) {
@@ -1349,7 +1349,7 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 			if(!fbank_channel_match(fb, target_channel)) continue;
 			for(size_t i = 0; i < fb->preset_count; i++) {
 				SS_BasicPreset *p = &fb->presets[i];
-				if(p->program == program && (p->is_xg_drum || p->is_gm_gs_drum)) return p;
+				if(p->program == program && ss_preset_is_drum(p)) return p;
 			}
 		}
 		for(size_t b = 0; b < fbank_count; b++) {
@@ -1357,7 +1357,7 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 			if(!fbank_channel_match(fb, target_channel)) continue;
 			for(size_t i = 0; i < fb->preset_count; i++) {
 				SS_BasicPreset *p = &fb->presets[i];
-				if(p->is_xg_drum) return p;
+				if(ss_preset_is_xg_drum(p)) return p;
 			}
 		}
 		for(size_t b = 0; b < fbank_count; b++) {
@@ -1365,7 +1365,7 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 			if(!fbank_channel_match(fb, target_channel)) continue;
 			for(size_t i = 0; i < fb->preset_count; i++) {
 				SS_BasicPreset *p = &fb->presets[i];
-				if(p->is_xg_drum || p->is_gm_gs_drum) return p;
+				if(ss_preset_is_drum(p)) return p;
 			}
 		}
 	}
@@ -1382,7 +1382,7 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 		if(!first_preset && fb->preset_count > 0) first_preset = &fb->presets[0];
 		for(size_t i = 0; i < fb->preset_count; i++) {
 			SS_BasicPreset *p = &fb->presets[i];
-			if(p->program == program && !p->is_gm_gs_drum && !p->is_xg_drum) {
+			if(p->program == program && !ss_preset_is_drum(p)) {
 				size_t new_match_count = match_count + 1;
 				if(new_match_count > allocated_match_count) {
 					allocated_match_count = allocated_match_count ? allocated_match_count * 2 : 16;
@@ -1445,8 +1445,8 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 static int compare_presets(const void *a, const void *b) {
 	SS_BasicPreset *aa = (SS_BasicPreset *)a;
 	SS_BasicPreset *bb = (SS_BasicPreset *)b;
-	bool a_is_drum = aa->is_xg_drum || aa->is_gm_gs_drum;
-	bool b_is_drum = bb->is_xg_drum || bb->is_gm_gs_drum;
+	bool a_is_drum = ss_preset_is_drum(aa);
+	bool b_is_drum = ss_preset_is_drum(bb);
 	if(a_is_drum != b_is_drum)
 		return (int)a_is_drum - (int)b_is_drum;
 	if(aa->program != bb->program)
@@ -1475,15 +1475,6 @@ static void soundbank_parse(SS_SoundBank *bank) {
 				// Not valid!
 				bank->is_xg_bank = false;
 				break;
-			}
-		}
-	}
-
-	if(bank->is_xg_bank) {
-		for(size_t i = 0; i < bank->preset_count; i++) {
-			SS_BasicPreset *p = &bank->presets[i];
-			if(p->bank_msb == 120 || p->bank_msb == 127) {
-				p->is_xg_drum = true;
 			}
 		}
 	}
@@ -1541,4 +1532,12 @@ void ss_preset_precache(SS_BasicPreset *p) {
 			}
 		}
 	}
+}
+
+bool ss_preset_is_xg_drum(const SS_BasicPreset *p) {
+	return p->bank_msb == 120 || p->bank_msb == 127;
+}
+
+bool ss_preset_is_drum(const SS_BasicPreset *p) {
+	return p->is_gm_gs_drum || ss_preset_is_xg_drum(p);
 }

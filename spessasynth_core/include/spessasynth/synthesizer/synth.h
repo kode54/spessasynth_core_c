@@ -317,7 +317,6 @@ typedef struct SS_MIDIChannel {
 	uint8_t bank_msb;
 	uint8_t bank_lsb;
 	uint8_t program;
-	bool is_gm_gs_drum;
 	uint8_t drum_map; /* GS drum map value (0 = none) */
 	/**
 	 * CC1 for GS controller matrix.

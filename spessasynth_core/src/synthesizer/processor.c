@@ -96,7 +96,7 @@ static void proc_refresh_presets(SS_Processor *proc) {
 		arr, total, ch->channel_number,
 		ch->program, ch->bank_msb, ch->bank_lsb,
 		(int)proc->master_params.midi_system,
-		ch->drum_channel || ch->is_gm_gs_drum);
+		ch->drum_channel);
 		if(p) ch->preset = p;
 	}
 	free(arr);
