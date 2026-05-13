@@ -1445,14 +1445,24 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 static int compare_presets(const void *a, const void *b) {
 	SS_BasicPreset *aa = (SS_BasicPreset *)a;
 	SS_BasicPreset *bb = (SS_BasicPreset *)b;
+
+	/* Force drum presets to be last */
 	bool a_is_drum = ss_preset_is_drum(aa);
 	bool b_is_drum = ss_preset_is_drum(bb);
-	if(a_is_drum != b_is_drum)
-		return (int)a_is_drum - (int)b_is_drum;
+	if(a_is_drum && !b_is_drum)
+		return 1;
+	if(!a_is_drum && b_is_drum)
+		return -1;
+
+	/* First, sort by program */
 	if(aa->program != bb->program)
 		return (int)aa->program - (int)bb->program;
+
+	/* Next, sort by bank MSB */
 	if(aa->bank_msb != bb->bank_msb)
 		return (int)aa->bank_msb - (int)bb->bank_msb;
+
+	/* Finally, sort by bank LSB */
 	return (int)aa->bank_lsb - (int)bb->bank_lsb;
 }
 
