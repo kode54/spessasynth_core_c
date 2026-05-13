@@ -608,36 +608,27 @@ static void loop_rewind_to_tick(SS_Sequencer *seq, size_t target_tick,
 
 	/* Recompute tempo so the loop iteration starts at the right speed
 	 * even when the loop body has no tempo meta at its head. */
+	size_t event_index = 0;
 	double one_tick_sec = (midi->time_division > 0) ? (60.0 / (120.0 * (double)midi->time_division)) : (60.0 / (120.0 * 480.0));
-	size_t best_tick = 0;
-	bool found = false;
-	for(size_t ti = 0; ti < midi->track_count; ti++) {
-		const SS_MIDITrack *t = &midi->tracks[ti];
-		for(size_t ei = 0; ei < t->event_count; ei++) {
-			const SS_MIDIMessage *e = &t->events[ei];
-			if(e->ticks > target_tick) break;
-			if(e->status_byte == SS_META_SET_TEMPO && e->data_length >= 3) {
-				if(!found || e->ticks >= best_tick) {
-					best_tick = e->ticks;
-					if(midi->time_division > 0) {
-						uint32_t us = ((uint32_t)e->data[0] << 16) |
-						              ((uint32_t)e->data[1] << 8) | e->data[2];
-						double bpm = (us > 0) ? (60000000.0 / (double)us) : 120.0;
-						one_tick_sec = 60.0 / (bpm * (double)midi->time_division);
-					}
-					found = true;
-				}
+	for(size_t ei = 0; ei < midi->timeline_count; ei++) {
+		const SS_MIDIMessage *e = &midi->timeline[ei];
+		if(e->ticks >= target_tick) {
+			event_index = ei;
+			break;
+		}
+		if(e->status_byte == SS_META_SET_TEMPO && e->data_length >= 3) {
+			if(midi->time_division > 0) {
+				uint32_t us = ((uint32_t)e->data[0] << 16) |
+				              ((uint32_t)e->data[1] << 8) | e->data[2];
+				double bpm = (us > 0) ? (60000000.0 / (double)us) : 120.0;
+				one_tick_sec = 60.0 / (bpm * (double)midi->time_division);
 			}
 		}
 	}
 	seq->one_tick_seconds = one_tick_sec;
 
 	/* Rewind the timeline to the first event at or after target_tick. */
-	for(size_t idx = 0; idx < song->midi->timeline_count; idx++) {
-		if(song->midi->timeline[idx].ticks < target_tick) continue;
-		song->event_index = idx;
-		break;
-	}
+	song->event_index = event_index;
 
 	double new_song_time = ss_midi_ticks_to_seconds(midi, target_tick);
 
