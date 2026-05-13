@@ -379,7 +379,7 @@ void SPESSASYNTH_EXPORTS ss_channel_all_sound_off(SS_MIDIChannel *ch);
 void SPESSASYNTH_EXPORTS ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time);
 void SPESSASYNTH_EXPORTS ss_channel_program_change(SS_MIDIChannel *ch, int program);
 void SPESSASYNTH_EXPORTS ss_channel_pitch_wheel(SS_MIDIChannel *ch, int value, int midi_note, double time);
-void SPESSASYNTH_EXPORTS ss_channel_reset_controllers(SS_MIDIChannel *ch);
+void SPESSASYNTH_EXPORTS ss_channel_reset(SS_MIDIChannel *ch);
 
 /**
  * Render all voices in this channel into output buffers.

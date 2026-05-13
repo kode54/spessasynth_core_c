@@ -174,7 +174,7 @@ static void reset_portamento(SS_MIDIChannel *ch) {
 }
 
 /* Default controller values per SF2 spec */
-void ss_channel_reset_controllers_to_defaults(SS_MIDIChannel *ch) {
+void ss_channel_reset_internal(SS_MIDIChannel *ch) {
 	for(int cc = 0; cc < SS_MIDI_CONTROLLER_COUNT; cc++) {
 		const int16_t reset_value = default_controller_values[cc];
 		if(ch->midi_controllers[cc] != reset_value && cc < 127) {
@@ -220,6 +220,6 @@ void ss_channel_reset_controllers_to_defaults(SS_MIDIChannel *ch) {
 	ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_TRANSPOSE_FINE, transpose);
 }
 
-void ss_channel_reset_controllers(SS_MIDIChannel *ch) {
-	ss_channel_reset_controllers_to_defaults(ch);
+void ss_channel_reset(SS_MIDIChannel *ch) {
+	ss_channel_reset_internal(ch);
 }

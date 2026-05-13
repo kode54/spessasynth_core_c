@@ -589,7 +589,7 @@ void ss_processor_system_reset(SS_Processor *proc) {
 		SS_MIDIChannel *ch = proc->midi_channels[i];
 		if(!ch) continue;
 		ss_channel_all_sound_off(ch);
-		ss_channel_reset_controllers(ch);
+		ss_channel_reset(ch);
 		ch->drum_channel = (i % 16 == 9);
 		/* Reset bank/program */
 		ch->bank_msb = 0;

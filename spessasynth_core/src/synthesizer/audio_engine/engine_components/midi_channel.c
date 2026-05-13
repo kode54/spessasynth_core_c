@@ -48,7 +48,7 @@ void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController ty
 void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
 extern void ss_channel_exclusive_release(SS_MIDIChannel *ch, int note, double time);
 extern void ss_channel_reset_drum_params(SS_MIDIChannel *ch);
-extern void ss_channel_reset_controllers_to_defaults(SS_MIDIChannel *ch);
+extern void ss_channel_reset_internal(SS_MIDIChannel *ch);
 extern void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time);
 
 SS_MIDIChannel *ss_channel_new(int channel_number, struct SS_Processor *synth) {
@@ -63,7 +63,7 @@ SS_MIDIChannel *ss_channel_new(int channel_number, struct SS_Processor *synth) {
 	ch->cc1 = 0x10;
 	ch->cc2 = 0x11;
 	ss_channel_reset_drum_params(ch);
-	ss_channel_reset_controllers_to_defaults(ch);
+	ss_channel_reset_internal(ch);
 	return ch;
 }
 
