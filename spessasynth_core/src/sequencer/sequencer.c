@@ -297,6 +297,62 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 	seq->one_tick_seconds = one_tick_sec;
 }
 
+void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick) {
+	SS_SequencerSong *song = current_song(seq);
+	if(!song) return;
+	SS_MIDIFile *midi = song->midi;
+
+	double seconds = ss_midi_ticks_to_seconds(midi, target_tick);
+
+	/* Rewind and replay non-note events up to target time */
+	song_rewind(song);
+	seq->base_time += seq->current_time - seconds;
+	seq->current_time = seconds;
+	seq->current_tick = target_tick;
+
+	/* Reset processor */
+	dispatch_reset(seq);
+
+	/* Fast-forward: process all events whose absolute time <= seconds without audio */
+	/* We use the tempo map to convert ticks → seconds. */
+	/* Replay just CC/program/pitch wheel/sysex events; skip notes. */
+	bool done = false;
+	double one_tick_sec = (midi->time_division > 0) ? (60.0 / (120.0 * (double)midi->time_division)) : (60.0 / (120.0 * 480.0));
+
+	while(!done) {
+		size_t ei = song->event_index;
+		SS_MIDIMessage *e = &midi->timeline[ei];
+		double ev_time = ss_midi_ticks_to_seconds(midi, e->ticks);
+
+		if(ev_time > seconds) break;
+
+		song->event_index++;
+
+		uint8_t sb = e->status_byte;
+
+		/* Update tempo (so subsequent ticks-to-seconds conversions are right) */
+		if(sb == SS_META_SET_TEMPO && e->data_length >= 3) {
+			double bpm = read_tempo_bpm(e->data);
+			if(midi->time_division > 0)
+				one_tick_sec = 60.0 / (bpm * (double)midi->time_division);
+		}
+
+		/* Replay CC / Program / Pitch wheel / SysEx only; skip notes
+		 * and pressure so the seek is silent. */
+		if(sb >= 0x80 && sb < 0xF0) {
+			uint8_t type = sb & 0xF0;
+			if(type == 0x90 && e->data_length >= 2 && e->data[1] == 0)
+				dispatch_voice_event(seq, midi, e, ev_time);
+			else if(type == 0x80 || type == 0xB0 || type == 0xC0 || type == 0xE0)
+				dispatch_voice_event(seq, midi, e, ev_time);
+		} else if(sb == 0xF0) {
+			dispatch_sysex_event(seq, midi, e, ev_time);
+		}
+	}
+
+	seq->one_tick_seconds = one_tick_sec;
+}
+
 bool ss_sequencer_is_finished(const SS_Sequencer *seq) {
 	return seq->finished;
 }
@@ -668,7 +724,7 @@ try_again:
 			/* End of events.  Behavior depends on loop config: */
 			if(infinite && !has_markers) {
 				/* Infinite + no markers: loop the whole file. */
-				loop_rewind_to_tick(seq, 0, target_time);
+				ss_sequencer_set_tick(seq, 0);
 				target_time -= current_time;
 				current_time = 0;
 				seq->loops_played++;
@@ -739,7 +795,10 @@ try_again:
 				                                                midi->loop.end);
 				double loop_start_time = ss_midi_ticks_to_seconds(midi,
 				                                                  midi->loop.start);
-				loop_rewind_to_tick(seq, midi->loop.start, loop_end_time);
+				if(midi->loop.type == SS_LOOP_TYPE_SOFT)
+					loop_rewind_to_tick(seq, midi->loop.start, loop_end_time);
+				else
+					ss_sequencer_set_tick(seq, midi->loop.start);
 				target_time -= loop_end_time - loop_start_time;
 				continue;
 			}
@@ -749,7 +808,7 @@ try_again:
 		if(e->ticks >= midi->last_voice_event_tick) {
 			if(song->event_index >= song->midi->timeline_count) {
 				if(infinite && !has_markers) {
-					loop_rewind_to_tick(seq, 0, target_time);
+					ss_sequencer_set_tick(seq, 0);
 					target_time -= current_time;
 					current_time = 0;
 					continue;

@@ -241,6 +241,7 @@ static bool is_cc(const SS_MIDIMessage *e) {
 static void scan_loops(SS_MIDIFile *m) {
 	size_t loop_start = LOOP_UNSET;
 	size_t loop_end = LOOP_UNSET;
+	SS_MIDILoopType loop_type = SS_LOOP_TYPE_HARD;
 
 	/* Pre-pass: does any track carry EMIDI (CC 110) designations?  If
 	 * so, RPG Maker CC 111 markers are not trustworthy loops. */
@@ -278,6 +279,7 @@ static void scan_loops(SS_MIDIFile *m) {
 						errored = true;
 						break;
 					}
+					loop_type = SS_LOOP_TYPE_SOFT;
 					t_end = e->ticks;
 				}
 			}
@@ -319,6 +321,7 @@ static void scan_loops(SS_MIDIFile *m) {
 			} else if(cc == 0x75 || cc == 0x77) {
 				if(loop_end == LOOP_UNSET || e->ticks > loop_end)
 					loop_end = e->ticks;
+				loop_type = SS_LOOP_TYPE_SOFT;
 			}
 		}
 	}
@@ -360,6 +363,7 @@ static void scan_loops(SS_MIDIFile *m) {
 
 	m->loop.start = (loop_start != LOOP_UNSET) ? loop_start : 0;
 	m->loop.end = (loop_end != LOOP_UNSET) ? loop_end : 0;
+	m->loop.type = loop_type;
 }
 
 /* ── parseInternal — builds tempo map, loop, duration, key range ─────────── */

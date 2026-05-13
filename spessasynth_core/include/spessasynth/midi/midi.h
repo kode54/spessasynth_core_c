@@ -62,9 +62,15 @@ typedef struct {
 
 /* ── Loop points ─────────────────────────────────────────────────────────── */
 
+typedef enum {
+	SS_LOOP_TYPE_HARD = 0,
+	SS_LOOP_TYPE_SOFT = 1
+} SS_MIDILoopType;
+
 typedef struct {
 	size_t start;
 	size_t end;
+	SS_MIDILoopType type;
 } SS_MIDILoop;
 
 /* ── RMID info fields ─────────────────────────────────────────────────────── */
