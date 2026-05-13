@@ -149,6 +149,7 @@ static inline float drum_params_reverb(int note) {
 
 void ss_channel_reset_drum_params(SS_MIDIChannel *ch) {
 	/* Initialize drum params to defaults */
+	bool is_xg = ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_XG;
 	for(int k = 0; k < 128; k++) {
 		ch->drum_params[k].pitch = 0.0f;
 		ch->drum_params[k].gain = 1.0f;
@@ -157,7 +158,7 @@ void ss_channel_reset_drum_params(SS_MIDIChannel *ch) {
 		ch->drum_params[k].filter_cutoff = 64;
 		ch->drum_params[k].filter_resonance = 0;
 		ch->drum_params[k].reverb_gain = drum_params_reverb(k);
-		ch->drum_params[k].chorus_gain = 0.0f; /* No drums have chorus */
+		ch->drum_params[k].chorus_gain = is_xg ? drum_params_reverb(k) : 0.0f; /* Mirror reverb on XG only, GS has no chorus by default */
 		ch->drum_params[k].delay_gain = 0.0f; /* No drums have delay */
 		ch->drum_params[k].rx_note_on = true;
 		ch->drum_params[k].rx_note_off = false;
