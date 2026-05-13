@@ -67,7 +67,8 @@ void ss_channel_exclusive_release(SS_MIDIChannel *ch, int note, double time) {
 	int real_key = (note < 0) ? -1 :
 	                            (int)(note +
 	                            ch->channel_transpose_key_shift +
-	                            ch->custom_controllers[SS_CUSTOM_CTRL_KEY_SHIFT]);
+	                            ch->custom_controllers[SS_CUSTOM_CTRL_KEY_SHIFT] +
+								(ch->drum_channel ? 0 : (ch->synth ? ch->synth->master_params.master_pitch : 0)));
 
 	for(size_t i = 0; i < ch->voice_count; i++) {
 		SS_Voice *v = ch->voices[i];

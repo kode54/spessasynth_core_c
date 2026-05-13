@@ -74,7 +74,8 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	const int real_key =
 	(int)(note +
 	ch->channel_transpose_key_shift +
-	ch->custom_controllers[SS_CUSTOM_CTRL_KEY_SHIFT]);
+	ch->custom_controllers[SS_CUSTOM_CTRL_KEY_SHIFT] +
+	(ch->drum_channel ? 0 : (ch->synth ? ch->synth->master_params.master_pitch : 0)));
 	int internal_midi_note = real_key;
 
 	if(real_key > 127 || real_key < 0) {
