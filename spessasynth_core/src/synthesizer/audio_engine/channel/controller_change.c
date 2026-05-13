@@ -95,11 +95,7 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 		ss_channel_compute_modulators(ch, time);
 	}
 
-	/* Apply the cc to the table (top 7 bits only, to not override LSB)
-	 * For consistency we also technically apply this to the LSB controllers directly,
-	 * But they are unused (except Parameter Numbers)
-	 */
-	ch->midi_controllers[cc] = (val << 7) | (ch->midi_controllers[cc] & 0x7f);
+	ch->midi_controllers[cc] = val << 7;
 
 	switch(cc) {
 		case SS_MIDCON_ALL_NOTES_OFF: /* all notes off */
