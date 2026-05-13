@@ -430,13 +430,6 @@ typedef struct {
 
 /* ── Master parameters ────────────────────────────────────────────────────── */
 
-typedef enum {
-	SS_SYSTEM_GM = 0,
-	SS_SYSTEM_GM2 = 1,
-	SS_SYSTEM_GS = 2,
-	SS_SYSTEM_XG = 3
-} SS_MIDISystem;
-
 typedef struct {
 	float master_volume; /* 0 to 1 */
 	float master_pan; /* -1 to +1 */

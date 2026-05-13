@@ -12,12 +12,6 @@
 #include "spessasynth/utils/indexed_byte_array.h"
 #endif
 
-typedef enum {
-	SS_SYSTEM_GM = 0,
-	SS_SYSTEM_GS = 1,
-	SS_SYSTEM_XG = 2
-} SS_MIDISystem;
-
 /* ── Generator limits table ──────────────────────────────────────────────── */
 
 const SS_GeneratorLimit SS_GENERATOR_LIMITS[SS_GEN_COUNT] = {

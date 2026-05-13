@@ -24,6 +24,13 @@
 extern "C" {
 #endif
 
+typedef enum {
+	SS_SYSTEM_GM = 0,
+	SS_SYSTEM_GM2 = 1,
+	SS_SYSTEM_GS = 2,
+	SS_SYSTEM_XG = 3
+} SS_MIDISystem;
+
 /* Bump the allocated sample buffers for interpolators, just in case */
 #define SS_SAMPLE_COUNT_BUMP (8)
 
