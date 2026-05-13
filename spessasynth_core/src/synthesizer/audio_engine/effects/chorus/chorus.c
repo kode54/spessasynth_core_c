@@ -121,12 +121,17 @@ void ss_chorus_set_delay(SS_Chorus *chorus, unsigned char value) {
 
 void ss_chorus_set_feedback(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.feedback = value;
-	chorus->feedbackGain = (float)value / 128.0f;
+	/* GM2 section 4.5.4 */
+	chorus->feedbackGain = (float)value * 0.00763f;
 }
 
 void ss_chorus_set_rate(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.rate = value;
-	const float rate = 15.5f * ((float)value / 127.0f);
+	/* GS Advanced Editor actually specifies the rate!
+	 * 127 - 15.50Hz, 1 - 0.12 Hz
+	 * And GM2 section 4.5.2 actually specifies the equation!
+	 */
+	const float rate = (float)value * 0.122;
 	chorus->rateInc = rate / chorus->sampleRate;
 }
 
