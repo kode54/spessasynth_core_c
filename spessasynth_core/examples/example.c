@@ -253,8 +253,6 @@ int main(int argc, char *argv[]) {
 
 	ma_device_uninit(&device);
 
-	// We could call tsf_close(g_TinySoundFontSynth) and tml_free(TinyMidiLoader)
-	// here to free the memory and resources but we just let the OS clean up
-	// because the process ends here.
+	// Cleaning up is a good idea in a real implementation, but this example leaves it for the system to clean up.
 	return 0;
 }
