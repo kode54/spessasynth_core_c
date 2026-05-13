@@ -17,6 +17,9 @@
 
 /* ── Reset controllers ───────────────────────────────────────────────────── */
 
+/* 1 / cos(pi/4)^2 = 2.0: corrects insertion send levels from 0-1 to 0-2 range */
+#define EFX_SENDS_GAIN_CORRECTION 2.0f
+
 extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
 
 static void reset_generator_overrides(SS_MIDIChannel *ch) {
@@ -78,7 +81,7 @@ static bool non_resettable_controllers[128] = {
 };
 
 /* Values come from Falcosoft MidiPlayer 6 */
-static const int16_t default_controller_values[SS_MIDI_CONTROLLER_COUNT] = {
+static const int16_t default_controller_values[128] = {
 	[SS_MIDCON_MAIN_VOLUME] = 100 << 7,
 	[SS_MIDCON_BALANCE] = 64 << 7,
 	[SS_MIDCON_EXPRESSION] = 127 << 7,
@@ -100,9 +103,6 @@ static const int16_t default_controller_values[SS_MIDI_CONTROLLER_COUNT] = {
 	[SS_MIDCON_RPN_MSB] = 127 << 7,
 	[SS_MIDCON_NRPN_LSB] = 127 << 7,
 	[SS_MIDCON_NRPN_MSB] = 127 << 7,
-
-	[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL] = 64 << 7,
-	[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = 2 << 7
 };
 
 enum { PORTAMENTO_CONTROL_UNSET = 1 };
@@ -122,20 +122,23 @@ static void reset_vibrato_params(SS_MIDIChannel *ch) {
  * Reset controllers according to RP-15 Recommended Practice.
  */
 void ss_channel_reset_rp15(SS_MIDIChannel *ch, double time) {
-	for(int i = 0; i < 128; i++) {
-		const int16_t reset_value = default_controller_values[i];
-		if(
-		!non_resettable_controllers[i] &&
-		reset_value != ch->midi_controllers[i] &&
-		i != SS_MIDCON_PORTAMENTO_CONTROL) {
-			ss_channel_controller(ch, i, reset_value >> 7, time);
+	const uint8_t rp_15_reset_cc_nums[] = {
+		SS_MIDCON_MODULATION_WHEEL,
+		SS_MIDCON_EXPRESSION,
+		SS_MIDCON_SUSTAIN_PEDAL,
+		SS_MIDCON_PORTAMENTO_ON_OFF,
+		SS_MIDCON_SOSTENUTO_PEDAL,
+		SS_MIDCON_SOFT_PEDAL,
+		SS_MIDCON_RPN_MSB,
+		SS_MIDCON_RPN_LSB
+	};
+	for(size_t i = 0, j = sizeof(rp_15_reset_cc_nums) / sizeof(rp_15_reset_cc_nums[0]); i < j; i++) {
+		const uint8_t reset_cc = rp_15_reset_cc_nums[i];
+		const int16_t reset_value = default_controller_values[reset_cc];
+		if(reset_value != ch->midi_controllers[reset_cc]) {
+			ss_channel_controller(ch, reset_cc, reset_value >> 7, time);
 		}
 	}
-
-	ss_channel_pitch_wheel(ch, 8192, -1, time);
-
-	reset_generator_overrides(ch);
-	reset_generator_offsets(ch);
 }
 
 static inline float drum_params_reverb(int note) {
@@ -175,49 +178,64 @@ static void reset_portamento(SS_MIDIChannel *ch) {
 
 /* Default controller values per SF2 spec */
 void ss_channel_reset_internal(SS_MIDIChannel *ch) {
-	for(int cc = 0; cc < SS_MIDI_CONTROLLER_COUNT; cc++) {
+	/* Reset MIDI controllers */
+	for(int cc = 0; cc < 128; cc++) {
 		const int16_t reset_value = default_controller_values[cc];
-		if(ch->midi_controllers[cc] != reset_value && cc < 127) {
-			if(cc != SS_MIDCON_PORTAMENTO_CONTROL &&
-			   cc != SS_MIDCON_DATA_ENTRY_MSB &&
-			   cc != SS_MIDCON_RPN_MSB &&
-			   cc != SS_MIDCON_RPN_LSB &&
-			   cc != SS_MIDCON_NRPN_MSB &&
-			   cc != SS_MIDCON_NRPN_LSB) {
-				ss_channel_controller(ch, cc, reset_value >> 7, 0);
-			}
-		} else {
-			/* Out of range, do a regular reset */
-			ch->midi_controllers[cc] = reset_value;
+		if(ch->midi_controllers[cc] != reset_value &&
+		   cc != SS_MIDCON_PORTAMENTO_CONTROL &&
+		   cc != SS_MIDCON_DATA_ENTRY_MSB &&
+		   cc != SS_MIDCON_RPN_MSB &&
+		   cc != SS_MIDCON_RPN_LSB &&
+		   cc != SS_MIDCON_NRPN_MSB &&
+		   cc != SS_MIDCON_NRPN_LSB) {
+			ss_channel_controller(ch, cc, reset_value >> 7, 0);
 		}
 	}
 
-	memset(ch->channel_octave_tuning, 0, sizeof(ch->channel_octave_tuning));
-	ch->channel_tuning_cents = 0;
+	/* Reset insertion: free old processor, create default Thru */
+	if(ch->synth) {
+		SS_Processor *proc = ch->synth;
+		ss_insertion_free(proc->insertion);
+		proc->insertion = ss_insertion_create(0x0000, proc->sample_rate, SS_MAX_SOUND_CHUNK);
+		if(proc->insertion) {
+			proc->insertion->send_level_to_reverb = (40.0f / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
+			proc->insertion->send_level_to_chorus = 0.0f;
+			proc->insertion->send_level_to_delay = 0.0f;
+		}
+		proc->insertion_active = false;
+		for(int i = 0; i < proc->channel_count; i++) {
+			if(proc->midi_channels[i])
+				proc->midi_channels[i]->insertion_enabled = false;
+		}
+	}
 
 	ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = 2 << 7; /* Default 2 semitones */
 	ss_channel_pitch_wheel(ch, 8192, -1, 0);
 
-	ss_dynamic_modulator_system_init(&ch->dms);
-
 	reset_portamento(ch);
 	ss_channel_reset_drum_params(ch);
 	reset_vibrato_params(ch);
+	ss_channel_reset_parameters_to_defaults(ch);
+
+	ss_dynamic_modulator_system_init(&ch->dms);
 
 	ch->assign_mode = 2;
 	ch->poly_mode = true;
 	ch->rx_channel = ch->channel_number;
 	ch->random_pan = false;
 
-	ss_channel_reset_parameters_to_defaults(ch);
-
-	/* Reset custom controllers
-	 * Special case: transpose does not get affected
-	 */
-	const float transpose =
-	ch->custom_controllers[SS_CUSTOM_CTRL_TRANSPOSE_FINE];
 	memcpy(&ch->custom_controllers, &custom_reset_array, sizeof(ch->custom_controllers));
-	ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_TRANSPOSE_FINE, transpose);
+
+	memset(ch->channel_octave_tuning, 0, sizeof(ch->channel_octave_tuning));
+	ch->channel_tuning_cents = 0;
+
+	/* Reset program */
+	const int default_bank_msb = ch->synth ? (ch->synth->master_params.midi_system == SS_SYSTEM_GM2 ? 121 : 0) : 0;
+	ch->midi_controllers[SS_MIDCON_BANK_SELECT] = default_bank_msb << 7;
+	ch->bank_msb = default_bank_msb;
+	ch->bank_lsb = 0;
+	ch->drum_channel = ch->channel_number % 16 == 9;
+	ss_channel_program_change(ch, 0);
 }
 
 void ss_channel_reset(SS_MIDIChannel *ch) {
