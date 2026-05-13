@@ -106,3 +106,7 @@ void ss_channel_pitch_wheel(SS_MIDIChannel *ch, int value, int midi_note, double
 		}
 	}
 }
+
+void ss_channel_set_pitch_wheel_range(SS_MIDIChannel *ch, int value) {
+	ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = value;
+}

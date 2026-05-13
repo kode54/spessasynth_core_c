@@ -27,6 +27,7 @@ static const uint8_t GS_PART_TO_CHANNEL[16] = { 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 10
 extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
 extern void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
 extern void ss_processor_set_midi_volume(SS_Processor *proc, float volume);
+extern void ss_channel_set_pitch_wheel_range(SS_MIDIChannel *ch, int value);
 
 /*
  * Handles a GS system exclusive
@@ -515,7 +516,7 @@ void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 									 * Testcase: th07_03.mid
 									 */
 									const int centeredValue = (int)data - 64;
-									mch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = centeredValue << 7;
+									ss_channel_set_pitch_wheel_range(mch, centeredValue * 128);
 									break;
 								}
 								ss_dynamic_modulator_system_setup_receiver(&mch->dms, a3, data, NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL, true);

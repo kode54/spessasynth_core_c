@@ -23,6 +23,7 @@ extern void ss_channel_reset_parameters_to_defaults(SS_MIDIChannel *ch);
 extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
 extern void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
 extern void ss_channel_set_modulation_depth(SS_MIDIChannel *ch, float cents);
+extern void ss_channel_set_pitch_wheel_range(SS_MIDIChannel *ch, int value);
 
 void ss_channel_data_entry_coarse(SS_MIDIChannel *ch, int val, double time) {
 	ch->midi_controllers[SS_MIDCON_DATA_ENTRY_MSB] = val << 7;
@@ -204,7 +205,7 @@ because I wanted support for Touhou MIDIs :-)
 
 					/* Pitch bend range */
 				case SS_RPN_PITCH_WHEEL_RANGE:
-					ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] = val << 7;
+					ss_channel_set_pitch_wheel_range(ch, val << 7);
 					break;
 
 				case SS_RPN_COARSE_TUNING: {

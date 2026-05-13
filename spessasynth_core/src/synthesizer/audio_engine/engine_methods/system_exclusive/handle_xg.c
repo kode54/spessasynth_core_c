@@ -22,6 +22,7 @@ extern void ss_processor_set_midi_volume(SS_Processor *proc, float volume);
 extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
 extern void ss_processor_event_emit(SS_Processor *proc, SS_SynthEventType type,
                                     int channel, int v1, int v2);
+extern void ss_channel_set_pitch_wheel_range(SS_MIDIChannel *ch, int value);
 
 void ss_sysex_handle_xg(SS_Processor *proc, const uint8_t *syx, size_t len, double t, int channel_offset) {
 	/*  data[0]=0x43, data[1]=0x10 (parameter change), data[2]=0x4c (XG),
@@ -68,12 +69,14 @@ void ss_sysex_handle_xg(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 
 	/* XG Part parameters (addr1=0x08, addr2=channel) */
 	if(a1 == 0x08) {
-		if(proc->master_params.midi_system != SS_SYSTEM_XG) return;
 		int channel_idx = (int)(a2) + channel_offset;
 		if(channel_idx < 0 || channel_idx >= proc->channel_count) return;
 		SS_MIDIChannel *mch = proc->midi_channels[channel_idx];
 
 		switch(a3) {
+			default:
+				/* Unsupported XG message */
+				break;
 			case 0x01: /* Bank select MSB (CC0) */
 				ss_channel_controller(mch, SS_MIDCON_BANK_SELECT, (int)data, t);
 				break;
@@ -84,9 +87,8 @@ void ss_sysex_handle_xg(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 				ss_channel_program_change(mch, (int)data);
 				break;
 			case 0x04: /* Rx. channel */
-				mch->rx_channel = (int)data;
-				if(mch->rx_channel != mch->channel_number)
-					proc->custom_channel_numbers = true;
+				mch->rx_channel = (int)data + channel_offset;
+				proc->custom_channel_numbers = proc->custom_channel_numbers || (mch->rx_channel != mch->channel_number);
 				break;
 			case 0x05: /* Poly/mono mode */
 				mch->poly_mode = (data == 1);
@@ -141,8 +143,11 @@ void ss_sysex_handle_xg(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 			case 0x1c: /* Release time (CC72) */
 				ss_channel_controller(mch, SS_MIDCON_RELEASE_TIME, (int)data, t);
 				break;
-			default:
+			case 0x23: { /* Bend pitch control (pitch wheel range) */
+				const int centeredValue = (int)data - 64;
+				ss_channel_set_pitch_wheel_range(mch, centeredValue * 128);
 				break;
+			}
 		}
 		return;
 	}

@@ -22,6 +22,7 @@ extern void ss_channel_nrpn_awe32(SS_MIDIChannel *ch, int awe_gen, int data_lsb,
 extern void ss_channel_reset_parameters_to_defaults(SS_MIDIChannel *ch);
 extern void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
 extern void ss_channel_set_modulation_depth(SS_MIDIChannel *ch, float cents);
+extern void ss_channel_set_pitch_wheel_range(SS_MIDIChannel *ch, int value);
 
 void ss_channel_data_entry_fine(SS_MIDIChannel *ch, int val, double time) {
 	ch->midi_controllers[SS_MIDCON_DATA_ENTRY_LSB] = val << 7;
@@ -43,7 +44,8 @@ void ss_channel_data_entry_fine(SS_MIDIChannel *ch, int val, double time) {
 						break;
 					}
 					/* 14-bit value, so upper 7 are coarse and lower 7 are fine! */
-					ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE] |= val;
+					const int current = ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL_RANGE];
+					ss_channel_set_pitch_wheel_range(ch, current | val);
 					break;
 
 				/* Fine-tuning */
