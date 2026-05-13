@@ -77,8 +77,6 @@ void ss_channel_free(SS_MIDIChannel *ch) {
 	free(ch);
 }
 
-/* ── Voice allocation ────────────────────────────────────────────────────── */
-
 /* ── Pitch wheel ─────────────────────────────────────────────────────────── */
 
 void ss_channel_pitch_wheel(SS_MIDIChannel *ch, int value, int midi_note, double time) {
