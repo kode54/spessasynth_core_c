@@ -24,7 +24,16 @@ extern void ss_processor_event_emit(SS_Processor *proc, SS_SynthEventType type,
                                     int channel, int v1, int v2);
 extern void ss_channel_set_pitch_wheel_range(SS_MIDIChannel *ch, int value);
 
-void ss_sysex_handle_xg(SS_Processor *proc, const uint8_t *syx, size_t len, double t, int channel_offset) {
+/**
+ * Handles a Yamaha XG system exclusive
+ * http://www.studio4all.de/htmle/main91.html
+ * @param proc
+ * @param syx
+ * @param len
+ * @param t
+ * @param channel_offset
+ */
+void ss_sysex_yamaha(SS_Processor *proc, const uint8_t *syx, size_t len, double t, int channel_offset) {
 	/*  data[0]=0x43, data[1]=0x10 (parameter change), data[2]=0x4c (XG),
 	          data[3]=addr1, data[4]=addr2, data[5]=addr3, data[6]=value */
 	if(len < 7) return;

@@ -30,7 +30,7 @@ extern void ss_processor_set_midi_volume(SS_Processor *proc, float volume);
 extern void ss_channel_set_pitch_wheel_range(SS_MIDIChannel *ch, int value);
 
 /*
- * Handles a GS system exclusive
+ * Handles a Roland GS system exclusive
  * http://www.bandtrax.com.au/sysex.htm
  * https://cdn.roland.com/assets/media/pdf/SC-8850_OM.pdf
  * @param proc
@@ -39,7 +39,7 @@ extern void ss_channel_set_pitch_wheel_range(SS_MIDIChannel *ch, int value);
  * @param t
  * @param channel_offset
  */
-void ss_sysex_handle_gs(SS_Processor *proc, const uint8_t *syx, size_t len, double t, int channel_offset) {
+void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double t, int channel_offset) {
 	if(len < 8) return;
 
 	/* 0x12: DT1 (Device Transmit) */

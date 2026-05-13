@@ -45,9 +45,9 @@ set(SS_SOURCES
     src/synthesizer/audio_engine/channel/data_entry/data_entry_fine.c
     src/synthesizer/audio_engine/channel/data_entry/awe32.c
     src/synthesizer/audio_engine/engine_methods/system_exclusive.c
-    src/synthesizer/audio_engine/engine_methods/system_exclusive/handle_gm.c
-    src/synthesizer/audio_engine/engine_methods/system_exclusive/handle_gs.c
-    src/synthesizer/audio_engine/engine_methods/system_exclusive/handle_xg.c
+    src/synthesizer/audio_engine/engine_methods/system_exclusive/universal.c
+    src/synthesizer/audio_engine/engine_methods/system_exclusive/roland.c
+    src/synthesizer/audio_engine/engine_methods/system_exclusive/yamaha.c
     src/synthesizer/audio_engine/engine_components/voice.c
     src/synthesizer/audio_engine/engine_components/midi_channel.c
     src/synthesizer/audio_engine/engine_components/compute_modulator.c

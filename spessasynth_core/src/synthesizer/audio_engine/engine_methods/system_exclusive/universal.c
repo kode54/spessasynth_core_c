@@ -20,7 +20,15 @@
 
 void ss_processor_set_midi_volume(SS_Processor *proc, float volume);
 
-void ss_sysex_handle_gm(SS_Processor *proc, const uint8_t *syx, size_t len, double t, int channel_offset) {
+/**
+ * Handles a Universal system exclusive (realtime/non-realtime)
+ * @param proc
+ * @param syx
+ * @param len
+ * @param t
+ * @param channel_offset
+ */
+void ss_sysex_universal(SS_Processor *proc, const uint8_t *syx, size_t len, double t, int channel_offset) {
 	if(len < 4) return;
 	/* syx[1] = device ID (0x7f = all), syx[2] = sub-ID1 */
 	switch(syx[2]) {
