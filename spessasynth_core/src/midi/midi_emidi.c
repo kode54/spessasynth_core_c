@@ -89,5 +89,6 @@ size_t ss_midi_remove_emidi_non_gm(SS_MIDIFile *midi) {
 		out++;
 	}
 	midi->track_count = out;
+	if(dropped) ss_midi_flush(midi);
 	return dropped;
 }
