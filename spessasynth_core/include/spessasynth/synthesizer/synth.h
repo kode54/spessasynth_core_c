@@ -343,6 +343,12 @@ typedef struct SS_MIDIChannel {
 	bool per_note_pitch; /* true when MIDI 2.0 per-note pitch wheel is active */
 	int16_t pitch_wheels[128]; /* per-note pitch wheel values (0..16383, 8192 = center) */
 
+	int8_t last_note; /* The last pressed note on this channel. -1 means none. */
+	/* If the portamento should be executed once regardless of Portamento on/off.
+	 * Adhering to the MIDI spec, CC#84 ignores on/off.
+	 */
+	bool portamento_force;
+
 	SS_Voice **voices; /* owned */
 	size_t voice_count;
 	size_t voice_capacity;

@@ -84,8 +84,6 @@ static const int16_t default_controller_values[SS_MIDI_CONTROLLER_COUNT] = {
 	[SS_MIDCON_EXPRESSION] = 127 << 7,
 	[SS_MIDCON_PAN] = 64 << 7,
 
-	[SS_MIDCON_PORTAMENTO_ON_OFF] = 127 << 7,
-
 	[SS_MIDCON_FILTER_RESONANCE] = 64 << 7,
 	[SS_MIDCON_RELEASE_TIME] = 64 << 7,
 	[SS_MIDCON_ATTACK_TIME] = 64 << 7,
@@ -169,9 +167,9 @@ static void reset_portamento(SS_MIDIChannel *ch) {
 	if(ch->locked_controllers[SS_MIDCON_PORTAMENTO_CONTROL]) return;
 
 	if(ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_XG) {
-		ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, 60, 0);
+		ch->last_note = 60;
 	} else {
-		ss_channel_controller(ch, SS_MIDCON_PORTAMENTO_CONTROL, 0, 0);
+		ch->last_note = -1;
 	}
 }
 

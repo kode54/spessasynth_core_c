@@ -183,6 +183,15 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 			ss_channel_reset_rp15(ch, time);
 			break;
 
+		case SS_MIDCON_PORTAMENTO_CONTROL: {
+			/* Force portamento (MIDI 1.0 specification, page 16) 
+			 * Even if portamento on/off (cc#65) is off
+			 */
+			ch->last_note = val;
+			ch->portamento_force = true;
+			break;
+		}
+
 		default: /* Compute modulators */
 			ss_channel_compute_modulators(ch, time);
 			break;
