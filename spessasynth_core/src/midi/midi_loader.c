@@ -114,6 +114,7 @@ void ss_rmidi_info_free(SS_RMIDIInfo *info) {
 
 void ss_midi_free(SS_MIDIFile *m) {
 	if(!m) return;
+	free(m->timeline);
 	for(size_t i = 0; i < m->track_count; i++)
 		ss_midi_track_clear(&m->tracks[i]);
 	free(m->tracks);
@@ -610,4 +611,49 @@ bool ss_midi_has_gs(const SS_MIDIFile *m) {
 		}
 	}
 	return false;
+}
+
+/* ── Timeline ────────────────────────────────────────────────────────────── */
+
+bool ss_midi_ensure_timeline(SS_MIDIFile *m) {
+	free(m->timeline);
+	m->timeline = NULL;
+
+	size_t total_events = 0;
+	for(size_t ti = 0; ti < m->track_count; ti++) {
+		const SS_MIDITrack *t = &m->tracks[ti];
+		total_events += t->event_count;
+	}
+
+	m->timeline = (SS_MIDIMessage *) calloc(total_events, sizeof(SS_MIDIMessage));
+	if(!m->timeline) return false;
+
+	size_t *current_track_event = calloc(m->track_count, sizeof(size_t));
+	if(!current_track_event) return false;
+
+	size_t current_output_event = 0;
+
+	while(current_output_event < total_events) {
+		const SS_MIDIMessage *msg = NULL;
+		size_t best_ticks = ~0UL;
+		for(size_t ti = 0; ti < m->track_count; ti++) {
+			const SS_MIDITrack *t = &m->tracks[ti];
+			const size_t current_event = current_track_event[ti];
+			if(current_event >= t->event_count) continue;
+			const SS_MIDIMessage *_msg = &t->events[current_event];
+			if(_msg->ticks < best_ticks) {
+				best_ticks = _msg->ticks;
+				msg = _msg;
+				continue;
+			}
+		}
+		if(!msg) break;
+		m->timeline[current_output_event++] = *msg;
+		current_track_event[msg->track_index]++;
+	}
+	m->timeline_count = current_output_event;
+
+	free(current_track_event);
+
+	return true;
 }

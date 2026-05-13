@@ -141,6 +141,9 @@ typedef struct {
 	size_t binary_name_length;
 
 	char file_name[512];
+
+	SS_MIDIMessage *timeline; /* All data unowned, free only the main pointer on close */
+	size_t timeline_count;
 } SS_MIDIFile;
 
 SS_MIDIFile SPESSASYNTH_EXPORTS *ss_midi_new(void);
@@ -160,6 +163,10 @@ size_t SPESSASYNTH_EXPORTS ss_seconds_to_midi_tick(const SS_MIDIFile *m, double 
 
 /** Rebuild internal caches (tempo map, loop, ports, name). Call after editing. */
 void SPESSASYNTH_EXPORTS ss_midi_flush(SS_MIDIFile *midi);
+
+/** Rebuild timeline. Called by the sequencer, or anything else that needs
+ * the timeline track. Returns false on allocation error. */
+bool SPESSASYNTH_EXPORTS ss_midi_ensure_timeline(SS_MIDIFile *midi);
 
 /* ── EMIDI (Extended MIDI) classification and filtering ──────────────────── */
 

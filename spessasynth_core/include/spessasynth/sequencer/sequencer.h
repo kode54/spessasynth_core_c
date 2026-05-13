@@ -24,8 +24,7 @@ extern "C" {
 
 typedef struct {
 	SS_MIDIFile *midi; /* non-owning */
-	size_t *event_indexes; /* current index per track (heap-allocated) */
-	size_t track_count;
+	size_t event_index;
 } SS_SequencerSong;
 
 /**

@@ -104,27 +104,7 @@ static SS_SequencerSong *current_song(const SS_Sequencer *seq) {
 
 /** Reset all per-track event indexes to 0. */
 static void song_rewind(SS_SequencerSong *song) {
-	for(size_t i = 0; i < song->track_count; i++)
-		song->event_indexes[i] = 0;
-}
-
-/** Find the track with the earliest next event tick.
- *  Returns -1 if all tracks exhausted. */
-static int find_first_event(const SS_SequencerSong *song,
-                            const SS_MIDIFile *midi) {
-	int best_track = -1;
-	size_t best_tick = SIZE_MAX;
-
-	for(size_t ti = 0; ti < song->track_count; ti++) {
-		size_t ei = song->event_indexes[ti];
-		if(ei >= midi->tracks[ti].event_count) continue;
-		size_t t = midi->tracks[ti].events[ei].ticks;
-		if(t < best_tick) {
-			best_tick = t;
-			best_track = (int)ti;
-		}
-	}
-	return best_track;
+	song->event_index = 0;
 }
 
 /* ── Create / free ───────────────────────────────────────────────────────── */
@@ -181,9 +161,8 @@ bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 
 	SS_SequencerSong *song = &seq->songs[seq->song_count];
 	song->midi = midi;
-	song->track_count = midi->track_count;
-	song->event_indexes = (size_t *)calloc(midi->track_count, sizeof(size_t));
-	if(!song->event_indexes) return false;
+	if(!ss_midi_ensure_timeline(midi)) return false;
+	song->event_index = 0;
 	seq->song_count++;
 
 	if(seq->current_song_index == ~0UL) {
@@ -204,8 +183,6 @@ bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 
 void ss_sequencer_clear(SS_Sequencer *seq) {
 	unload_embedded_bank(seq);
-	for(size_t i = 0; i < seq->song_count; i++)
-		free(seq->songs[i].event_indexes);
 	seq->song_count = 0;
 	seq->current_song_index = -1;
 	seq->is_playing = false;
@@ -287,19 +264,13 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 	double one_tick_sec = (midi->time_division > 0) ? (60.0 / (120.0 * (double)midi->time_division)) : (60.0 / (120.0 * 480.0));
 
 	while(!done) {
-		int ti = find_first_event(song, midi);
-		if(ti < 0) {
-			done = true;
-			break;
-		}
-
-		size_t ei = song->event_indexes[ti];
-		SS_MIDIMessage *e = &midi->tracks[ti].events[ei];
+		size_t ei = song->event_index;
+		SS_MIDIMessage *e = &midi->timeline[ei];
 		double ev_time = ss_midi_ticks_to_seconds(midi, e->ticks);
 
 		if(ev_time > seconds) break;
 
-		song->event_indexes[ti]++;
+		song->event_index++;
 
 		uint8_t sb = e->status_byte;
 
@@ -605,12 +576,11 @@ static void loop_rewind_to_tick(SS_Sequencer *seq, size_t target_tick,
 	}
 	seq->one_tick_seconds = one_tick_sec;
 
-	/* Rewind each track to the first event at or after target_tick. */
-	for(size_t ti = 0; ti < song->track_count; ti++) {
-		const SS_MIDITrack *t = &midi->tracks[ti];
-		size_t idx = 0;
-		while(idx < t->event_count && t->events[idx].ticks < target_tick) idx++;
-		song->event_indexes[ti] = idx;
+	/* Rewind the timeline to the first event at or after target_tick. */
+	for(size_t idx = 0; idx < song->midi->timeline_count; idx++) {
+		if(song->midi->timeline[idx].ticks < target_tick) continue;
+		song->event_index = idx;
+		break;
 	}
 
 	double new_song_time = ss_midi_ticks_to_seconds(midi, target_tick);
@@ -694,8 +664,7 @@ try_again:
 
 	/* Dispatch all events whose time <= target_time */
 	while(1) {
-		int ti = find_first_event(song, midi);
-		if(ti < 0) {
+		if(song->event_index >= song->midi->timeline_count) {
 			/* End of events.  Behavior depends on loop config: */
 			if(infinite && !has_markers) {
 				/* Infinite + no markers: loop the whole file. */
@@ -716,8 +685,8 @@ try_again:
 			break;
 		}
 
-		size_t ei = song->event_indexes[ti];
-		SS_MIDIMessage *e = &midi->tracks[ti].events[ei];
+		size_t ei = song->event_index;
+		SS_MIDIMessage *e = &midi->timeline[ei];
 		size_t delta_ticks = 0;
 		if(e->ticks > seq->current_tick) delta_ticks = e->ticks - seq->current_tick;
 		double delta_time = (double)delta_ticks * seq->one_tick_seconds;
@@ -728,8 +697,8 @@ try_again:
 		current_time = ev_time;
 		seq->current_tick += delta_ticks;
 
-		song->event_indexes[ti]++;
-		process_event(seq, midi, e, ti);
+		song->event_index++;
+		process_event(seq, midi, e, e->track_index);
 
 		/* Loop-jump check at the MIDI loop marker.
 		 *
@@ -778,8 +747,7 @@ try_again:
 
 		/* End-of-sequence check (for tracks without a loop.end). */
 		if(e->ticks >= midi->last_voice_event_tick) {
-			int next_ti = find_first_event(song, midi);
-			if(next_ti < 0) {
+			if(song->event_index >= song->midi->timeline_count) {
 				if(infinite && !has_markers) {
 					loop_rewind_to_tick(seq, 0, target_time);
 					target_time -= current_time;
