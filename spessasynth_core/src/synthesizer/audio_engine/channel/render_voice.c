@@ -249,7 +249,7 @@ bool ss_voice_render(SS_Voice *v,
 
 	/* ── Panning and mix ─────────────────────────────────────────────── */
 	float pan_val;
-	if(v->override_pan != 0.0f) {
+	if(v->override_pan_active) {
 		pan_val = v->override_pan / 500.0f;
 	} else {
 		/* Smooth only the generator pan (matches TS: currentPan tracks modulated[pan] only).

@@ -124,7 +124,8 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	float drum_delay_send = 1.0f;
 	float drum_gain = 1.0f;
 	int drum_exclusive_override = 0;
-	float drum_pan_override = 0.0f; /* 0 = not overridden */
+	bool pan_override_active = false;
+	float pan_override;
 
 	if(ch->drum_channel) {
 		const SS_DrumParameters *dp = &ch->drum_params[internal_midi_note];
@@ -138,25 +139,26 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		drum_chorus_send = dp->chorus_gain;
 		drum_delay_send = dp->delay_gain;
 		drum_gain = dp->gain;
+		const int drum_pan = dp->pan - 64;
 
 		/* Drum pan override: 0=random, 64=channel default, else override */
-		if(dp->pan != 64) {
-			if(dp->pan == 0) {
+		if(drum_pan != 0) {
+			if(drum_pan == -64) {
 				/* Random pan [-500, 500] */
-				drum_pan_override = (float)(rand() % 1001) - 500.0f;
-				if(drum_pan_override == 0.0f) drum_pan_override = 1.0f;
+				pan_override = (float)(rand() % 1001) - 500.0f;
+				pan_override_active = true;
 			} else {
 				float ch_pan = (float)(ch->midi_controllers[SS_MIDCON_PAN] >> 7) - 64.0f;
-				float target = (float)dp->pan - 64.0f + ch_pan;
+				float target = (float)drum_pan + ch_pan;
 				if(target < -63.0f) target = -63.0f;
 				if(target > 63.0f) target = 63.0f;
-				if(target == 0.0f) target = 1.0f;
-				drum_pan_override = (target / 63.0f) * 500.0f;
+				pan_override = (target / 63.0f) * 500.0f;
+				pan_override_active = true;
 			}
 		}
 	} else if(ch->random_pan) {
-		drum_pan_override = (float)(rand() % 1001) - 500.0f;
-		if(drum_pan_override == 0.0f) drum_pan_override = 1.0f;
+		pan_override = (float)(rand() % 1001) - 500.0f;
+		pan_override_active = true;
 	}
 
 	const int program = ch->preset->program;
@@ -245,8 +247,12 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		voice->chorus_send = drum_chorus_send;
 		voice->delay_send = drum_delay_send;
 		voice->gain *= drum_gain;
-		if(drum_pan_override != 0.0f)
-			voice->override_pan = drum_pan_override;
+		voice->override_pan_active = pan_override_active;
+		if(pan_override_active) {
+			voice->override_pan = pan_override;
+		} else {
+			voice->override_pan = 0;
+		}
 		if(drum_exclusive_override != 0)
 			voice->exclusive_class = drum_exclusive_override;
 

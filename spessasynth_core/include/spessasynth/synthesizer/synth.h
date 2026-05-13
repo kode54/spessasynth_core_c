@@ -205,6 +205,7 @@ typedef struct SS_Voice {
 	int current_tuning_cents;
 	double current_tuning_calculated;
 	float current_pan;
+	bool override_pan_active;
 	float override_pan;
 
 	int portamento_from_key; /* -1 = off */
