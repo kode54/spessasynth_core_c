@@ -35,50 +35,19 @@ static void reset_generator_offsets(SS_MIDIChannel *ch) {
 }
 
 void ss_channel_reset_parameters_to_defaults(SS_MIDIChannel *ch) {
-	ch->data_entry_state = SS_DATAENTRY_IDLE;
+	/* Reset Parameters (do not emit controller change)
+	 * We reset them here since in the loop, the data entries would come before params
+	 */
+	ch->last_parameter_is_registered = true;
 	ch->midi_controllers[SS_MIDCON_NRPN_LSB] = 127 << 7;
 	ch->midi_controllers[SS_MIDCON_NRPN_MSB] = 127 << 7;
 	ch->midi_controllers[SS_MIDCON_RPN_LSB] = 127 << 7;
 	ch->midi_controllers[SS_MIDCON_RPN_MSB] = 127 << 7;
+	ch->midi_controllers[SS_MIDCON_DATA_ENTRY_MSB] = 0;
+	ch->midi_controllers[SS_MIDCON_DATA_ENTRY_LSB] = 0;
 	reset_generator_overrides(ch);
 	reset_generator_offsets(ch);
 }
-
-static bool non_resettable_controllers[128] = {
-	[SS_MIDCON_BANK_SELECT] = true,
-	[SS_MIDCON_BANK_SELECT_LSB] = true,
-	[SS_MIDCON_MAIN_VOLUME] = true,
-	[SS_MIDCON_MAIN_VOLUME_LSB] = true,
-	[SS_MIDCON_PAN] = true,
-	[SS_MIDCON_PAN_LSB] = true,
-	[SS_MIDCON_REVERB_DEPTH] = true,
-	[SS_MIDCON_TREMOLO_DEPTH] = true,
-	[SS_MIDCON_CHORUS_DEPTH] = true,
-	[SS_MIDCON_VARIATION_DEPTH] = true,
-	[SS_MIDCON_PHASER_DEPTH] = true,
-	[SS_MIDCON_SOUND_VARIATION] = true,
-	[SS_MIDCON_FILTER_RESONANCE] = true,
-	[SS_MIDCON_RELEASE_TIME] = true,
-	[SS_MIDCON_ATTACK_TIME] = true,
-	[SS_MIDCON_BRIGHTNESS] = true,
-	[SS_MIDCON_DECAY_TIME] = true,
-	[SS_MIDCON_VIBRATO_RATE] = true,
-	[SS_MIDCON_VIBRATO_DEPTH] = true,
-	[SS_MIDCON_VIBRATO_DELAY] = true,
-	[SS_MIDCON_SOUND_CONTROLLER_10] = true,
-	[SS_MIDCON_POLY_MODE_ON] = true,
-	[SS_MIDCON_MONO_MODE_ON] = true,
-	[SS_MIDCON_OMNI_MODE_ON] = true,
-	[SS_MIDCON_OMNI_MODE_OFF] = true,
-
-	// RP-15: Do not reset RPN or NRPN
-	[SS_MIDCON_DATA_ENTRY_MSB] = true,
-	[SS_MIDCON_DATA_ENTRY_LSB] = true,
-	[SS_MIDCON_NRPN_LSB] = true,
-	[SS_MIDCON_NRPN_MSB] = true,
-	[SS_MIDCON_RPN_LSB] = true,
-	[SS_MIDCON_RPN_MSB] = true
-};
 
 /* Values come from Falcosoft MidiPlayer 6 */
 static const int16_t default_controller_values[128] = {

@@ -262,16 +262,6 @@ typedef enum {
 
 #define NON_CC_INDEX_OFFSET 128
 
-typedef enum {
-	SS_DATAENTRY_IDLE = 0,
-	SS_DATAENTRY_RP_COARSE = 1,
-	SS_DATAENTRY_RP_FINE = 2,
-	SS_DATAENTRY_NRP_COARSE = 3,
-	SS_DATAENTRY_NRP_FINE = 4,
-	SS_DATAENTRY_DATA_COARSE = 5,
-	SS_DATAENTRY_DATA_FINE = 6
-} SS_DataEntryState;
-
 enum { GENERATOR_OVERRIDE_NO_CHANGE_VALUE = 32767 };
 
 typedef struct {
@@ -287,7 +277,7 @@ typedef struct SS_MIDIChannel {
 	bool locked_controllers[SS_MIDI_CONTROLLER_COUNT];
 	float custom_controllers[SS_CUSTOM_CTRL_COUNT];
 
-	SS_DataEntryState data_entry_state;
+	bool last_parameter_is_registered;
 
 	SS_DynamicModulatorSystem dms;
 
@@ -348,8 +338,8 @@ typedef struct SS_MIDIChannel {
 	/* The last pressed note on this channel.
 	 * -1 means none.
 	 * This is not a standard paramter and is strictly internal,
-     * mostly because we don't want to send events for every note on message.
-     * It can be set with Portamento Control CC anyway.
+	 * mostly because we don't want to send events for every note on message.
+	 * It can be set with Portamento Control CC anyway.
 	 */
 	int8_t last_note;
 	/* If the portamento should be executed once regardless of Portamento on/off.

@@ -50,12 +50,11 @@ void ss_channel_set_generator_override(SS_MIDIChannel *ch, SS_GeneratorType gen,
 }
 
 static void ss_channel_update_tuning(SS_MIDIChannel *ch) {
-	ch->channel_tuning_cents = (int)(
-	ch->custom_controllers[SS_CUSTOM_CTRL_TUNING] + /* RPN channel fine tuning */
-	ch->custom_controllers[SS_CUSTOM_CTRL_TRANSPOSE_FINE] + /* User tuning (transpose) */
-	ch->custom_controllers[SS_CUSTOM_CTRL_MASTER_TUNING] + /* Master tuning, set by sysEx */
-	ch->custom_controllers[SS_CUSTOM_CTRL_TUNING_SEMITONES] *
-	100.0f); /* RPN channel coarse tuning */
+	ch->channel_tuning_cents = (int)(ch->custom_controllers[SS_CUSTOM_CTRL_TUNING] + /* RPN channel fine tuning */
+	                                 ch->custom_controllers[SS_CUSTOM_CTRL_TRANSPOSE_FINE] + /* User tuning (transpose) */
+	                                 ch->custom_controllers[SS_CUSTOM_CTRL_MASTER_TUNING] + /* Master tuning, set by sysEx */
+	                                 ch->custom_controllers[SS_CUSTOM_CTRL_TUNING_SEMITONES] *
+	                                 100.0f); /* RPN channel coarse tuning */
 }
 
 void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val) {
@@ -95,7 +94,7 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 		ss_channel_compute_modulators(ch, time);
 	}
 
-	ch->midi_controllers[cc] = val << 7;
+	ch->midi_controllers[cc] = (val << 7) | (ch->midi_controllers[cc] & 0x7f);
 
 	switch(cc) {
 		case SS_MIDCON_ALL_NOTES_OFF: /* all notes off */
@@ -126,16 +125,27 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 
 		/* Check for RPN and NPRN and data entry */
 		case SS_MIDCON_RPN_LSB:
-			ch->data_entry_state = SS_DATAENTRY_RP_FINE;
-			break;
-
 		case SS_MIDCON_RPN_MSB:
-			ch->data_entry_state = SS_DATAENTRY_RP_COARSE;
+			/* Clear and set state.
+			 * This is technically not a MIDI behavior,
+			 * But some only send MSB matters:
+			 * https://github.com/spessasus/spessasynth_core/pull/78#discussion_r3233413622
+			 */
+			ch->midi_controllers[SS_MIDCON_DATA_ENTRY_MSB] = 0;
+			ch->last_parameter_is_registered = true;
 			break;
 
 		case SS_MIDCON_NRPN_MSB:
+			/* Sf spec section 9.6.2 */
 			ch->custom_controllers[SS_CUSTOM_CTRL_SF2_NRPN_GENERATOR_LSB] = 0;
-			ch->data_entry_state = SS_DATAENTRY_NRP_COARSE;
+
+			/* Clear and set state.
+			 * This is technically not a MIDI behavior,
+			 * But some only send MSB matters:
+			 * https://github.com/spessasus/spessasynth_core/pull/78#discussion_r3233413622
+			 */
+			ch->midi_controllers[SS_MIDCON_DATA_ENTRY_MSB] = 0;
+			ch->last_parameter_is_registered = false;
 			break;
 
 		case SS_MIDCON_NRPN_LSB:
@@ -157,7 +167,14 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 					ch->custom_controllers[SS_CUSTOM_CTRL_SF2_NRPN_GENERATOR_LSB] += (float)val;
 				}
 			}
-			ch->data_entry_state = SS_DATAENTRY_NRP_FINE;
+
+			/* Clear and set state.
+			 * This is technically not a MIDI behavior,
+			 * But some only send MSB matters:
+			 * https://github.com/spessasus/spessasynth_core/pull/78#discussion_r3233413622
+			 */
+			ch->midi_controllers[SS_MIDCON_DATA_ENTRY_MSB] = 0;
+			ch->last_parameter_is_registered = false;
 			break;
 
 		case SS_MIDCON_DATA_ENTRY_MSB:
@@ -182,7 +199,7 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 			break;
 
 		case SS_MIDCON_PORTAMENTO_CONTROL: {
-			/* Force portamento (MIDI 1.0 specification, page 16) 
+			/* Force portamento (MIDI 1.0 specification, page 16)
 			 * Even if portamento on/off (cc#65) is off
 			 */
 			ch->last_note = val;
