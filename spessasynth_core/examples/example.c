@@ -191,7 +191,7 @@ int main(int argc, char *argv[]) {
 	SS_ProcessorOptions opts = {
 		.enable_effects = true,
 		.voice_cap = 512,
-		.interpolation = SS_INTERP_LINEAR,
+		.interpolation = SS_INTERP_HERMITE,
 		.preload_all_samples = false,
 		.preload_instruments = true
 	};

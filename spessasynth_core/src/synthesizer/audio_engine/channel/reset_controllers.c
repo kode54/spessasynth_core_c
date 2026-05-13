@@ -123,7 +123,7 @@ static void reset_vibrato_params(SS_MIDIChannel *ch) {
  * https://amei.or.jp/midistandardcommittee/Recommended_Practice/e/rp15.pdf
  * Reset controllers according to RP-15 Recommended Practice.
  */
-void ss_channel_reset_controllers_rp15_compliant(SS_MIDIChannel *ch, double time) {
+void ss_channel_reset_rp15(SS_MIDIChannel *ch, double time) {
 	for(int i = 0; i < 128; i++) {
 		const int16_t reset_value = default_controller_values[i];
 		if(

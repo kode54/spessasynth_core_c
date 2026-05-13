@@ -24,7 +24,7 @@ extern void ss_voice_release(SS_Voice *v, double current_time, double min_note_l
 extern void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch,
                                         double time);
 
-extern void ss_channel_reset_controllers_rp15_compliant(SS_MIDIChannel *ch, double time);
+extern void ss_channel_reset_rp15(SS_MIDIChannel *ch, double time);
 
 void ss_channel_data_entry_coarse(SS_MIDIChannel *ch, int val, double time);
 void ss_channel_data_entry_fine(SS_MIDIChannel *ch, int val, double time);
@@ -180,7 +180,7 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 			break;
 
 		case SS_MIDCON_RESET_ALL_CONTROLLERS: /* reset all controllers */
-			ss_channel_reset_controllers_rp15_compliant(ch, time);
+			ss_channel_reset_rp15(ch, time);
 			break;
 
 		default: /* Compute modulators */

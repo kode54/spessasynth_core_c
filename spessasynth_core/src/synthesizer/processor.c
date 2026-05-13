@@ -116,7 +116,7 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 	} else {
 		proc->options.enable_effects = true;
 		proc->options.voice_cap = 512;
-		proc->options.interpolation = SS_INTERP_LINEAR;
+		proc->options.interpolation = SS_INTERP_HERMITE;
 		proc->options.preload_all_samples = false;
 		proc->options.preload_instruments = true;
 	}
