@@ -617,6 +617,26 @@ bool ss_midi_has_gs(const SS_MIDIFile *m) {
 	return false;
 }
 
+/* ── GM2 detection ────────────────────────────────────────────────────────── */
+
+bool ss_midi_has_gm2(const SS_MIDIFile *m) {
+	if(!m) return false;
+	for(size_t ti = 0; ti < m->track_count; ti++) {
+		const SS_MIDITrack *t = &m->tracks[ti];
+		for(size_t ei = 0; ei < t->event_count; ei++) {
+			const SS_MIDIMessage *msg = &t->events[ei];
+			if(msg->status_byte == 0xf0) {
+				if(msg->data_length < 4) continue;
+				const uint8_t *data = msg->data;
+				if(data[0] == 0x7e && data[1] == 0x7f && data[2] == 9 && data[3] == 3) {
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
 /* ── Timeline ────────────────────────────────────────────────────────────── */
 
 bool ss_midi_ensure_timeline(SS_MIDIFile *m) {
