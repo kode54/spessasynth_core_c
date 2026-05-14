@@ -128,7 +128,7 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 		case SS_MIDCON_RPN_MSB:
 			/* Clear and set state.
 			 * This is technically not a MIDI behavior,
-			 * But some only send MSB matters:
+			 * But some MIDI files only send MSB data:
 			 * https://github.com/spessasus/spessasynth_core/pull/78#discussion_r3233413622
 			 */
 			ch->midi_controllers[SS_MIDCON_DATA_ENTRY_MSB] = 0;
@@ -141,7 +141,7 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 
 			/* Clear and set state.
 			 * This is technically not a MIDI behavior,
-			 * But some only send MSB matters:
+			 * But some MIDI files only send MSB data:
 			 * https://github.com/spessasus/spessasynth_core/pull/78#discussion_r3233413622
 			 */
 			ch->midi_controllers[SS_MIDCON_DATA_ENTRY_MSB] = 0;
@@ -170,7 +170,7 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 
 			/* Clear and set state.
 			 * This is technically not a MIDI behavior,
-			 * But some only send MSB matters:
+			 * But some MIDI files only send MSB data:
 			 * https://github.com/spessasus/spessasynth_core/pull/78#discussion_r3233413622
 			 */
 			ch->midi_controllers[SS_MIDCON_DATA_ENTRY_MSB] = 0;
