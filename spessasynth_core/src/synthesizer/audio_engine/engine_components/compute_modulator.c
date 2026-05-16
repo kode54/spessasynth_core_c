@@ -55,7 +55,7 @@ static float get_source_value(const SS_MIDIChannel *ch, const SS_Voice *v,
 				raw = v->velocity << 7;
 				break;
 			case SS_MODSRC_NOTE_ON_KEYNUM:
-				raw = v->midi_note << 7;
+				raw = v->target_key << 7;
 				break;
 			case SS_MODSRC_POLY_PRESSURE:
 				raw = v->pressure << 7;
