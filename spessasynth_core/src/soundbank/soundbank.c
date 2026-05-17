@@ -246,7 +246,7 @@ const SS_Modulator SS_DEFAULT_MODULATORS[] = {
 	DEFAULT_RESONANT_MOD_SOURCE,
 	0x0, /* No controller */
 	SS_GEN_INITIAL_FILTER_Q,
-	200,
+	250,
 	0),
 
 	/* 6. Cc 67 (soft pedal) to attenuation */
