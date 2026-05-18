@@ -242,7 +242,7 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		if(generators[SS_GEN_VELOCITY] > -1)
 			voice_vel = generators[SS_GEN_VELOCITY];
 
-		SS_Voice *voice = ss_voice_create(sr, ch->preset, &audio, note, voice_vel,
+		SS_Voice *voice = ss_voice_create(proc, sr, ch->preset, &audio, note, voice_vel,
 		                                  time, target_key, sound_bank_note,
 		                                  generators,
 		                                  sd->modulators, sd->mod_count, dms);

@@ -173,6 +173,8 @@ void SPESSASYNTH_EXPORTS ss_dynamic_modulator_system_setup_receiver(SS_DynamicMo
 
 /* ── Voice ───────────────────────────────────────────────────────────────── */
 
+struct SS_Processor; /* forward */
+
 typedef struct SS_Voice {
 	SS_AudioSample sample;
 	SS_LowpassFilter filter;
@@ -187,6 +189,7 @@ typedef struct SS_Voice {
 
 	SS_Modulator *modulators; /* owned copy */
 	size_t modulator_count;
+	size_t modulator_capacity; /* allocated slots; retained across pool reuse */
 
 	float resonance_offset;
 	bool is_active;
@@ -231,7 +234,27 @@ typedef struct SS_Voice {
 	int override_release_vol_env;
 } SS_Voice;
 
-SS_Voice SPESSASYNTH_EXPORTS *ss_voice_create(uint32_t sample_rate,
+/* ── Voice pool ──────────────────────────────────────────────────────────── */
+/*
+ * A global free-list of retired SS_Voice structures, owned by the processor.
+ * Finished voices are returned here instead of being freed, so the next
+ * note-on recycles the structure (and its modulator array) rather than
+ * allocating from scratch.  Mirrors the voice reuse upstream introduced in
+ * spessasynth_core 4.1.0.
+ */
+typedef struct {
+	SS_Voice **free_list; /* owned: recycled, currently-unused voices */
+	size_t free_count;
+	size_t free_capacity;
+} SS_VoicePool;
+
+/*
+ * Acquires a voice (recycled from the processor's pool when possible) and
+ * initializes it for playback.  `proc` may be NULL, in which case the voice
+ * is allocated directly and must be returned with ss_voice_free().
+ */
+SS_Voice SPESSASYNTH_EXPORTS *ss_voice_create(struct SS_Processor *proc,
+                                              uint32_t sample_rate,
                                               const SS_BasicPreset *preset,
                                               const SS_AudioSample *audio_sample,
                                               int midi_note, int velocity,
@@ -240,6 +263,13 @@ SS_Voice SPESSASYNTH_EXPORTS *ss_voice_create(uint32_t sample_rate,
                                               const SS_Modulator *modulators, size_t mod_count,
                                               const SS_DynamicModulatorSystem *dms);
 /*SS_Voice SPESSASYNTH_EXPORTS *ss_voice_copy(const SS_Voice *src, double current_time, int sound_bank_key);*/
+
+/* Returns a finished voice to the processor's pool for later reuse.
+ * When `proc` is NULL the voice is freed outright. */
+void SPESSASYNTH_EXPORTS ss_voice_pool_release(struct SS_Processor *proc, SS_Voice *v);
+/* Frees every pooled voice and the pool's backing array. */
+void SPESSASYNTH_EXPORTS ss_voice_pool_free(SS_VoicePool *pool);
+/* Frees a single voice structure outright (does not touch the pool). */
 void SPESSASYNTH_EXPORTS ss_voice_free(SS_Voice *v);
 
 /* ── Custom controller indices ───────────────────────────────────────────── */
@@ -632,6 +662,8 @@ typedef struct SS_Processor {
 
 	int voice_count;
 	double current_time; /* seconds */
+
+	SS_VoicePool voice_pool; /* recycled voice structures */
 
 	SS_Reverb *reverb;
 	SS_Chorus *chorus;

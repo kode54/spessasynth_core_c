@@ -167,6 +167,9 @@ void ss_processor_free(SS_Processor *proc) {
 		proc->midi_channels[i] = NULL;
 	}
 
+	/* Channels retire their voices into the pool; free it once they're gone. */
+	ss_voice_pool_free(&proc->voice_pool);
+
 	for(size_t i = 0; i < proc->bank_group_count; i++) {
 		SS_ProcessorBankGroup *g = &proc->bank_groups[i];
 		ss_filtered_banks_free(g->banks, !g->external_banks);

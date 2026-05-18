@@ -15,16 +15,7 @@
 #include "spessasynth/synthesizer/synth.h"
 #endif
 
-extern SS_Voice *ss_voice_create(uint32_t sr,
-                                 const SS_BasicPreset *preset,
-                                 const SS_AudioSample *audio_sample,
-                                 int midi_note, int velocity,
-                                 double current_time, int target_key, int sound_bank_key,
-                                 const int16_t *generators,
-                                 const SS_Modulator *modulators, size_t mod_count,
-                                 const SS_DynamicModulatorSystem *dms);
-/*extern SS_Voice *ss_voice_copy(const SS_Voice *src, double current_time, int sound_bank_key);*/
-extern void ss_voice_free(SS_Voice *v);
+/* ss_voice_create / ss_voice_pool_release / ss_voice_free are declared in synth.h. */
 extern void ss_voice_release(SS_Voice *v, double current_time, double min_note_length);
 extern void ss_voice_exclusive_release(SS_Voice *v, double current_time);
 extern void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch, double time);
@@ -71,8 +62,11 @@ SS_MIDIChannel *ss_channel_new(int channel_number, struct SS_Processor *synth) {
 
 void ss_channel_free(SS_MIDIChannel *ch) {
 	if(!ch) return;
+	/* Retire voices into the processor's pool so their structures (and
+	 * modulator buffers) can be reused; the pool itself is freed by
+	 * ss_processor_free() after every channel is gone. */
 	for(size_t i = 0; i < ch->voice_count; i++)
-		ss_voice_free(ch->voices[i]);
+		ss_voice_pool_release(ch->synth, ch->voices[i]);
 	free(ch->voices);
 	free(ch->sustained_voices);
 	ss_dynamic_modulator_system_free(&ch->dms);
