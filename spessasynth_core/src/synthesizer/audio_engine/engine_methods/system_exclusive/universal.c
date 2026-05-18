@@ -48,21 +48,21 @@ void ss_sysex_universal(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 					 * MIDI spec page 62
 					 */
 					const uint16_t bal = (uint16_t)((syx[5] << 7) | syx[4]);
-					proc->master_params.master_pan =
-					((float)bal - 8192.0f) / 8192.0f;
+					ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_PAN,
+					                                ((float)bal - 8192.0f) / 8192.0f);
 					break;
 				}
 				case 0x03: { /* Fine Tuning */
 					if(len < 7) break;
 					const int raw = (int)(((syx[5] << 7) | syx[6]) - 8192);
-					proc->master_params.master_tuning =
-					(float)(raw / 81.92);
+					ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_FINE_TUNE,
+					                                (float)(raw / 81.92));
 					break;
 				}
 				case 0x04: { /* Coarse Tuning */
 					const int semitones = (int)syx[5] - 64;
-					proc->master_params.master_pitch =
-					(float)(semitones);
+					ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_KEY_SHIFT,
+					                                (float)(semitones));
 					break;
 				}
 			}
@@ -171,13 +171,13 @@ void ss_sysex_universal(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 					/* Unrecognized General MIDI system message */
 					break;
 				case 0x01:
-					proc->master_params.midi_system = SS_SYSTEM_GM;
+					proc->midi_params.system = SS_SYSTEM_GM;
 					break;
 				case 0x02:
-					proc->master_params.midi_system = SS_SYSTEM_GS;
+					proc->midi_params.system = SS_SYSTEM_GS;
 					break;
 				case 0x03:
-					proc->master_params.midi_system = SS_SYSTEM_GM2;
+					proc->midi_params.system = SS_SYSTEM_GM2;
 					break;
 			}
 			ss_processor_system_reset(proc);
@@ -194,18 +194,18 @@ void ss_sysex_universal(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 					/* skip 16-byte name */
 					idx += 16;
 					/* Ensure tuning grid exists */
-					if(!proc->master_params.tunings) {
-						proc->master_params.tunings =
+					if(!proc->tunings) {
+						proc->tunings =
 						(SS_TuningEntry **)calloc(128, sizeof(SS_TuningEntry *));
-						if(!proc->master_params.tunings) return;
+						if(!proc->tunings) return;
 					}
-					if(!proc->master_params.tunings[program]) {
-						proc->master_params.tunings[program] =
+					if(!proc->tunings[program]) {
+						proc->tunings[program] =
 						(SS_TuningEntry *)malloc(128 * sizeof(SS_TuningEntry));
-						if(!proc->master_params.tunings[program]) return;
+						if(!proc->tunings[program]) return;
 						for(int n = 0; n < 128; n++) {
-							proc->master_params.tunings[program][n].midi_note = -1;
-							proc->master_params.tunings[program][n].cent_tuning = 0;
+							proc->tunings[program][n].midi_note = -1;
+							proc->tunings[program][n].cent_tuning = 0;
 						}
 					}
 					for(int n = 0; n < 128 && idx + 2 < len; n++) {
@@ -213,12 +213,12 @@ void ss_sysex_universal(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 						uint8_t b2 = syx[idx++];
 						uint8_t b3 = syx[idx++];
 						if(b1 == 0x7f && b2 == 0x7f && b3 == 0x7f) {
-							proc->master_params.tunings[program][n].midi_note = n;
-							proc->master_params.tunings[program][n].cent_tuning = 0.0f;
+							proc->tunings[program][n].midi_note = n;
+							proc->tunings[program][n].cent_tuning = 0.0f;
 						} else {
 							int fraction = (b2 << 7) | b3;
-							proc->master_params.tunings[program][n].midi_note = (int)b1;
-							proc->master_params.tunings[program][n].cent_tuning =
+							proc->tunings[program][n].midi_note = (int)b1;
+							proc->tunings[program][n].cent_tuning =
 							(float)(fraction * 0.0061);
 						}
 					}
@@ -228,18 +228,18 @@ void ss_sysex_universal(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 					if(len < 4 + 6) break;
 					int program = (int)syx[idx++];
 					int num_notes = (int)syx[idx++];
-					if(!proc->master_params.tunings) {
-						proc->master_params.tunings =
+					if(!proc->tunings) {
+						proc->tunings =
 						(SS_TuningEntry **)calloc(128, sizeof(SS_TuningEntry *));
-						if(!proc->master_params.tunings) return;
+						if(!proc->tunings) return;
 					}
-					if(!proc->master_params.tunings[program]) {
-						proc->master_params.tunings[program] =
+					if(!proc->tunings[program]) {
+						proc->tunings[program] =
 						(SS_TuningEntry *)malloc(128 * sizeof(SS_TuningEntry));
-						if(!proc->master_params.tunings[program]) return;
+						if(!proc->tunings[program]) return;
 						for(int n = 0; n < 128; n++) {
-							proc->master_params.tunings[program][n].midi_note = -1;
-							proc->master_params.tunings[program][n].cent_tuning = 0;
+							proc->tunings[program][n].midi_note = -1;
+							proc->tunings[program][n].cent_tuning = 0;
 						}
 					}
 					for(int ni = 0; ni < num_notes && idx + 3 <= len; ni++) {
@@ -249,8 +249,8 @@ void ss_sysex_universal(SS_Processor *proc, const uint8_t *syx, size_t len, doub
 						uint8_t b3 = syx[idx++];
 						if(b1 == 0x7f && b2 == 0x7f && b3 == 0x7f) continue;
 						int fraction = (b2 << 7) | b3;
-						proc->master_params.tunings[program][key].midi_note = (int)b1;
-						proc->master_params.tunings[program][key].cent_tuning =
+						proc->tunings[program][key].midi_note = (int)b1;
+						proc->tunings[program][key].cent_tuning =
 						(float)(fraction * 0.0061);
 					}
 					break;

@@ -21,7 +21,7 @@ extern void ss_channel_reset_drum_params(SS_MIDIChannel *ch);
 extern void ss_preset_precache(SS_BasicPreset *p);
 
 void ss_channel_program_change(SS_MIDIChannel *ch, int program) {
-	if(ch->lock_preset) return;
+	if(ch->system_params.preset_lock) return;
 	ch->program = (uint8_t)(program & 0x7F);
 	/* Look up preset in the soundbank(s) via processor */
 	struct SS_Processor *proc = ch->synth;

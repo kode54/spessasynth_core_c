@@ -46,6 +46,8 @@ extern bool ss_sample_decode(SS_BasicSample *s);
 
 void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
 void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
+extern void ss_channel_reset_system_parameters(SS_MIDIChannel *ch);
+extern void ss_channel_reset_midi_parameters(SS_MIDIChannel *ch);
 extern void ss_channel_exclusive_release(SS_MIDIChannel *ch, int note, double time);
 extern void ss_channel_reset_drum_params(SS_MIDIChannel *ch);
 extern void ss_channel_reset_internal(SS_MIDIChannel *ch);
@@ -57,11 +59,11 @@ SS_MIDIChannel *ss_channel_new(int channel_number, struct SS_Processor *synth) {
 	ch->channel_number = channel_number;
 	ch->synth = synth;
 	ch->drum_channel = (channel_number % 16 == 9);
-	ch->poly_mode = true;
-	ch->rx_channel = channel_number;
-	ch->drum_map = 0;
-	ch->cc1 = 0x10;
-	ch->cc2 = 0x11;
+	/* Initialize both the API-only system parameters and the MIDI
+	 * parameters. ss_channel_reset_internal() below resets the MIDI
+	 * parameters again, but leaves the system parameters untouched. */
+	ss_channel_reset_system_parameters(ch);
+	ss_channel_reset_midi_parameters(ch);
 	ss_channel_reset_drum_params(ch);
 	ss_channel_reset_internal(ch);
 	return ch;

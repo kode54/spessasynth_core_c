@@ -272,6 +272,174 @@ typedef struct {
 
 struct SS_Processor; /* forward */
 
+/* ── System and MIDI parameters ───────────────────────────────────────────── */
+/*
+ * Parameters are organized into a 2x2 matrix, mirroring the upstream
+ * TypeScript implementation:
+ *
+ *               | system (API only)        | MIDI (set by MIDI messages) |
+ *   ------------+--------------------------+-----------------------------+
+ *   global      | SS_GlobalSystemParameter | SS_GlobalMIDIParameter      |
+ *   per-channel | SS_ChannelSystemParameter| SS_ChannelMIDIParameter     |
+ *
+ * "system" parameters can only be changed through the API.
+ * "MIDI" parameters are set by MIDI messages (System Exclusive, RPN, ...).
+ *
+ * The shared numeric parameters (gain, pan, key_shift, fine_tune) of all
+ * four structures are summed together by ss_channel_update_internal_params()
+ * into the channel's current_* aggregate fields used during rendering.
+ */
+
+/* Tri-state value for nullable per-channel system overrides:
+ * SS_PARAM_UNSET means "fall back to the global parameter". */
+#define SS_PARAM_UNSET (-1)
+
+/**
+ * Global system parameters. These can only be changed through the API.
+ */
+typedef struct {
+	bool effects_enabled; /* whether reverb/chorus/delay/insertion run */
+	bool events_enabled; /* whether the event callback fires */
+	int voice_cap; /* maximum number of simultaneous voices */
+	bool auto_allocate_voices; /* allocate instead of stealing at the cap */
+
+	float reverb_gain; /* 0..n, 1 == 100% reverb */
+	bool reverb_lock; /* prevent MIDI edits of the reverb */
+	float chorus_gain; /* 0..n, 1 == 100% chorus */
+	bool chorus_lock; /* prevent MIDI edits of the chorus */
+	float delay_gain; /* 0..n, 1 == 100% delay */
+	bool delay_lock; /* prevent MIDI edits of the delay */
+	bool insertion_effect_lock; /* prevent MIDI edits of the insertion EFX */
+	bool drum_lock; /* prevent MIDI edits of the drum parameters */
+
+	bool black_midi_mode; /* force note killing instead of releasing */
+	int device_id; /* SysEx device ID, -1 accepts all */
+
+	/* Shared with channel: summed into the channel current_* aggregates. */
+	float gain; /* master gain, 1 == 100% */
+	float pan; /* master pan, -1 left .. 1 right */
+	float key_shift; /* global key shift in semitones (drums ignore) */
+	float fine_tune; /* global tuning in cents (drums ignore) */
+
+	SS_InterpolationType interpolation_type;
+	bool custom_vibrato_lock; /* prevent applying the custom vibrato */
+	bool nrpn_param_lock; /* prevent changing parameters via NRPN */
+	bool monophonic_retrigger; /* MS GS Wavetable-style note retrigger */
+} SS_GlobalSystemParameter;
+
+/**
+ * Global MIDI parameters. These are set by MIDI System Exclusive messages.
+ */
+typedef struct {
+	SS_MIDISystem system; /* GM, GM2, GS, XG */
+	float key_shift; /* global key shift in semitones (drums ignore) */
+	float fine_tune; /* global tuning in cents (drums ignore) */
+	float gain; /* global volume gain */
+	float pan; /* global panning, -1 left .. 1 right */
+} SS_GlobalMIDIParameter;
+
+/**
+ * Per-channel system parameters. These can only be changed through the API.
+ * The nullable members use SS_PARAM_UNSET to fall back to the global value.
+ */
+typedef struct {
+	bool preset_lock; /* prevent program changes on this channel */
+	bool is_muted; /* whether the channel is muted */
+
+	/* Shared with the synth: summed into the channel current_* aggregates. */
+	float gain; /* channel gain, 1 == 100% */
+	float pan; /* channel pan, -1 left .. 1 right */
+	float key_shift; /* channel key shift in semitones */
+	float fine_tune; /* channel tuning in cents */
+
+	int interpolation_type; /* SS_InterpolationType, or SS_PARAM_UNSET */
+	int8_t custom_vibrato_lock; /* tri-state, SS_PARAM_UNSET = inherit */
+	int8_t nrpn_param_lock; /* tri-state, SS_PARAM_UNSET = inherit */
+	int8_t monophonic_retrigger; /* tri-state, SS_PARAM_UNSET = inherit */
+} SS_ChannelSystemParameter;
+
+/**
+ * Per-channel MIDI parameters. These are set by MIDI messages.
+ *
+ * Note: unlike the upstream TypeScript, pressure, pitch_wheel and
+ * pitch_wheel_range remain in the channel's midi_controllers table, and
+ * the modulation depth remains a custom controller, so they are not
+ * duplicated here.
+ */
+typedef struct {
+	int rx_channel; /* receive channel override (-1 == off) */
+	bool poly_mode; /* true = polyphonic, false = monophonic */
+	float fine_tune; /* RPN/SysEx fine tuning in cents */
+	float key_shift; /* RPN#2/SysEx key shift in semitones */
+	bool random_pan; /* random panning for every note */
+	int assign_mode; /* voice assignment mode (0=Single, 2=FullMulti) */
+	bool efx_assign; /* route voices through the insertion EFX */
+	uint8_t cc1; /* CC1 for the GS controller matrix (default 0x10) */
+	uint8_t cc2; /* CC2 for the GS controller matrix (default 0x11) */
+	uint8_t drum_map; /* GS drum map for SysEx tracking */
+} SS_ChannelMIDIParameter;
+
+/* Selector enums for the parameter setter functions. */
+
+typedef enum {
+	SS_GLOBAL_SYS_EFFECTS_ENABLED = 0,
+	SS_GLOBAL_SYS_EVENTS_ENABLED,
+	SS_GLOBAL_SYS_VOICE_CAP,
+	SS_GLOBAL_SYS_AUTO_ALLOCATE_VOICES,
+	SS_GLOBAL_SYS_REVERB_GAIN,
+	SS_GLOBAL_SYS_REVERB_LOCK,
+	SS_GLOBAL_SYS_CHORUS_GAIN,
+	SS_GLOBAL_SYS_CHORUS_LOCK,
+	SS_GLOBAL_SYS_DELAY_GAIN,
+	SS_GLOBAL_SYS_DELAY_LOCK,
+	SS_GLOBAL_SYS_INSERTION_EFFECT_LOCK,
+	SS_GLOBAL_SYS_DRUM_LOCK,
+	SS_GLOBAL_SYS_BLACK_MIDI_MODE,
+	SS_GLOBAL_SYS_DEVICE_ID,
+	SS_GLOBAL_SYS_GAIN,
+	SS_GLOBAL_SYS_PAN,
+	SS_GLOBAL_SYS_KEY_SHIFT,
+	SS_GLOBAL_SYS_FINE_TUNE,
+	SS_GLOBAL_SYS_INTERPOLATION_TYPE,
+	SS_GLOBAL_SYS_CUSTOM_VIBRATO_LOCK,
+	SS_GLOBAL_SYS_NRPN_PARAM_LOCK,
+	SS_GLOBAL_SYS_MONOPHONIC_RETRIGGER
+} SS_GlobalSystemParameterType;
+
+typedef enum {
+	SS_GLOBAL_MIDI_SYSTEM = 0,
+	SS_GLOBAL_MIDI_KEY_SHIFT,
+	SS_GLOBAL_MIDI_FINE_TUNE,
+	SS_GLOBAL_MIDI_GAIN,
+	SS_GLOBAL_MIDI_PAN
+} SS_GlobalMIDIParameterType;
+
+typedef enum {
+	SS_CHANNEL_SYS_PRESET_LOCK = 0,
+	SS_CHANNEL_SYS_IS_MUTED,
+	SS_CHANNEL_SYS_GAIN,
+	SS_CHANNEL_SYS_PAN,
+	SS_CHANNEL_SYS_KEY_SHIFT,
+	SS_CHANNEL_SYS_FINE_TUNE,
+	SS_CHANNEL_SYS_INTERPOLATION_TYPE,
+	SS_CHANNEL_SYS_CUSTOM_VIBRATO_LOCK,
+	SS_CHANNEL_SYS_NRPN_PARAM_LOCK,
+	SS_CHANNEL_SYS_MONOPHONIC_RETRIGGER
+} SS_ChannelSystemParameterType;
+
+typedef enum {
+	SS_CHANNEL_MIDI_RX_CHANNEL = 0,
+	SS_CHANNEL_MIDI_POLY_MODE,
+	SS_CHANNEL_MIDI_FINE_TUNE,
+	SS_CHANNEL_MIDI_KEY_SHIFT,
+	SS_CHANNEL_MIDI_RANDOM_PAN,
+	SS_CHANNEL_MIDI_ASSIGN_MODE,
+	SS_CHANNEL_MIDI_EFX_ASSIGN,
+	SS_CHANNEL_MIDI_CC1,
+	SS_CHANNEL_MIDI_CC2,
+	SS_CHANNEL_MIDI_DRUM_MAP
+} SS_ChannelMIDIParameterType;
+
 typedef struct SS_MIDIChannel {
 	int16_t midi_controllers[SS_MIDI_CONTROLLER_COUNT];
 	bool locked_controllers[SS_MIDI_CONTROLLER_COUNT];
@@ -281,7 +449,6 @@ typedef struct SS_MIDIChannel {
 
 	SS_DynamicModulatorSystem dms;
 
-	int channel_transpose_key_shift;
 	int8_t channel_octave_tuning[128];
 	int channel_tuning_cents;
 	int16_t generator_offsets[SS_GEN_COUNT];
@@ -290,43 +457,27 @@ typedef struct SS_MIDIChannel {
 	bool generator_overrides_enabled;
 
 	bool drum_channel;
-	bool random_pan;
-	bool is_muted;
-	bool poly_mode; /* true = polyphonic (default), false = monophonic */
-	bool insertion_enabled; /* GS EFX assign: route voices to insertion processor */
+
 	/**
-	 * Assign mode for the channel.
-	 * ASSIGN MODE is the parameter that determines how voice assignment will be handled when sounds overlap on identical note numbers in the same channel (i.e., repeatedly struck notes).
-	 * This is initialized to a mode suitable for each Part, so for general purposes there is no need to change this.
-	 *
-	 * 0 - Single: If the same note is played multiple times in succession, the previously-sounding note will be completely silenced, and then the new note will be sounded.
-	 * 1 - LimitedMulti: If the same note is played multiple times in succession, the previously-sounding note will be continued to a certain extent even after the new note is sounded. (Default setting)
-	 * 2 - FullMulti: If the same note is played multiple times in succession, the previously-sounding note(s) will continue sounding for their natural length even after the new note is sounded.
-	 * We treat LimitedMulti like FullMulti
+	 * Per-channel system parameters (API only) and MIDI parameters
+	 * (set by MIDI messages). See the parameter struct definitions above.
 	 */
-	int assign_mode;
+	SS_ChannelSystemParameter system_params;
+	SS_ChannelMIDIParameter midi_params;
+
+	/* Aggregates recomputed by ss_channel_update_internal_params() from the
+	 * four parameter structs; consumed on the hot rendering path. */
+	float current_gain; /* output gain multiplier */
+	float current_pan; /* added pan offset in the -500..500 range */
+	float current_tuning; /* added tuning in cents */
+	int current_key_shift; /* added key shift in semitones */
 
 	uint8_t bank_msb;
 	uint8_t bank_lsb;
 	uint8_t program;
-	uint8_t drum_map; /* GS drum map value (0 = none) */
-	/**
-	 * CC1 for GS controller matrix.
-	 * An arbitrary MIDI controller, which can be bound to any synthesis parameter.
-	 * Default is 16
-	 */
-	uint8_t cc1;
-	/**
-	 * CC2 for GS controller matrix.
-	 * An arbitrary MIDI controller, which can be bound to any synthesis parameter.
-	 *  * Default is 17
-	 */
-	uint8_t cc2;
-	int rx_channel; /* receive channel override (-1 = off), default = channel_number */
 
 	SS_SoundBank *bank; /* non-owning */
 	SS_BasicPreset *preset; /* non-owning */
-	bool lock_preset;
 
 	SS_ChannelVibrato channel_vibrato;
 
@@ -370,6 +521,32 @@ void SPESSASYNTH_EXPORTS ss_channel_controller(SS_MIDIChannel *ch, int cc, int v
 void SPESSASYNTH_EXPORTS ss_channel_program_change(SS_MIDIChannel *ch, int program);
 void SPESSASYNTH_EXPORTS ss_channel_pitch_wheel(SS_MIDIChannel *ch, int value, int midi_note, double time);
 void SPESSASYNTH_EXPORTS ss_channel_reset(SS_MIDIChannel *ch);
+
+/* ── Channel parameters ──────────────────────────────────────────────────── */
+
+/**
+ * Sets a per-channel system parameter (API only).
+ * Boolean parameters treat any non-zero value as true; the nullable
+ * tri-state parameters accept SS_PARAM_UNSET to inherit the global value.
+ */
+void SPESSASYNTH_EXPORTS ss_channel_set_system_parameter(SS_MIDIChannel *ch,
+                                                         SS_ChannelSystemParameterType param,
+                                                         double value);
+
+/**
+ * Sets a per-channel MIDI parameter. Normally driven by MIDI messages,
+ * but also usable through the API.
+ */
+void SPESSASYNTH_EXPORTS ss_channel_set_midi_parameter(SS_MIDIChannel *ch,
+                                                       SS_ChannelMIDIParameterType param,
+                                                       double value);
+
+/**
+ * Recomputes the channel's current_gain/current_pan/current_tuning/
+ * current_key_shift aggregates from the four parameter structs.
+ * Called automatically by the parameter setters.
+ */
+void SPESSASYNTH_EXPORTS ss_channel_update_internal_params(SS_MIDIChannel *ch);
 
 /**
  * Render all voices in this channel into output buffers.
@@ -432,22 +609,6 @@ typedef struct {
 	float cent_tuning;
 } SS_TuningEntry;
 
-/* ── Master parameters ────────────────────────────────────────────────────── */
-
-typedef struct {
-	float master_volume; /* 0 to 1 */
-	float master_pan; /* -1 to +1 */
-	float master_pitch; /* semitones */
-	float master_tuning; /* cents */
-	float delay_gain;
-	SS_InterpolationType interpolation_type;
-	SS_MIDISystem midi_system;
-	bool reverb_enabled;
-	bool chorus_enabled;
-	bool delay_enabled;
-	SS_TuningEntry **tunings; /* [128][128] tuning grid, or NULL */
-} SS_MasterParameters;
-
 /* ── Processor (synthesis engine) ────────────────────────────────────────── */
 
 #define SS_MAX_SOUND_CHUNK 128
@@ -488,8 +649,14 @@ typedef struct SS_Processor {
 	float interleave_left[SS_MAX_SOUND_CHUNK];
 	float interleave_right[SS_MAX_SOUND_CHUNK];
 
-	SS_MasterParameters master_params;
-	float midi_volume, pan_left, pan_right;
+	/**
+	 * Global system parameters (API only) and MIDI parameters
+	 * (set by MIDI System Exclusive). See the parameter struct definitions.
+	 */
+	SS_GlobalSystemParameter system_params;
+	SS_GlobalMIDIParameter midi_params;
+	SS_TuningEntry **tunings; /* [128][128] MTS tuning grid, or NULL */
+	float pan_left, pan_right;
 	float volume_envelope_smoothing_factor;
 	float filter_smoothing_factor;
 	float pan_smoothing_factor;
@@ -593,6 +760,24 @@ void SPESSASYNTH_EXPORTS ss_processor_sysex(SS_Processor *proc, const uint8_t *d
  * samples are rendered.
  */
 void SPESSASYNTH_EXPORTS ss_processor_system_reset(SS_Processor *proc);
+
+/* ── Global parameters ───────────────────────────────────────────────────── */
+
+/**
+ * Sets a global system parameter (API only).
+ * Boolean parameters treat any non-zero value as true.
+ */
+void SPESSASYNTH_EXPORTS ss_processor_set_system_parameter(SS_Processor *proc,
+                                                           SS_GlobalSystemParameterType param,
+                                                           double value);
+
+/**
+ * Sets a global MIDI parameter. Normally driven by MIDI System Exclusive
+ * messages, but also usable through the API.
+ */
+void SPESSASYNTH_EXPORTS ss_processor_set_midi_parameter(SS_Processor *proc,
+                                                         SS_GlobalMIDIParameterType param,
+                                                         double value);
 
 /**
  * This optional callback will receive events every time either the above event

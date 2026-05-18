@@ -69,13 +69,15 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	if(vel > 127) vel = 127;
 
 	if(!ch->preset) return;
-	if(ch->is_muted) return;
+	if(ch->system_params.is_muted) return;
 
+	/* current_key_shift folds in the global system/MIDI and channel system
+	 * key shifts (see ss_channel_update_internal_params). The GS/XG SysEx
+	 * key shift is still tracked separately as a custom controller. */
 	int sound_bank_note =
 	(int)(note +
-	ch->channel_transpose_key_shift +
 	ch->custom_controllers[SS_CUSTOM_CTRL_KEY_SHIFT] +
-	(ch->drum_channel ? 0 : (ch->synth ? ch->synth->master_params.master_pitch : 0)));
+	ch->current_key_shift);
 
 	if(sound_bank_note > 127 || sound_bank_note < 0) {
 		return;
@@ -110,7 +112,7 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	 */
 	ch->last_note = note;
 
-	if(!ch->poly_mode) {
+	if(!ch->midi_params.poly_mode) {
 		ss_channel_exclusive_release(ch, -1, time);
 	}
 
@@ -155,7 +157,7 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 				pan_override_active = true;
 			}
 		}
-	} else if(ch->random_pan) {
+	} else if(ch->midi_params.random_pan) {
 		pan_override = (float)(rand() % 1001) - 500.0f;
 		pan_override_active = true;
 	}
@@ -163,15 +165,21 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	const int program = ch->preset->program;
 	int tune = -1;
 	if(ch->synth &&
-	   ch->synth->master_params.tunings &&
-	   ch->synth->master_params.tunings[program]) {
-		tune = ch->synth->master_params.tunings[program][note].midi_note;
+	   ch->synth->tunings &&
+	   ch->synth->tunings[program]) {
+		tune = ch->synth->tunings[program][note].midi_note;
 	}
 	if(tune >= 0) {
 		sound_bank_note = tune;
 	}
 
-	if(/*this.synthCore.masterParameters.monophonicRetriggerMode note implemented ||*/ ch->assign_mode == 0) {
+	/* Monophonic retrigger: the per-channel system override falls back to
+	 * the global system parameter when unset. */
+	const int8_t mono_retrig = ch->system_params.monophonic_retrigger;
+	const bool monophonic_retrigger = (mono_retrig != SS_PARAM_UNSET)
+	                                  ? (mono_retrig != 0)
+	                                  : (ch->synth && ch->synth->system_params.monophonic_retrigger);
+	if(monophonic_retrigger || ch->midi_params.assign_mode == 0) {
 		ss_channel_exclusive_release(ch, note, time);
 	}
 

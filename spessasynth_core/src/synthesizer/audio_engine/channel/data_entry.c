@@ -170,7 +170,7 @@ void ss_channel_data_entry(SS_MIDIChannel *ch, double time) {
 			 * it's actually 50 cents! (not for XG though)
 			 * also if SC-55 preset is explicitly requested (MAP1 - LSB 1), it's 100 cents as well!
 			 */
-			const bool is_xg = ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_XG;
+			const bool is_xg = ch->synth && ch->synth->midi_params.system == SS_SYSTEM_XG;
 			const bool is_100cent = is_xg && ch->bank_lsb == 1;
 			const float range = is_100cent ? 100.0f : 50.0f;
 			ch->drum_params[param_fine].pitch = (((float)data_coarse) - 64.0f) * range;

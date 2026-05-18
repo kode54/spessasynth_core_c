@@ -53,7 +53,8 @@ void ss_sysex_yamaha(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 					                ((uint32_t)(syx[7] & 0x0f) << 8) |
 					                ((uint32_t)(syx[8] & 0x0f) << 4) |
 					                (uint32_t)(syx[9] & 0x0f);
-					proc->master_params.master_tuning = ((float)tune - 1024.0f) / 10.0f;
+					ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_FINE_TUNE,
+					                                ((float)tune - 1024.0f) / 10.0f);
 				}
 				break;
 			case 0x04: /* Master volume */
@@ -63,11 +64,12 @@ void ss_sysex_yamaha(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 				ss_processor_set_midi_volume(proc, (float)(127 - data) / 127.0f);
 				break;
 			case 0x06: /* Master transpose (semitones) */
-				proc->master_params.master_pitch = (float)((int)data - 64);
+				ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_KEY_SHIFT,
+				                                (float)((int)data - 64));
 				break;
 			case 0x7e: /* XG Reset */
 			case 0x7f: /* XG System On */
-				proc->master_params.midi_system = SS_SYSTEM_XG;
+				proc->midi_params.system = SS_SYSTEM_XG;
 				ss_processor_system_reset(proc);
 				break;
 			default:
@@ -96,11 +98,11 @@ void ss_sysex_yamaha(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 				ss_channel_program_change(mch, (int)data);
 				break;
 			case 0x04: /* Rx. channel */
-				mch->rx_channel = (int)data + channel_offset;
-				proc->custom_channel_numbers = proc->custom_channel_numbers || (mch->rx_channel != mch->channel_number);
+				mch->midi_params.rx_channel = (int)data + channel_offset;
+				proc->custom_channel_numbers = proc->custom_channel_numbers || (mch->midi_params.rx_channel != mch->channel_number);
 				break;
 			case 0x05: /* Poly/mono mode */
-				mch->poly_mode = (data == 1);
+				mch->midi_params.poly_mode = (data == 1);
 				break;
 			case 0x07: /* Part mode (0=normal, else=drum) */
 				mch->drum_channel = (data != 0);
@@ -116,9 +118,9 @@ void ss_sysex_yamaha(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 				break;
 			case 0x0e: /* Pan (0=random) */
 				if(data == 0) {
-					mch->random_pan = true;
+					mch->midi_params.random_pan = true;
 				} else {
-					mch->random_pan = false;
+					mch->midi_params.random_pan = false;
 					ss_channel_controller(mch, SS_MIDCON_PAN, (int)data, t);
 				}
 				break;
@@ -163,7 +165,7 @@ void ss_sysex_yamaha(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 
 	/* XG Drum setup (addr1 high nibble = 3, e.g. 0x30-0x3F) */
 	if((a1 >> 4) == 3) {
-		if(proc->master_params.midi_system != SS_SYSTEM_XG) return;
+		if(proc->midi_params.system != SS_SYSTEM_XG) return;
 		uint8_t drum_key = a2;
 		/* Apply to all drum channels */
 		for(int ci = 0; ci < proc->channel_count; ci++) {

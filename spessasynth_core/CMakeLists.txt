@@ -43,6 +43,7 @@ set(SS_SOURCES
     src/synthesizer/audio_engine/channel/reset.c
     src/synthesizer/audio_engine/channel/data_entry.c
     src/synthesizer/audio_engine/channel/awe32_nrpn.c
+    src/synthesizer/audio_engine/parameters.c
     src/synthesizer/audio_engine/engine_methods/system_exclusive.c
     src/synthesizer/audio_engine/engine_methods/system_exclusive/universal.c
     src/synthesizer/audio_engine/engine_methods/system_exclusive/roland.c

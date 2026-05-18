@@ -79,16 +79,16 @@ bool ss_voice_render(SS_Voice *v,
 
 	/* ── TUNING ────────────────────────────────────────────────────────── */
 	int target_key = v->target_key;
-	float cents = (float)v->modulated_generators[SS_GEN_FINE_TUNE] + (float)ch->channel_octave_tuning[v->midi_note] + (float)ch->channel_tuning_cents + v->pitch_offset;
+	float cents = (float)v->modulated_generators[SS_GEN_FINE_TUNE] + (float)ch->channel_octave_tuning[v->midi_note] + (float)ch->channel_tuning_cents + ch->current_tuning + v->pitch_offset;
 	float semitones = (float)v->modulated_generators[SS_GEN_COARSE_TUNE];
 
 	/* MIDI tuning standard */
 	const int program = v->preset->program;
 	const SS_TuningEntry *tuning = NULL;
 	if(ch->synth) {
-		if(ch->synth->master_params.tunings &&
-		   ch->synth->master_params.tunings[program]) {
-			tuning = &ch->synth->master_params.tunings[program][v->midi_note];
+		if(ch->synth->tunings &&
+		   ch->synth->tunings[program]) {
+			tuning = &ch->synth->tunings[program][v->midi_note];
 		}
 	}
 	if(tuning) {
@@ -252,27 +252,30 @@ bool ss_voice_render(SS_Voice *v,
 	v->is_active = v->is_active && env_active;
 
 	/* ── Panning and mix ─────────────────────────────────────────────── */
-	float pan_val;
+	/* Generator pan in the -500..500 range. The channel pan controller (CC#10)
+	 * is already integrated into the generator by the default modulators;
+	 * ch->current_pan carries the global/channel system + global MIDI pan. */
+	float pan;
 	if(v->override_pan_active) {
-		pan_val = v->override_pan / 500.0f;
+		pan = v->override_pan;
 	} else {
-		/* Smooth only the generator pan (matches TS: currentPan tracks modulated[pan] only).
-		 * v->current_pan is stored in the -500..500 generator range.
-		 * Channel pan is already integrated into the generator by the default modulators. */
+		/* Smooth only the generator pan to prevent clicking. */
 		v->current_pan += ((float)v->modulated_generators[SS_GEN_PAN] - v->current_pan) * pan_smoothing;
-		pan_val = v->current_pan / 500.0f;
+		pan = v->current_pan;
 	}
 
-	/* Master volume applied here */
-	const float output_gain = ch->synth ? ch->synth->master_params.master_volume * ch->synth->midi_volume * voice_gain : voice_gain;
+	/* current_gain folds in the global system/MIDI gain and the channel
+	 * system gain (see ss_channel_update_internal_params). */
+	const float output_gain = ch->current_gain * voice_gain;
 	const float reverb_amt = (float)v->modulated_generators[SS_GEN_REVERB_EFFECTS_SEND] * v->reverb_send;
 	const float chorus_amt = (float)v->modulated_generators[SS_GEN_CHORUS_EFFECTS_SEND] * v->chorus_send;
 
 	/* Equal-power panning */
 	ss_init_pan_table(); /* just in case */
-	int pan_index = (int)((pan_val + 1.0f) * 500.0f);
-	if(pan_index < 0) pan_index = 0;
-	if(pan_index > 1000) pan_index = 1000;
+	float pan_combined = pan + ch->current_pan;
+	if(pan_combined < (float)MIN_PAN) pan_combined = (float)MIN_PAN;
+	if(pan_combined > (float)MAX_PAN) pan_combined = (float)MAX_PAN;
+	int pan_index = (int)(pan_combined - (float)MIN_PAN);
 	const float pan_left = ss_panTableLeft[pan_index];
 	const float pan_right = ss_panTableRight[pan_index];
 	const float gain_left = pan_left * output_gain;
@@ -283,7 +286,7 @@ bool ss_voice_render(SS_Voice *v,
 		if(delaySend > 0) {
 			const float delayGain =
 			output_gain *
-			ch->synth->master_params.delay_gain *
+			ch->synth->system_params.delay_gain *
 			((float)(delaySend >> 7) / 127.0f);
 			for(int i = 0; i < sample_count; i++) {
 				const float s = delayGain * buf[i];
@@ -299,7 +302,8 @@ bool ss_voice_render(SS_Voice *v,
 	}
 
 	if(reverb && reverb_amt > 0) {
-		const float reverb_gain = output_gain * (reverb_amt / 1000.0f);
+		const float reverb_gain = output_gain * (reverb_amt / 1000.0f) *
+		                          (ch->synth ? ch->synth->system_params.reverb_gain : 1.0f);
 		for(int i = 0; i < sample_count; i++) {
 			float s = buf[i];
 			reverb[i] += s * reverb_gain;
@@ -307,7 +311,8 @@ bool ss_voice_render(SS_Voice *v,
 	}
 
 	if(chorus && chorus_amt > 0) {
-		const float chorus_gain = output_gain * (chorus_amt / 1000.0f);
+		const float chorus_gain = output_gain * (chorus_amt / 1000.0f) *
+		                          (ch->synth ? ch->synth->system_params.chorus_gain : 1.0f);
 		for(int i = 0; i < sample_count; i++) {
 			float s = buf[i];
 			chorus[i] += s * chorus_gain;
@@ -327,10 +332,15 @@ void ss_channel_render(SS_MIDIChannel *ch,
                        float *chorus,
                        float *delay,
                        uint32_t sample_count) {
-	if(ch->is_muted) return;
+	if(ch->system_params.is_muted) return;
 	SS_Processor *proc = ch->synth;
 
-	SS_InterpolationType interp = proc ? proc->master_params.interpolation_type : SS_INTERP_LINEAR;
+	/* Per-channel interpolation override falls back to the global setting. */
+	SS_InterpolationType interp = SS_INTERP_LINEAR;
+	if(ch->system_params.interpolation_type != SS_PARAM_UNSET)
+		interp = (SS_InterpolationType)ch->system_params.interpolation_type;
+	else if(proc)
+		interp = proc->system_params.interpolation_type;
 	float vol_smoothing = proc ? proc->volume_envelope_smoothing_factor : 0.01f;
 	float filter_smoothing = proc ? proc->filter_smoothing_factor : 0.1f;
 	float pan_smoothing = proc ? proc->pan_smoothing_factor : 0.1f;
