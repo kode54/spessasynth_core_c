@@ -129,13 +129,10 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	if(!ch->preset) return;
 	if(ch->system_params.is_muted) return;
 
-	/* current_key_shift folds in the global system/MIDI and channel system
-	 * key shifts (see ss_channel_update_internal_params). The GS/XG SysEx
-	 * key shift is still tracked separately as a custom controller. */
-	int sound_bank_note =
-	(int)(note +
-	ch->custom_controllers[SS_CUSTOM_CTRL_KEY_SHIFT] +
-	ch->current_key_shift);
+	/* current_key_shift folds in the global system/MIDI and channel
+	 * system/MIDI key shifts (see ss_channel_update_internal_params). The
+	 * GS/XG SysEx key shift is the channel MIDI key shift parameter. */
+	int sound_bank_note = (int)(note + ch->current_key_shift);
 
 	if(sound_bank_note > 127 || sound_bank_note < 0) {
 		return;

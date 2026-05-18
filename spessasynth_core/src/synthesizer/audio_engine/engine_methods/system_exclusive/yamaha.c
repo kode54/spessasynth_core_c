@@ -109,9 +109,7 @@ void ss_sysex_yamaha(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 				ss_processor_event_emit(proc, SS_EVENT_DRUM_CHANGE, channel_idx, (int)mch->drum_channel, 0);
 				break;
 			case 0x08: /* Note shift (key shift) — ignore on drum channels */
-				if(!mch->drum_channel) {
-					ss_channel_set_custom_controller(mch, SS_CUSTOM_CTRL_KEY_SHIFT, (float)((int)data - 64));
-				}
+				ss_channel_set_midi_parameter(mch, SS_CHANNEL_MIDI_KEY_SHIFT, (double)((int)data - 64));
 				break;
 			case 0x0b: /* Volume (CC7) */
 				ss_channel_controller(mch, SS_MIDCON_MAIN_VOLUME, (int)data, t);

@@ -346,7 +346,7 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 								case 0x16: {
 									/* This is the pitch key shift sysex */
 									const int key_shift = (int)data - 64;
-									ss_channel_set_custom_controller(mch, SS_CUSTOM_CTRL_KEY_SHIFT, (float)key_shift);
+									ss_channel_set_midi_parameter(mch, SS_CHANNEL_MIDI_KEY_SHIFT, (double)key_shift);
 									break;
 								}
 
