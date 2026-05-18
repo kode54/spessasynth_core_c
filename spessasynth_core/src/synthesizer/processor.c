@@ -28,6 +28,7 @@ extern void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time);
 extern void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch, double time);
 extern void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
 extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
+extern void ss_processor_init_parameters(SS_Processor *proc);
 
 void ss_processor_set_midi_volume(SS_Processor *proc, float volume);
 
@@ -71,7 +72,7 @@ SS_BasicPreset *ss_processor_resolve_preset(SS_Processor *proc,
 	size_t total = proc_collect_fbanks(proc, &arr);
 	SS_BasicPreset *p = ss_filtered_banks_find_preset(arr, total, target_channel,
 	                                                  program, bank_msb, bank_lsb,
-	                                                  (int)proc->master_params.midi_system,
+	                                                  (int)proc->midi_params.system,
 	                                                  is_drum);
 	free(arr);
 	return p;
@@ -95,7 +96,7 @@ static void proc_refresh_presets(SS_Processor *proc) {
 		SS_BasicPreset *p = ss_filtered_banks_find_preset(
 		arr, total, ch->channel_number,
 		ch->program, ch->bank_msb, ch->bank_lsb,
-		(int)proc->master_params.midi_system,
+		(int)proc->midi_params.system,
 		ch->drum_channel);
 		if(p) ch->preset = p;
 	}
@@ -121,17 +122,8 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 		proc->options.preload_instruments = true;
 	}
 
-	/* Master params defaults */
-	proc->master_params.master_volume = 1.0f;
-	proc->master_params.master_pan = 0.0f;
-	proc->master_params.master_pitch = 0.0f;
-	proc->master_params.master_tuning = 0.0f;
-	proc->master_params.delay_gain = 1.0f;
-	proc->master_params.interpolation_type = proc->options.interpolation;
-	proc->master_params.midi_system = SS_SYSTEM_GS;
-	proc->master_params.reverb_enabled = true;
-	proc->master_params.chorus_enabled = true;
-	proc->master_params.delay_enabled = true;
+	/* System and MIDI parameter defaults */
+	ss_processor_init_parameters(proc);
 
 	/* MIDI volume */
 	ss_processor_set_midi_volume(proc, 1.0);
@@ -183,9 +175,9 @@ void ss_processor_free(SS_Processor *proc) {
 	free(proc->bank_groups);
 
 	/* Free MTS tuning grid if allocated */
-	if(proc->master_params.tunings) {
-		for(int i = 0; i < 128; i++) free(proc->master_params.tunings[i]);
-		free(proc->master_params.tunings);
+	if(proc->tunings) {
+		for(int i = 0; i < 128; i++) free(proc->tunings[i]);
+		free(proc->tunings);
 	}
 
 	ss_reverb_free(proc->reverb);
@@ -385,7 +377,7 @@ void ss_processor_set_event_callback(SS_Processor *proc,
 
 void ss_processor_event_emit(SS_Processor *proc, SS_SynthEventType type,
                              int channel, int v1, int v2) {
-	if(!proc->event_callback) return;
+	if(!proc->event_callback || !proc->system_params.events_enabled) return;
 	SS_SynthEvent ev;
 	ev.type = type;
 	ev.channel = channel;
@@ -415,9 +407,9 @@ static void ss_processor_render_internal(SS_Processor *proc,
 
 	for(int i = 0; i < proc->channel_count; i++) {
 		SS_MIDIChannel *ch = proc->midi_channels[i];
-		if(!ch || ch->is_muted || ch->voice_count == 0) continue;
+		if(!ch || ch->system_params.is_muted || ch->voice_count == 0) continue;
 
-		if(proc->options.enable_effects && ch->insertion_enabled &&
+		if(proc->system_params.effects_enabled && ch->midi_params.efx_assign &&
 		   proc->insertion_active) {
 			/* Route this channel's voices into the insertion input buffers.
 			 * Skip reverb/chorus/delay sends: the insertion processor handles them. */
@@ -464,7 +456,7 @@ void ss_processor_render(SS_Processor *proc,
 		if(proc->delay_active) {
 			memset(delay, 0, sizeof(float) * block_count);
 		}
-		if(proc->options.enable_effects && proc->insertion_active) {
+		if(proc->system_params.effects_enabled && proc->insertion_active) {
 			memset(proc->insertion_left, 0, sizeof(float) * block_count);
 			memset(proc->insertion_right, 0, sizeof(float) * block_count);
 		}
@@ -472,7 +464,7 @@ void ss_processor_render(SS_Processor *proc,
 		ss_processor_render_internal(proc, out_left, out_right, reverb, chorus, delay, block_count);
 
 		/* Run insertion processor first: it feeds into the stereo out and effect buses */
-		if(proc->options.enable_effects && proc->insertion_active && proc->insertion) {
+		if(proc->system_params.effects_enabled && proc->insertion_active && proc->insertion) {
 			proc->insertion->process(proc->insertion,
 			                         proc->insertion_left, proc->insertion_right,
 			                         out_left, out_right,
@@ -482,7 +474,7 @@ void ss_processor_render(SS_Processor *proc,
 
 		/* These mix into the output, with the option of chorus and/or delay emitting into the reverb buffers */
 		ss_chorus_process(proc->chorus, chorus, out_left, out_right, reverb, delay, block_count);
-		if(proc->delay_active && proc->master_params.midi_system != SS_SYSTEM_XG) {
+		if(proc->delay_active && proc->midi_params.system != SS_SYSTEM_XG) {
 			ss_delay_process(proc->delay, delay, out_left, out_right, reverb, block_count);
 		}
 		ss_reverb_process(proc->reverb, reverb, out_left, out_right, block_count);
@@ -617,7 +609,7 @@ void ss_processor_system_reset(SS_Processor *proc) {
 	ss_chorus_set_macro(proc->chorus, 2);
 	// Delay1 default
 	ss_delay_set_macro(proc->delay, 0);
-	if(proc->master_params.delay_enabled) proc->delay_active = false;
+	if(!proc->system_params.delay_lock) proc->delay_active = false;
 
 	/* Reset insertion: free old processor, create default Thru */
 	ss_insertion_free(proc->insertion);
@@ -630,7 +622,7 @@ void ss_processor_system_reset(SS_Processor *proc) {
 	proc->insertion_active = false;
 	for(int i = 0; i < proc->channel_count; i++) {
 		if(proc->midi_channels[i])
-			proc->midi_channels[i]->insertion_enabled = false;
+			proc->midi_channels[i]->midi_params.efx_assign = false;
 	}
 
 	ss_processor_event_emit(proc, SS_EVENT_STOP_ALL, -1, 0, 0);
@@ -638,7 +630,9 @@ void ss_processor_system_reset(SS_Processor *proc) {
 
 void ss_processor_set_midi_volume(SS_Processor *proc, float volume) {
 	/* GM2 specification, section 4.1: volume is squared.
-	 * Though, according to my own testing, Math.E seems like a better choice
+	 * Though, according to my own testing, Math.E seems like a better choice.
+	 * The curved value is stored as the global MIDI gain parameter.
 	 */
-	proc->midi_volume = powf(volume, M_E);
+	ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_GAIN,
+	                                powf(volume, (float)M_E));
 }

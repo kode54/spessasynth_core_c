@@ -111,10 +111,10 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 			 * Dave-Rodgers-D-j-Vu-Anonymous-20200419154845-nonstop2k.com.mid
 			 */
 			if(ch->channel_number % 16 == 9 &&
-			   ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_XG) {
+			   ch->synth && ch->synth->midi_params.system == SS_SYSTEM_XG) {
 				ch->bank_msb = 127;
 			}
-			if(ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_XG) {
+			if(ch->synth && ch->synth->midi_params.system == SS_SYSTEM_XG) {
 				ch->drum_channel = ch->bank_msb == 120 || ch->bank_msb == 127;
 			}
 			break;

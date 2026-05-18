@@ -21,6 +21,7 @@
 #define EFX_SENDS_GAIN_CORRECTION 2.0f
 
 extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
+extern void ss_channel_reset_midi_parameters(SS_MIDIChannel *ch);
 
 static void reset_generator_overrides(SS_MIDIChannel *ch) {
 	for(int i = 0; i < SS_GEN_COUNT; i++)
@@ -118,8 +119,10 @@ static inline float drum_params_reverb(int note) {
 }
 
 void ss_channel_reset_drum_params(SS_MIDIChannel *ch) {
+	/* The drum parameters can be locked against MIDI/API edits. */
+	if(ch->synth && ch->synth->system_params.drum_lock) return;
 	/* Initialize drum params to defaults */
-	bool is_xg = ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_XG;
+	bool is_xg = ch->synth && ch->synth->midi_params.system == SS_SYSTEM_XG;
 	for(int k = 0; k < 128; k++) {
 		ch->drum_params[k].pitch = 0.0f;
 		ch->drum_params[k].gain = 1.0f;
@@ -138,7 +141,7 @@ void ss_channel_reset_drum_params(SS_MIDIChannel *ch) {
 static void reset_portamento(SS_MIDIChannel *ch) {
 	if(ch->locked_controllers[SS_MIDCON_PORTAMENTO_CONTROL]) return;
 
-	if(ch->synth && ch->synth->master_params.midi_system == SS_SYSTEM_XG) {
+	if(ch->synth && ch->synth->midi_params.system == SS_SYSTEM_XG) {
 		ch->last_note = 60;
 	} else {
 		ch->last_note = -1;
@@ -174,7 +177,7 @@ void ss_channel_reset_internal(SS_MIDIChannel *ch) {
 		proc->insertion_active = false;
 		for(int i = 0; i < proc->channel_count; i++) {
 			if(proc->midi_channels[i])
-				proc->midi_channels[i]->insertion_enabled = false;
+				proc->midi_channels[i]->midi_params.efx_assign = false;
 		}
 	}
 
@@ -188,18 +191,21 @@ void ss_channel_reset_internal(SS_MIDIChannel *ch) {
 
 	ss_dynamic_modulator_system_init(&ch->dms);
 
-	ch->assign_mode = 2;
-	ch->poly_mode = true;
-	ch->rx_channel = ch->channel_number;
-	ch->random_pan = false;
+	/* Reset the per-channel MIDI parameters (assign mode, poly mode,
+	 * receive channel, random pan, CC1/CC2, ...) to their defaults.
+	 * Per-channel system parameters are API-only and survive a MIDI reset. */
+	ss_channel_reset_midi_parameters(ch);
 
 	memcpy(&ch->custom_controllers, &custom_reset_array, sizeof(ch->custom_controllers));
 
 	memset(ch->channel_octave_tuning, 0, sizeof(ch->channel_octave_tuning));
 	ch->channel_tuning_cents = 0;
 
+	/* Refresh the current_* aggregates from the parameter structs. */
+	ss_channel_update_internal_params(ch);
+
 	/* Reset program */
-	const int default_bank_msb = ch->synth ? (ch->synth->master_params.midi_system == SS_SYSTEM_GM2 ? 121 : 0) : 0;
+	const int default_bank_msb = ch->synth ? (ch->synth->midi_params.system == SS_SYSTEM_GM2 ? 121 : 0) : 0;
 	ch->midi_controllers[SS_MIDCON_BANK_SELECT] = default_bank_msb << 7;
 	ch->bank_msb = default_bank_msb;
 	ch->bank_lsb = 0;

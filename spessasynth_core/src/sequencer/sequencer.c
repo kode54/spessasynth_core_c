@@ -443,7 +443,7 @@ static void dispatch_master_volume(SS_Sequencer *seq, float value) {
 	if(seq->callbacks.set_master_volume)
 		seq->callbacks.set_master_volume(seq->callbacks.context, value);
 	if(seq->proc)
-		seq->proc->master_params.master_volume = value;
+		ss_processor_set_system_parameter(seq->proc, SS_GLOBAL_SYS_GAIN, value);
 }
 
 /** Build the port-select SysEx and dispatch it ahead of a voice event. */
@@ -591,7 +591,7 @@ static void begin_fade(SS_Sequencer *seq) {
 	/* Remember the master volume the synth currently holds so we can
 	 * fade relative to it and restore on fade-cancel.  Callback-mode
 	 * has no introspection hook, so we assume the nominal 1.0. */
-	seq->saved_master_volume = seq->proc ? seq->proc->master_params.master_volume : 1.0f;
+	seq->saved_master_volume = seq->proc ? seq->proc->system_params.gain : 1.0f;
 }
 
 /** Rewind the current song's event indexes to the first event at or

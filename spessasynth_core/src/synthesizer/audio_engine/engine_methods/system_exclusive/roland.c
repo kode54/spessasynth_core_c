@@ -57,7 +57,7 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 
 				/* SYSTEM MODE SET */
 				if(a1 == 0 && a2 == 0 && a3 == 0x7f && data == 0x00) {
-					proc->master_params.midi_system = SS_SYSTEM_GS;
+					proc->midi_params.system = SS_SYSTEM_GS;
 					ss_processor_system_reset(proc);
 					return;
 				}
@@ -74,7 +74,8 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 								                      ((uint32_t)(syx[8] & 0x0f) << 8) |
 								                      ((uint32_t)(syx[9] & 0x0f) << 4) |
 								                      (syx[10] & 0x0f);
-								proc->master_params.master_tuning = ((float)tune - 1024.0f) / 10.0f;
+								ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_FINE_TUNE,
+								                                ((float)tune - 1024.0f) / 10.0f);
 								break;
 							}
 
@@ -84,12 +85,14 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 
 							/* Roland GS master key shift (transpose) */
 							case 0x05:
-								proc->master_params.master_pitch = (float)((int)data - 64);
+								ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_KEY_SHIFT,
+								                                (float)((int)data - 64));
 								break;
 
 							/* Roland master pan */
 							case 0x06:
-								proc->master_params.master_pan = (float)((int)data - 64) / 64.0f;
+								ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_PAN,
+								                                (float)((int)data - 64) / 64.0f);
 								break;
 
 							case 0x7f:
@@ -97,11 +100,11 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 								/* GS mode */
 								if(data == 0x00) {
 									/* This is a GS reset */
-									proc->master_params.midi_system = SS_SYSTEM_GS;
+									proc->midi_params.system = SS_SYSTEM_GS;
 									ss_processor_system_reset(proc);
 								} else if(data == 0x7f) {
 									/* GS mode off */
-									proc->master_params.midi_system = SS_SYSTEM_GM;
+									proc->midi_params.system = SS_SYSTEM_GM;
 									ss_processor_system_reset(proc);
 								}
 								break;
@@ -115,11 +118,11 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 						const bool is_chorus = a3 >= 0x38 && a3 <= 0x40;
 						const bool is_delay = a3 >= 0x50 && a3 <= 0x5a;
 						/* Disable effect editing if locked */
-						if(is_reverb && !proc->master_params.reverb_enabled)
+						if(is_reverb && proc->system_params.reverb_lock)
 							return;
-						if(is_chorus && !proc->master_params.chorus_enabled)
+						if(is_chorus && proc->system_params.chorus_lock)
 							return;
-						if(is_delay && !proc->master_params.delay_enabled)
+						if(is_delay && proc->system_params.delay_lock)
 							return;
 						/*
 						 0x40 - chorus to delay; any delay param activates delay
@@ -317,24 +320,24 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 									break;
 
 								case 0x02:
-									mch->rx_channel = (data == 0x10) ? -1 : (int)data + channel_offset;
-									if(mch->rx_channel != mch->channel_number)
+									mch->midi_params.rx_channel = (data == 0x10) ? -1 : (int)data + channel_offset;
+									if(mch->midi_params.rx_channel != mch->channel_number)
 										proc->custom_channel_numbers = true;
 									break;
 
 								case 0x13:
 									/* Mono/poly */
-									mch->poly_mode = data == 1;
+									mch->midi_params.poly_mode = data == 1;
 									break;
 
 								case 0x14:
 									/* Assign mode */
-									mch->assign_mode = data;
+									mch->midi_params.assign_mode = data;
 									break;
 
 								case 0x15: {
 									/* This is the Use for Drum Part sysex (multiple drums) */
-									mch->drum_map = data;
+									mch->midi_params.drum_map = data;
 									const bool is_drums = data > 0; /* If set to other than 0, is a drum channel */
 									mch->drum_channel = is_drums;
 									break;
@@ -358,9 +361,9 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 								case 0x1c: {
 									/* 0 is random */
 									if(data == 0) {
-										mch->random_pan = true;
+										mch->midi_params.random_pan = true;
 									} else {
-										mch->random_pan = false;
+										mch->midi_params.random_pan = false;
 										ss_channel_controller(mch, SS_MIDCON_PAN, data, t);
 									}
 									break;
@@ -368,13 +371,13 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 
 								case 0x1f: {
 									/* CC1 controller number */
-									mch->cc1 = data;
+									mch->midi_params.cc1 = data;
 									break;
 								}
 
 								case 0x20: {
 									// CC2 controller number
-									mch->cc2 = data;
+									mch->midi_params.cc2 = data;
 									break;
 								}
 
@@ -537,13 +540,13 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 
 							case 0x40: {
 								/* CC1 */
-								ss_dynamic_modulator_system_setup_receiver(&mch->dms, a3, data, mch->cc1, false);
+								ss_dynamic_modulator_system_setup_receiver(&mch->dms, a3, data, mch->midi_params.cc1, false);
 								break;
 							}
 
 							case 0x50: {
 								/* CC2 */
-								ss_dynamic_modulator_system_setup_receiver(&mch->dms, a3, data, mch->cc2, false);
+								ss_dynamic_modulator_system_setup_receiver(&mch->dms, a3, data, mch->midi_params.cc2, false);
 								break;
 							}
 						}
@@ -577,7 +580,7 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 							case 0x22: {
 								/* EFX assign */
 								const bool efx = data == 1;
-								mch->insertion_enabled = efx;
+								mch->midi_params.efx_assign = efx;
 								proc->insertion_active = proc->insertion_active || efx;
 								break;
 							}
@@ -606,7 +609,7 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 							const int pitch = (int)data - 60;
 							for(int ch = 0; ch < proc->channel_count; ch++) {
 								SS_MIDIChannel *mch = proc->midi_channels[ch];
-								if(!mch || mch->drum_map != map) continue;
+								if(!mch || mch->midi_params.drum_map != map) continue;
 								/* Apply same thing: SC-55 uses 100 cents, SC-88 and above is 50 */
 								mch->drum_params[drum_key].pitch = (float)(pitch * (mch->bank_lsb == 1 ? 100 : 50));
 							}
@@ -618,7 +621,7 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 							const float gain = (float)data / 120.0f;
 							for(int ch = 0; ch < proc->channel_count; ch++) {
 								SS_MIDIChannel *mch = proc->midi_channels[ch];
-								if(!mch || mch->drum_map != map) continue;
+								if(!mch || mch->midi_params.drum_map != map) continue;
 								mch->drum_params[drum_key].gain = gain;
 							}
 							break;
@@ -628,7 +631,7 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 							/* Drum Assign Group (exclusive class) */
 							for(int ch = 0; ch < proc->channel_count; ch++) {
 								SS_MIDIChannel *mch = proc->midi_channels[ch];
-								if(!mch || mch->drum_map != map) continue;
+								if(!mch || mch->midi_params.drum_map != map) continue;
 								mch->drum_params[drum_key].exclusive_class = data;
 							}
 							break;
@@ -638,7 +641,7 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 							/* Pan */
 							for(int ch = 0; ch < proc->channel_count; ch++) {
 								SS_MIDIChannel *mch = proc->midi_channels[ch];
-								if(!mch || mch->drum_map != map) continue;
+								if(!mch || mch->midi_params.drum_map != map) continue;
 								mch->drum_params[drum_key].pan = data;
 							}
 							break;
@@ -649,7 +652,7 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 							const float gain = (float)data / 127.0f;
 							for(int ch = 0; ch < proc->channel_count; ch++) {
 								SS_MIDIChannel *mch = proc->midi_channels[ch];
-								if(!mch || mch->drum_map != map) continue;
+								if(!mch || mch->midi_params.drum_map != map) continue;
 								mch->drum_params[drum_key].reverb_gain = gain;
 							}
 							break;
@@ -660,7 +663,7 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 							const float gain = (float)data / 127.0f;
 							for(int ch = 0; ch < proc->channel_count; ch++) {
 								SS_MIDIChannel *mch = proc->midi_channels[ch];
-								if(!mch || mch->drum_map != map) continue;
+								if(!mch || mch->midi_params.drum_map != map) continue;
 								mch->drum_params[drum_key].chorus_gain = gain;
 							}
 							break;
@@ -670,7 +673,7 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 							/* Receive Note Off */
 							for(int ch = 0; ch < proc->channel_count; ch++) {
 								SS_MIDIChannel *mch = proc->midi_channels[ch];
-								if(!mch || mch->drum_map != map) continue;
+								if(!mch || mch->midi_params.drum_map != map) continue;
 								mch->drum_params[drum_key].rx_note_off = data == 1;
 							}
 							break;
@@ -680,7 +683,7 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 							/* Receive Note On */
 							for(int ch = 0; ch < proc->channel_count; ch++) {
 								SS_MIDIChannel *mch = proc->midi_channels[ch];
-								if(!mch || mch->drum_map != map) continue;
+								if(!mch || mch->midi_params.drum_map != map) continue;
 								mch->drum_params[drum_key].rx_note_on = data == 1;
 							}
 							break;
@@ -691,7 +694,7 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 							const float gain = (float)data / 127.0f;
 							for(int ch = 0; ch < proc->channel_count; ch++) {
 								SS_MIDIChannel *mch = proc->midi_channels[ch];
-								if(!mch || mch->drum_map != map) continue;
+								if(!mch || mch->midi_params.drum_map != map) continue;
 								mch->drum_params[drum_key].delay_gain = gain;
 							}
 							break;
