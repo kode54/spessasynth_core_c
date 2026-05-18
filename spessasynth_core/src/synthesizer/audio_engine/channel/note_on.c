@@ -59,6 +59,64 @@ static bool channel_add_voice(SS_MIDIChannel *ch, SS_Voice *v) {
 	return true;
 }
 
+/* ── Voice cap / stealing ────────────────────────────────────────────────── */
+
+/*
+ * Stealing priority for a voice: higher means more important / keep longer.
+ * Mirrors SynthesizerCore.assignVoicePriorities() in spessasynth_core: drums
+ * are favored, released and quiet voices are the first to go, while louder
+ * and younger voices (earlier volume-envelope stage) are kept.
+ */
+static float voice_steal_priority(const SS_Voice *v, bool drum_channel) {
+	float p = 0.0f;
+	if(drum_channel) p += 5.0f;          /* percussion is important */
+	if(v->is_in_release) p -= 10.0f;     /* already released: expendable */
+	p += (float)v->velocity / 25.0f;     /* louder note (0..~5): keep */
+	p -= (float)v->volume_env.state;     /* later envelope stage: drop sooner */
+	p -= (float)v->volume_env.attenuation_cb / 200.0f; /* quieter: drop sooner */
+	return p;
+}
+
+/*
+ * Enforces the global voice cap.  Once the number of active voices across all
+ * channels has reached the cap, the lowest-priority voice is silenced to make
+ * room for the one about to start.  The layers already placed by the current
+ * note-on (own_ch->voices[own_start..]) are spared so a multi-layer note-on
+ * cannot cannibalize itself; voices from earlier note-ons — even at the same
+ * timestamp — remain fair game.  With auto-allocation enabled the cap is
+ * advisory and nothing is stolen.
+ */
+static void enforce_voice_cap(SS_Processor *proc, double time,
+                              const SS_MIDIChannel *own_ch, size_t own_start) {
+	(void)time;
+	const int cap = proc->system_params.voice_cap;
+	if(cap <= 0 || proc->system_params.auto_allocate_voices) return;
+
+	int active = 0;
+	SS_Voice *lowest = NULL;
+	float lowest_priority = 0.0f;
+	for(int ci = 0; ci < proc->channel_count; ci++) {
+		SS_MIDIChannel *ch = proc->midi_channels[ci];
+		if(!ch) continue;
+		for(size_t vi = 0; vi < ch->voice_count; vi++) {
+			SS_Voice *v = ch->voices[vi];
+			if(!v->is_active) continue;
+			active++;
+			/* Never steal a layer started by the in-progress note-on. */
+			if(ch == own_ch && vi >= own_start) continue;
+			const float p = voice_steal_priority(v, ch->drum_channel);
+			if(!lowest || p < lowest_priority) {
+				lowest = v;
+				lowest_priority = p;
+			}
+		}
+	}
+	/* Silenced voices stop rendering immediately and are reaped by
+	 * ss_channel_remove_finished_voices(), which returns them to the pool. */
+	if(active >= cap && lowest)
+		lowest->is_active = false;
+}
+
 /* ── Note on ─────────────────────────────────────────────────────────────── */
 
 void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
@@ -190,6 +248,10 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	SS_Processor *proc = ch->synth;
 
 	SS_DynamicModulatorSystem *dms = &ch->dms;
+
+	/* Voices appended below belong to this note-on; the cap enforcement
+	 * must never steal them back. */
+	const size_t own_voices_start = ch->voice_count;
 
 	for(size_t si = 0; si < sd_count; si++) {
 		SS_SynthesisData *sd = &synth_data[si];
@@ -359,6 +421,9 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 				}
 			}
 		}
+
+		/* Enforce the global voice cap before the new voice joins. */
+		if(proc) enforce_voice_cap(proc, time, ch, own_voices_start);
 
 		channel_add_voice(ch, voice);
 		if(proc) proc->voice_count++;
