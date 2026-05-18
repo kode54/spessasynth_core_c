@@ -251,6 +251,7 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 	/* Rewind and replay non-note events up to target time */
 	song_rewind(song);
 	seq->base_time += seq->current_time - seconds;
+	double target_event_time = seq->current_time;
 	seq->current_time = seconds;
 	seq->current_tick = ss_seconds_to_midi_tick(midi, seconds);
 
@@ -286,11 +287,11 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 		if(sb >= 0x80 && sb < 0xF0) {
 			uint8_t type = sb & 0xF0;
 			if(type == 0x90 && e->data_length >= 2 && e->data[1] == 0)
-				dispatch_voice_event(seq, midi, e, ev_time);
+				dispatch_voice_event(seq, midi, e, target_event_time);
 			else if(type == 0x80 || type == 0xB0 || type == 0xC0 || type == 0xE0)
-				dispatch_voice_event(seq, midi, e, ev_time);
+				dispatch_voice_event(seq, midi, e, target_event_time);
 		} else if(sb == 0xF0) {
-			dispatch_sysex_event(seq, midi, e, ev_time);
+			dispatch_sysex_event(seq, midi, e, target_event_time);
 		}
 	}
 
@@ -307,6 +308,7 @@ void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick) {
 	/* Rewind and replay non-note events up to target time */
 	song_rewind(song);
 	seq->base_time += seq->current_time - seconds;
+	double target_event_time = seq->current_time;
 	seq->current_time = seconds;
 	seq->current_tick = target_tick;
 
@@ -342,11 +344,11 @@ void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick) {
 		if(sb >= 0x80 && sb < 0xF0) {
 			uint8_t type = sb & 0xF0;
 			if(type == 0x90 && e->data_length >= 2 && e->data[1] == 0)
-				dispatch_voice_event(seq, midi, e, ev_time);
+				dispatch_voice_event(seq, midi, e, target_event_time);
 			else if(type == 0x80 || type == 0xB0 || type == 0xC0 || type == 0xE0)
-				dispatch_voice_event(seq, midi, e, ev_time);
+				dispatch_voice_event(seq, midi, e, target_event_time);
 		} else if(sb == 0xF0) {
-			dispatch_sysex_event(seq, midi, e, ev_time);
+			dispatch_sysex_event(seq, midi, e, target_event_time);
 		}
 	}
 
