@@ -40,7 +40,9 @@ void ss_channel_remove_finished_voices(SS_MIDIChannel *ch) {
 		if(ch->voices[i]->is_active) {
 			ch->voices[new_count++] = ch->voices[i];
 		} else {
-			ss_voice_free(ch->voices[i]);
+			/* Retire the finished voice into the processor's pool
+			 * so the structure can be recycled by a later note-on. */
+			ss_voice_pool_release(ch->synth, ch->voices[i]);
 		}
 	}
 	ch->voice_count = new_count;

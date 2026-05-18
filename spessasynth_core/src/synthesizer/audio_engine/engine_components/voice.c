@@ -34,9 +34,64 @@ extern void ss_lowpass_filter_init(SS_LowpassFilter *f, uint32_t sr);
                                                double release_start_time,
                                                double start_time);*/
 
+/* ── Pool ────────────────────────────────────────────────────────────────── */
+
+/*
+ * Acquires a blank voice: pops a retired structure off the processor's pool
+ * (preserving its modulator buffer) or, failing that, allocates a fresh one.
+ * The returned voice is fully zeroed except for the recycled modulator array.
+ */
+static SS_Voice *ss_voice_pool_acquire(SS_Processor *proc) {
+	if(proc && proc->voice_pool.free_count > 0) {
+		SS_VoicePool *pool = &proc->voice_pool;
+		SS_Voice *v = pool->free_list[--pool->free_count];
+		/* Recycle: keep the modulator buffer, wipe everything else. */
+		SS_Modulator *mods = v->modulators;
+		size_t cap = v->modulator_capacity;
+		memset(v, 0, sizeof(*v));
+		v->modulators = mods;
+		v->modulator_capacity = cap;
+		return v;
+	}
+	return (SS_Voice *)calloc(1, sizeof(SS_Voice));
+}
+
+void ss_voice_pool_release(SS_Processor *proc, SS_Voice *v) {
+	if(!v) return;
+	if(!proc) {
+		ss_voice_free(v);
+		return;
+	}
+	SS_VoicePool *pool = &proc->voice_pool;
+	if(pool->free_count >= pool->free_capacity) {
+		size_t nc = pool->free_capacity ? pool->free_capacity * 2 : 32;
+		SS_Voice **tmp = (SS_Voice **)realloc(pool->free_list,
+		                                      nc * sizeof(SS_Voice *));
+		if(!tmp) {
+			/* Out of memory growing the pool: free the voice outright. */
+			ss_voice_free(v);
+			return;
+		}
+		pool->free_list = tmp;
+		pool->free_capacity = nc;
+	}
+	pool->free_list[pool->free_count++] = v;
+}
+
+void ss_voice_pool_free(SS_VoicePool *pool) {
+	if(!pool) return;
+	for(size_t i = 0; i < pool->free_count; i++)
+		ss_voice_free(pool->free_list[i]);
+	free(pool->free_list);
+	pool->free_list = NULL;
+	pool->free_count = 0;
+	pool->free_capacity = 0;
+}
+
 /* ── Create ──────────────────────────────────────────────────────────────── */
 
-SS_Voice *ss_voice_create(uint32_t sample_rate,
+SS_Voice *ss_voice_create(SS_Processor *proc,
+                          uint32_t sample_rate,
                           const SS_BasicPreset *preset,
                           const SS_AudioSample *audio_sample,
                           int midi_note, int velocity,
@@ -44,7 +99,7 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
                           const int16_t *generators,
                           const SS_Modulator *modulators, size_t mod_count,
                           const SS_DynamicModulatorSystem *dms) {
-	SS_Voice *v = (SS_Voice *)calloc(1, sizeof(SS_Voice));
+	SS_Voice *v = ss_voice_pool_acquire(proc);
 	if(!v) return NULL;
 
 	v->preset = preset;
@@ -89,12 +144,20 @@ SS_Voice *ss_voice_create(uint32_t sample_rate,
 
 	v->exclusive_class = generators[SS_GEN_EXCLUSIVE_CLASS];
 
-	/* Copy modulators */
+	/* Copy modulators.  A recycled voice keeps its modulator buffer between
+	 * uses; only grow it when this note needs more slots than before. */
 	if(mod_count > 0 || dms->is_active) {
 		size_t max_mod_count = mod_count + (dms->is_active ? dms->modulator_count : 0);
 		size_t adjusted_mod_count = mod_count;
-		v->modulators = (SS_Modulator *)malloc(max_mod_count * sizeof(SS_Modulator));
-		if(v->modulators) {
+		if(v->modulator_capacity < max_mod_count) {
+			SS_Modulator *tmp = (SS_Modulator *)realloc(v->modulators,
+			                                            max_mod_count * sizeof(SS_Modulator));
+			if(tmp) {
+				v->modulators = tmp;
+				v->modulator_capacity = max_mod_count;
+			}
+		}
+		if(v->modulators && v->modulator_capacity >= max_mod_count) {
 			for(size_t i = 0; i < mod_count; i++)
 				v->modulators[i] = ss_modulator_copy(&modulators[i]);
 			if(dms->is_active) {
