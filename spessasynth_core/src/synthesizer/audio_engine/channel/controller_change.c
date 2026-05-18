@@ -123,7 +123,7 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 			ch->bank_lsb = val;
 			break;
 
-		/* Check for RPN and NPRN and data entry */
+		/* Check for RPN and NRPN and data entry */
 		case SS_MIDCON_RPN_LSB:
 		case SS_MIDCON_RPN_MSB:
 			/* Clear and set state.
