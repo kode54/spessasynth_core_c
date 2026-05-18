@@ -269,7 +269,7 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 		SS_MIDIMessage *e = &midi->timeline[ei];
 		double ev_time = ss_midi_ticks_to_seconds(midi, e->ticks);
 
-		if(ev_time > seconds) break;
+		if(ev_time >= seconds) break;
 
 		song->event_index++;
 
@@ -326,7 +326,7 @@ void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick) {
 		SS_MIDIMessage *e = &midi->timeline[ei];
 		double ev_time = ss_midi_ticks_to_seconds(midi, e->ticks);
 
-		if(ev_time > seconds) break;
+		if(ev_time >= seconds) break;
 
 		song->event_index++;
 
