@@ -118,7 +118,7 @@ static void ss_reverb_update_lowpass(SS_Reverb *reverb) {
 
 static void ss_reverb_update_gain(SS_Reverb *reverb) {
 	const SS_ReverbParams *p = &reverb->parameters;
-	reverb->dattorro->gain = ((float)p->level / 348.0f) * reverb->characterGainCoefficient;
+	reverb->dattorro->gain = ((float)p->level / 345.0f) * reverb->characterGainCoefficient;
 	reverb->delayGain = ((float)p->level / 127.0f) * 1.5f;
 }
 
@@ -168,7 +168,7 @@ void ss_reverb_set_character(SS_Reverb *reverb, unsigned char character) {
 			// Room1
 			dattorro->damping = 0.85f;
 			reverb->characterTimeCoefficient = 0.9f;
-			reverb->characterGainCoefficient = 0.7f;
+			reverb->characterGainCoefficient = 0.9f;
 			reverb->characterLPFCoefficient = 0.2f;
 			break;
 		}
@@ -176,7 +176,7 @@ void ss_reverb_set_character(SS_Reverb *reverb, unsigned char character) {
 		case 1: {
 			// Room2
 			dattorro->damping = 0.2f;
-			reverb->characterGainCoefficient = 0.5f;
+			reverb->characterGainCoefficient = 0.7f;
 			reverb->characterTimeCoefficient = 1;
 			dattorro->decayDiffusion[1] = 0.64f;
 			dattorro->decayDiffusion[0] = 0.6f;
@@ -187,7 +187,7 @@ void ss_reverb_set_character(SS_Reverb *reverb, unsigned char character) {
 		case 2: {
 			// Room3
 			dattorro->damping = 0.56f;
-			reverb->characterGainCoefficient = 0.55f;
+			reverb->characterGainCoefficient = 0.75f;
 			reverb->characterTimeCoefficient = 1;
 			dattorro->decayDiffusion[1] = 0.64f;
 			dattorro->decayDiffusion[0] = 0.6f;
@@ -197,8 +197,9 @@ void ss_reverb_set_character(SS_Reverb *reverb, unsigned char character) {
 
 		case 3: {
 			// Hall1
-			dattorro->damping = 0.6f;
-			reverb->characterGainCoefficient = 1;
+			dattorro->damping = 0.3f;
+			reverb->characterGainCoefficient = 1.25f;
+			reverb->characterTimeCoefficient = 1.3f;
 			reverb->characterLPFCoefficient = 0;
 			dattorro->decayDiffusion[1] = 0.7f;
 			dattorro->decayDiffusion[0] = 0.66f;
@@ -207,15 +208,18 @@ void ss_reverb_set_character(SS_Reverb *reverb, unsigned char character) {
 
 		case 4: {
 			// Hall2
-			reverb->characterGainCoefficient = 0.75f;
-			dattorro->damping = 0.2f;
-			reverb->characterLPFCoefficient = 0.2f;
+			reverb->characterGainCoefficient = 1;
+			reverb->characterTimeCoefficient = 1.2f;
+			reverb->characterLPFCoefficient = 0.1f;
+			dattorro->damping = 0.1f;
+			dattorro->decayDiffusion[1] = 0.69f;
+			dattorro->decayDiffusion[0] = 0.67f;
 			break;
 		}
 
 		case 5: {
 			// Plate
-			reverb->characterGainCoefficient = 0.55f;
+			reverb->characterGainCoefficient = 0.75f;
 			dattorro->damping = 0.65f;
 			reverb->characterTimeCoefficient = 0.5f;
 			break;
