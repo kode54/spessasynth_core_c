@@ -301,7 +301,7 @@ static void scan_loops(SS_MIDIFile *m) {
 			const SS_MIDITrack *t = &m->tracks[ti];
 			for(size_t ei = 0; ei < t->event_count; ei++) {
 				const SS_MIDIMessage *e = &t->events[ei];
-				if(!is_cc(e) || e->data[0] != 111) continue;
+				if(!is_cc(e) || e->data[0] != 111 || e->data[1] != 0) continue;
 				if(loop_start == LOOP_UNSET || e->ticks < loop_start)
 					loop_start = e->ticks;
 			}
