@@ -293,12 +293,6 @@ typedef enum {
 
 enum { GENERATOR_OVERRIDE_NO_CHANGE_VALUE = 32767 };
 
-typedef struct {
-	float delay;
-	float depth;
-	float rate;
-} SS_ChannelVibrato;
-
 struct SS_Processor; /* forward */
 
 /* ── System and MIDI parameters ───────────────────────────────────────────── */
@@ -351,7 +345,6 @@ typedef struct {
 	float fine_tune; /* global tuning in cents (drums ignore) */
 
 	SS_InterpolationType interpolation_type;
-	bool custom_vibrato_lock; /* prevent applying the custom vibrato */
 	bool nrpn_param_lock; /* prevent changing parameters via NRPN */
 	bool monophonic_retrigger; /* MS GS Wavetable-style note retrigger */
 } SS_GlobalSystemParameter;
@@ -382,7 +375,6 @@ typedef struct {
 	float fine_tune; /* channel tuning in cents */
 
 	int interpolation_type; /* SS_InterpolationType, or SS_PARAM_UNSET */
-	int8_t custom_vibrato_lock; /* tri-state, SS_PARAM_UNSET = inherit */
 	int8_t nrpn_param_lock; /* tri-state, SS_PARAM_UNSET = inherit */
 	int8_t monophonic_retrigger; /* tri-state, SS_PARAM_UNSET = inherit */
 } SS_ChannelSystemParameter;
@@ -430,7 +422,6 @@ typedef enum {
 	SS_GLOBAL_SYS_KEY_SHIFT,
 	SS_GLOBAL_SYS_FINE_TUNE,
 	SS_GLOBAL_SYS_INTERPOLATION_TYPE,
-	SS_GLOBAL_SYS_CUSTOM_VIBRATO_LOCK,
 	SS_GLOBAL_SYS_NRPN_PARAM_LOCK,
 	SS_GLOBAL_SYS_MONOPHONIC_RETRIGGER
 } SS_GlobalSystemParameterType;
@@ -451,7 +442,6 @@ typedef enum {
 	SS_CHANNEL_SYS_KEY_SHIFT,
 	SS_CHANNEL_SYS_FINE_TUNE,
 	SS_CHANNEL_SYS_INTERPOLATION_TYPE,
-	SS_CHANNEL_SYS_CUSTOM_VIBRATO_LOCK,
 	SS_CHANNEL_SYS_NRPN_PARAM_LOCK,
 	SS_CHANNEL_SYS_MONOPHONIC_RETRIGGER
 } SS_ChannelSystemParameterType;
@@ -507,8 +497,6 @@ typedef struct SS_MIDIChannel {
 
 	SS_SoundBank *bank; /* non-owning */
 	SS_BasicPreset *preset; /* non-owning */
-
-	SS_ChannelVibrato channel_vibrato;
 
 	SS_DrumParameters drum_params[128]; /* per-key drum parameters */
 

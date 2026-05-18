@@ -29,16 +29,6 @@ extern void ss_channel_nrpn_awe32(SS_MIDIChannel *ch, int param_lsb, int data_va
 void ss_channel_data_entry(SS_MIDIChannel *ch, double time) {
 	const uint16_t data_value = ch->midi_controllers[SS_MIDCON_DATA_ENTRY_MSB];
 
-#define addDefaultVibrato                  \
-	if(                                    \
-	ch->channel_vibrato.delay == 0 &&      \
-	ch->channel_vibrato.rate == 0 &&       \
-	ch->channel_vibrato.depth == 0) {      \
-		ch->channel_vibrato.depth = 50.0f; \
-		ch->channel_vibrato.rate = 8.0f;   \
-		ch->channel_vibrato.delay = 0.6f;  \
-	}
-
 	if(ch->last_parameter_is_registered) {
 		const int rpn_value = ch->midi_controllers[SS_MIDCON_RPN_MSB] |
 		                      ch->midi_controllers[SS_MIDCON_RPN_LSB] >> 7;
@@ -90,41 +80,25 @@ void ss_channel_data_entry(SS_MIDIChannel *ch, double time) {
 
 		case SS_NRPN_MSB_PART_PARAMETER: {
 			switch(param_fine) {
-				/*
-				 * A note on this vibrato.
-				 * This is a completely custom vibrato, with its own oscillator and parameters.
-				 * It is disabled by default,
-				 * only being enabled when one of the NRPN messages changing it is received
-				 * and stays on until the next system-reset.
-				 * It was implemented very early in SpessaSynth's development,
-				 * because I wanted support for Touhou MIDIs :-)
-				 */
 				default:
 					/* Unsupported parameter */
 					break;
 
+				/* Vibrato rate */
 				case SS_NRPN_GS_LSB_VIBRATO_RATE: {
-					if(ch->dms.is_active) {
-						ss_channel_controller(ch, SS_MIDCON_VIBRATO_RATE, data_coarse, time);
-						return;
-					}
-					if(data_coarse == 64) return;
-					addDefaultVibrato;
-					ch->channel_vibrato.rate = ((float)data_coarse / 64.0) * 8.0;
+					ss_channel_controller(ch, SS_MIDCON_VIBRATO_RATE, data_coarse, time);
 					break;
 				}
 
+				/* Vibrato depth */
 				case SS_NRPN_GS_LSB_VIBRATO_DEPTH: {
-					if(data_coarse == 64) return;
-					addDefaultVibrato;
-					ch->channel_vibrato.depth = (float)data_coarse / 2.0;
+					ss_channel_controller(ch, SS_MIDCON_VIBRATO_DEPTH, data_coarse, time);
 					break;
 				}
 
+				/* Vibrato delay */
 				case SS_NRPN_GS_LSB_VIBRATO_DELAY: {
-					if(data_coarse == 64) return;
-					addDefaultVibrato;
-					ch->channel_vibrato.delay = (float)data_coarse / 64.0 / 3.0;
+					ss_channel_controller(ch, SS_MIDCON_VIBRATO_DELAY, data_coarse, time);
 					break;
 				}
 

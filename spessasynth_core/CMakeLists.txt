@@ -52,7 +52,6 @@ set(SS_SOURCES
     src/synthesizer/audio_engine/engine_components/midi_channel.c
     src/synthesizer/audio_engine/engine_components/compute_modulator.c
     src/synthesizer/audio_engine/engine_components/unit_converter.c
-    src/synthesizer/audio_engine/engine_components/dsp_chain/lfo.c
     src/synthesizer/audio_engine/engine_components/dsp_chain/wavetable_oscillator.c
     src/synthesizer/audio_engine/engine_components/dsp_chain/volume_envelope.c
     src/synthesizer/audio_engine/engine_components/dsp_chain/lowpass_filter.c
@@ -86,7 +85,7 @@ else()
     add_library(spessasynth STATIC ${SS_SOURCES})
 endif()
 
-set_target_properties(spessasynth PROPERTIES VERSION 4.3.0 SOVERSION 8)
+set_target_properties(spessasynth PROPERTIES VERSION 4.3.0 SOVERSION 9)
 
 target_include_directories(spessasynth
     PUBLIC  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

@@ -81,7 +81,6 @@ void ss_channel_reset_system_parameters(SS_MIDIChannel *ch) {
 	ch->system_params.key_shift = 0.0f;
 	ch->system_params.fine_tune = 0.0f;
 	ch->system_params.interpolation_type = SS_PARAM_UNSET;
-	ch->system_params.custom_vibrato_lock = SS_PARAM_UNSET;
 	ch->system_params.nrpn_param_lock = SS_PARAM_UNSET;
 	ch->system_params.monophonic_retrigger = SS_PARAM_UNSET;
 }
@@ -135,9 +134,6 @@ void ss_channel_set_system_parameter(SS_MIDIChannel *ch,
 			break;
 		case SS_CHANNEL_SYS_INTERPOLATION_TYPE:
 			sp->interpolation_type = (int)value;
-			break;
-		case SS_CHANNEL_SYS_CUSTOM_VIBRATO_LOCK:
-			sp->custom_vibrato_lock = (int8_t)value;
 			break;
 		case SS_CHANNEL_SYS_NRPN_PARAM_LOCK:
 			sp->nrpn_param_lock = (int8_t)value;
@@ -214,7 +210,6 @@ void ss_processor_init_parameters(SS_Processor *proc) {
 	sp->key_shift = 0.0f;
 	sp->fine_tune = 0.0f;
 	sp->interpolation_type = proc->options.interpolation;
-	sp->custom_vibrato_lock = false;
 	sp->nrpn_param_lock = false;
 	sp->monophonic_retrigger = false;
 
@@ -303,9 +298,6 @@ void ss_processor_set_system_parameter(SS_Processor *proc,
 			break;
 		case SS_GLOBAL_SYS_INTERPOLATION_TYPE:
 			sp->interpolation_type = (SS_InterpolationType)(int)value;
-			break;
-		case SS_GLOBAL_SYS_CUSTOM_VIBRATO_LOCK:
-			sp->custom_vibrato_lock = value != 0.0;
 			break;
 		case SS_GLOBAL_SYS_NRPN_PARAM_LOCK:
 			sp->nrpn_param_lock = value != 0.0;

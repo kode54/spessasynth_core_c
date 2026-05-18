@@ -81,12 +81,6 @@ static const float custom_reset_array[SS_CUSTOM_CTRL_COUNT] = {
 	[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] = 1.0
 };
 
-static void reset_vibrato_params(SS_MIDIChannel *ch) {
-	ch->channel_vibrato.rate = 0;
-	ch->channel_vibrato.depth = 0;
-	ch->channel_vibrato.delay = 0;
-}
-
 /**
  * https://amei.or.jp/midistandardcommittee/Recommended_Practice/e/rp15.pdf
  * Reset controllers according to RP-15 Recommended Practice.
@@ -186,7 +180,6 @@ void ss_channel_reset_internal(SS_MIDIChannel *ch) {
 
 	reset_portamento(ch);
 	ss_channel_reset_drum_params(ch);
-	reset_vibrato_params(ch);
 	ss_channel_reset_parameters_to_defaults(ch);
 
 	ss_dynamic_modulator_system_init(&ch->dms);

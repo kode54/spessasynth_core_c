@@ -46,7 +46,6 @@ extern void ss_modulation_envelope_start_release(SS_ModulationEnvelope *env,
 extern float ss_modulation_envelope_get_value(const SS_ModulationEnvelope *env,
                                               double current_time);
 extern float ss_abs_cents_to_hz(int cents);
-extern float ss_lfo_value(double start_time, float freq_hz, double current_time);
 extern float ss_centibel_attenuation_to_gain(float db);
 
 bool ss_voice_render(SS_Voice *v,
@@ -170,13 +169,7 @@ bool ss_voice_render(SS_Voice *v,
 		}
 	}
 
-	/* Channel vibrato (GS NRPN) — sine wave, only when mod wheel == 0 (matches TS) */
-	if(ch->channel_vibrato.depth > 0.0f &&
-	   ch->midi_controllers[SS_MIDCON_MODULATION_WHEEL] == 0) {
-		float ch_vib = ss_lfo_value(v->start_time + ch->channel_vibrato.delay,
-		                            ch->channel_vibrato.rate, time_now);
-		cents += ch_vib * ch->channel_vibrato.depth;
-	}
+	/* TODO: Implement proper GS vibrato. Custom vibrato used to be here. */
 
 	/* Mod envelope */
 	int mod_env_pitch = v->modulated_generators[SS_GEN_MOD_ENV_TO_PITCH];
