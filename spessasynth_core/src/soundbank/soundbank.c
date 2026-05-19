@@ -1496,8 +1496,9 @@ static void soundbank_parse(SS_SoundBank *bank) {
 /* Forward declarations for the format-specific loaders */
 SS_SoundBank *ss_soundfont_load(SS_File *file, bool riff64);
 SS_SoundBank *ss_dls_load(SS_File *file, bool riff64);
+SS_SoundBank *ss_ecw_load(SS_File *file);
 
-/* Entry point: dispatch to SF2/DLS reader */
+/* Entry point: dispatch to SF2/DLS/ECW reader */
 SS_SoundBank *ss_soundbank_load(SS_File *file) {
 	if(!file) return NULL;
 	size_t size = ss_file_size(file);
@@ -1506,7 +1507,11 @@ SS_SoundBank *ss_soundbank_load(SS_File *file) {
 	SS_SoundBank *res = NULL;
 	char riff_id[5];
 	ss_file_read_string(file, 0, riff_id, 4);
-	if(riff_id[0] == 'R' && riff_id[1] == 'I' && riff_id[2] == 'F' && (riff_id[3] == 'F' || riff_id[3] == 'S')) {
+	/* ECW (E-mu/Creative wave set): "ECLW" magic at offset 0, not RIFF-wrapped */
+	if(riff_id[0] == 'E' && riff_id[1] == 'C' && riff_id[2] == 'L' && riff_id[3] == 'W') {
+		res = ss_ecw_load(file);
+	}
+	else if(riff_id[0] == 'R' && riff_id[1] == 'I' && riff_id[2] == 'F' && (riff_id[3] == 'F' || riff_id[3] == 'S')) {
 		const bool riff64 = riff_id[3] == 'S';
 		const size_t size_size = riff64 ? 8 : 4;
 		if(size >= (8 + size_size)) {

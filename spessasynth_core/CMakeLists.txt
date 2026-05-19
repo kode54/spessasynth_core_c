@@ -33,6 +33,7 @@ set(SS_SOURCES
     src/soundbank/soundbank.c
     src/soundbank/dls_reader.c
     src/soundbank/soundfont_reader.c
+    src/soundbank/ecw_reader.c
     src/synthesizer/audio_engine/channel/render_voice.c
     src/synthesizer/audio_engine/channel/program_change.c
     src/synthesizer/audio_engine/channel/note_on.c
