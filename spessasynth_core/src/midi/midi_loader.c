@@ -366,6 +366,197 @@ static void scan_loops(SS_MIDIFile *m) {
 	m->loop.type = loop_type;
 }
 
+/* ── Port resolution ─────────────────────────────────────────────────────── */
+
+/*
+ * A track's port can be stated three ways, in descending order of trust:
+ *
+ *   0x21 MIDI Port       — a literal port number.  The modern, unambiguous
+ *                          form; always wins when present.
+ *   0x09 Device Name     — names the destination device.  Distinct names are
+ *                          interned in encounter order and become ports
+ *                          0, 1, 2, …
+ *   0x04 Instrument Name — genuinely means "instrument" in the SMF spec, but
+ *                          some older authoring tools reused it as a device
+ *                          name.  Only consulted as a last resort, and only
+ *                          when it looks like device naming rather than
+ *                          instrument labelling (see instrument_names_are_ports).
+ *
+ * Whatever the source, the resulting port is folded into
+ * [0, SS_MIDI_PORT_COUNT) so that the channel offsets derived from it can
+ * never index past the processor's channel array.
+ */
+
+/* Maximum distinct device names tracked. Names beyond this are unresolvable
+ * and leave their track unassigned; the limit only has to exceed
+ * SS_MIDI_PORT_COUNT by enough to make the "too many names to be devices"
+ * test below meaningful. */
+#define PORT_NAME_MAX_ENTRIES 32
+/* Device names are compared on their first PORT_NAME_MAX_LEN bytes. */
+#define PORT_NAME_MAX_LEN 64
+
+typedef struct {
+	char names[PORT_NAME_MAX_ENTRIES][PORT_NAME_MAX_LEN];
+	size_t count;
+} PortNameTable;
+
+/**
+ * Normalise a name-meta payload for comparison: trim leading/trailing spaces
+ * and control bytes, truncate, and fold to lower case. Returns the length,
+ * which is 0 if nothing printable remained.
+ */
+static size_t port_name_normalize(const uint8_t *data, size_t len,
+                                  char *out, size_t out_size) {
+	size_t start = 0, end = len;
+	while(start < end && (unsigned char)data[start] <= ' ') start++;
+	while(end > start && (unsigned char)data[end - 1] <= ' ') end--;
+
+	size_t n = end - start;
+	if(n > out_size - 1) n = out_size - 1;
+	for(size_t i = 0; i < n; i++)
+		out[i] = (char)tolower((unsigned char)data[start + i]);
+	out[n] = '\0';
+	return n;
+}
+
+/** Look up name, appending it if new. Returns its index, or -1 if the table
+ *  is full. */
+static int port_name_intern(PortNameTable *t, const char *name) {
+	for(size_t i = 0; i < t->count; i++) {
+		if(strcmp(t->names[i], name) == 0) return (int)i;
+	}
+	if(t->count >= PORT_NAME_MAX_ENTRIES) return -1;
+	strcpy(t->names[t->count], name);
+	return (int)t->count++;
+}
+
+/**
+ * Decide whether this file's 0x04 events are device names rather than
+ * instrument labels. Two signals have to agree:
+ *
+ *   - There are few enough distinct names to be plausible devices. A file
+ *     labelling instruments typically has one name per part, far more than
+ *     the handful of ports any device chain has.
+ *   - Two different names claim the same MIDI channel. That collision is the
+ *     only reason port separation would matter: without it, a single-port
+ *     reading of the file plays correctly and splitting it would just scatter
+ *     the parts across ports for no gain.
+ *
+ * track_names holds each track's interned 0x04 index (-1 for none) and
+ * track_channels its channel-usage bitmask.
+ */
+static bool instrument_names_are_ports(const int *track_names,
+                                       const uint16_t *track_channels,
+                                       size_t track_count, size_t name_count) {
+	if(name_count < 2 || name_count > SS_MIDI_PORT_COUNT) return false;
+
+	uint16_t per_name[SS_MIDI_PORT_COUNT];
+	memset(per_name, 0, sizeof(per_name));
+	for(size_t ti = 0; ti < track_count; ti++) {
+		if(track_names[ti] >= 0)
+			per_name[track_names[ti]] |= track_channels[ti];
+	}
+
+	for(size_t i = 1; i < name_count; i++) {
+		for(size_t j = 0; j < i; j++) {
+			if((per_name[i] & per_name[j]) != 0) return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Assign SS_MIDITrack.port for every track from the file's port metadata, and
+ * set m->is_multi_port. Ports are folded into [0, SS_MIDI_PORT_COUNT).
+ */
+static void resolve_track_ports(SS_MIDIFile *m) {
+	/* ── Survey pass: what port metadata does this file actually carry? ─── */
+	bool has_explicit = false; /* any usable 0x21 */
+	bool has_device = false;   /* any usable 0x09 */
+
+	int *inst_name = (int *)malloc(m->track_count * sizeof(int));
+	uint16_t *inst_channels = (uint16_t *)calloc(m->track_count,
+	                                             sizeof(uint16_t));
+	PortNameTable inst_table;
+	inst_table.count = 0;
+
+	for(size_t ti = 0; ti < m->track_count; ti++) {
+		if(inst_name) inst_name[ti] = -1;
+		SS_MIDITrack *track = &m->tracks[ti];
+
+		for(size_t ei = 0; ei < track->event_count; ei++) {
+			SS_MIDIMessage *e = &track->events[ei];
+			uint8_t sb = e->status_byte;
+
+			if(sb >= 0x80 && sb < 0xF0) {
+				if(inst_channels) inst_channels[ti] |= (uint16_t)(1u << (sb & 0x0F));
+				continue;
+			}
+			if(e->data_length == 0) continue;
+
+			if(sb == SS_META_MIDI_PORT) {
+				has_explicit = true;
+			} else if(sb == SS_META_DEVICE_NAME) {
+				has_device = true;
+			} else if(sb == SS_META_INSTRUMENT_NAME && inst_name &&
+			          inst_name[ti] < 0) {
+				char name[PORT_NAME_MAX_LEN];
+				if(port_name_normalize(e->data, e->data_length, name,
+				                       sizeof(name)) > 0)
+					inst_name[ti] = port_name_intern(&inst_table, name);
+			}
+		}
+	}
+
+	bool use_inst = !has_explicit && !has_device && inst_name && inst_channels &&
+	                instrument_names_are_ports(inst_name, inst_channels,
+	                                           m->track_count,
+	                                           inst_table.count);
+
+	/* ── Assignment pass ────────────────────────────────────────────────── */
+	PortNameTable device_table;
+	device_table.count = 0;
+
+	for(size_t ti = 0; ti < m->track_count; ti++) {
+		SS_MIDITrack *track = &m->tracks[ti];
+		int port = -1;             /* from 0x21; last one in the track wins */
+		char device[PORT_NAME_MAX_LEN]; /* from 0x09; first one in the track wins */
+		device[0] = '\0';
+
+		/* This function is the only writer of track->port, and it can run
+		 * again after the caller edits the track, so start from unassigned. */
+		track->port = -1;
+
+		for(size_t ei = 0; ei < track->event_count; ei++) {
+			SS_MIDIMessage *e = &track->events[ei];
+			if(e->data_length == 0) continue;
+
+			if(e->status_byte == SS_META_MIDI_PORT) {
+				port = (int)e->data[0];
+			} else if(e->status_byte == SS_META_DEVICE_NAME && device[0] == '\0') {
+				port_name_normalize(e->data, e->data_length, device,
+				                    sizeof(device));
+			}
+		}
+
+		/* Intern only once the track's source is settled, so a name that an
+		 * explicit 0x21 overrode doesn't consume a port number and shift the
+		 * numbering of every device named after it. */
+		if(port < 0 && device[0] != '\0')
+			port = port_name_intern(&device_table, device);
+		if(port < 0 && use_inst)
+			port = inst_name[ti];
+
+		if(port >= 0) {
+			track->port = port % SS_MIDI_PORT_COUNT;
+			if(track->port > 0) m->is_multi_port = true;
+		}
+	}
+
+	free(inst_name);
+	free(inst_channels);
+}
+
 /* ── parseInternal — builds tempo map, loop, duration, key range ─────────── */
 
 static void midi_parse_internal(SS_MIDIFile *m) {
@@ -386,11 +577,11 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 	bool first_note_set = false;
 	bool karaoke_has_title = false;
 
-	/* Port tracking: map port_num → channel_offset */
+	/* Resolve every track's port up front: the main loop below needs the
+	 * final, folded numbers to size the channel-offset map. */
+	resolve_track_ports(m);
+
 	int max_port = 0;
-	int port_offsets[64];
-	memset(port_offsets, -1, sizeof(port_offsets));
-	port_offsets[0] = 0;
 
 	for(size_t ti = 0; ti < m->track_count; ti++) {
 		SS_MIDITrack *track = &m->tracks[ti];
@@ -465,15 +656,6 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 								m->binary_name_length = copy;
 							}
 						}
-					}
-					break;
-
-				case SS_META_MIDI_PORT:
-					if(e->data_length >= 1) {
-						int port = (int)e->data[0];
-						track->port = port;
-						if(port > 0) m->is_multi_port = true;
-						if(port > max_port) max_port = port;
 					}
 					break;
 

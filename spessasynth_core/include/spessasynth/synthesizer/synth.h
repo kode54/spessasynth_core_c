@@ -9,9 +9,11 @@
 #include <spessasynth_core/chorus.h>
 #include <spessasynth_core/delay.h>
 #include <spessasynth_core/insertion.h>
+#include <spessasynth_core/midi_enums.h>
 #include <spessasynth_core/reverb.h>
 #include <spessasynth_core/soundbank.h>
 #else
+#include "../midi/midi_enums.h"
 #include "../soundbank/soundbank.h"
 #include "dsp/chorus.h"
 #include "dsp/delay.h"
@@ -640,7 +642,7 @@ typedef struct SS_ProcessorBankGroup {
 
 typedef struct SS_Processor {
 	uint32_t sample_rate;
-	SS_MIDIChannel *midi_channels[SS_CHANNEL_COUNT * 4]; /* up to 4 ports */
+	SS_MIDIChannel *midi_channels[SS_CHANNEL_COUNT * SS_MIDI_PORT_COUNT];
 	int channel_count;
 
 	SS_ProcessorBankGroup *bank_groups; /* registered banks, in search order */

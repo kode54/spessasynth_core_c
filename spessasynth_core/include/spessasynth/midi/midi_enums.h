@@ -5,6 +5,24 @@
 extern "C" {
 #endif
 
+/* ── Port limit ──────────────────────────────────────────────────────────── */
+
+/**
+ * Number of MIDI ports the engine supports, each carrying 16 channels.
+ *
+ * This is a hard compile-time limit: the processor allocates exactly
+ * SS_CHANNEL_COUNT * SS_MIDI_PORT_COUNT channels, and the loader folds every
+ * port number it resolves (from meta 0x21, 0x09 or 0x04) into
+ * [0, SS_MIDI_PORT_COUNT) so nothing downstream can index past that.
+ */
+#define SS_MIDI_PORT_COUNT 4
+
+/* The sequencer announces port changes with an F5 <port+1> message, which has
+ * only a nibble to spend on the port number. */
+#if SS_MIDI_PORT_COUNT < 1 || SS_MIDI_PORT_COUNT > 16
+#error "SS_MIDI_PORT_COUNT must be between 1 and 16"
+#endif
+
 /* ── MIDI message types (status bytes / meta types) ─────────────────────── */
 
 typedef enum {
@@ -32,6 +50,8 @@ typedef enum {
 	SS_META_LYRIC = 0x05,
 	SS_META_MARKER = 0x06,
 	SS_META_CUE_POINT = 0x07,
+	SS_META_PROGRAM_NAME = 0x08,
+	SS_META_DEVICE_NAME = 0x09,
 	SS_META_MIDI_CHANNEL_PREFIX = 0x20,
 	SS_META_MIDI_PORT = 0x21,
 	SS_META_END_OF_TRACK = 0x2F,

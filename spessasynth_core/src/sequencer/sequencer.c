@@ -828,7 +828,7 @@ static void dispatch_reset(SS_Sequencer *seq) {
 	if(seq->proc)
 		ss_processor_system_reset(seq->proc);
 	if(seq->callbacks.midi_command) {
-		for(int i = 0; i < 4; i++) {
+		for(int i = 0; i < SS_MIDI_PORT_COUNT; i++) {
 			if((seq->ports_active & (1ULL << i)) != 0) {
 				dispatch_port_select(seq, i, seq->base_time);
 				dispatch_midi(seq, syx_reset_gm, sizeof(syx_reset_gm), seq->base_time);
@@ -848,10 +848,10 @@ static void dispatch_all_notes_off(SS_Sequencer *seq) {
 		}
 	}
 	if(seq->callbacks.midi_command) {
-		for(int i = 0; i < 4; i++) {
+		for(int i = 0; i < SS_MIDI_PORT_COUNT; i++) {
 			if((seq->ports_active & (1ULL << i)) != 0) {
 				dispatch_port_select(seq, i, seq->base_time);
-				for(int ch = 0; ch < 16; ch++) {
+				for(int ch = 0; ch < SS_CHANNEL_COUNT; ch++) {
 					uint8_t msg[3];
 					msg[0] = 0xB0 | ch;
 					msg[1] = 123; /* All notes off */

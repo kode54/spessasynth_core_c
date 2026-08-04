@@ -135,8 +135,8 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 	proc->filter_smoothing_factor = FILTER_SMOOTHING_44K * sr_scale;
 	proc->pan_smoothing_factor = PAN_SMOOTHING_44K * sr_scale;
 
-	/* Create default 16 MIDI channels for 4 ports */
-	for(int i = 0; i < SS_CHANNEL_COUNT * 4; i++) {
+	/* Create 16 MIDI channels for each of the SS_MIDI_PORT_COUNT ports */
+	for(int i = 0; i < SS_CHANNEL_COUNT * SS_MIDI_PORT_COUNT; i++) {
 		SS_MIDIChannel *ch = ss_channel_new(i, proc);
 		if(!ch) {
 			ss_processor_free(proc);
