@@ -64,6 +64,10 @@ export const cc = (tick, ch, controller, value) => ({
     tick,
     data: [0xb0 | ch, controller, value]
 });
+export const channelPressure = (tick, ch, value) => ({
+    tick,
+    data: [0xd0 | ch, value]
+});
 export const pitchBend = (tick, ch, value14) => ({
     tick,
     data: [0xe0 | ch, value14 & 0x7f, (value14 >> 7) & 0x7f]
