@@ -17,6 +17,8 @@
 #endif
 
 /* 1 / cos(pi/4)^2 = 2.0: corrects insertion send levels from 0-1 to 0-2 range */
+extern void ss_sinc_table_init(void);
+
 #define EFX_SENDS_GAIN_CORRECTION 2.0f
 
 /* Smoothing factors tuned at 44 100 Hz, scaled linearly to target rate */
@@ -153,6 +155,9 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 		ss_processor_free(proc);
 		return NULL;
 	}
+
+	/* Build the sinc kernel table once, before any voice can ask for it. */
+	ss_sinc_table_init();
 
 	ss_processor_system_reset(proc);
 
