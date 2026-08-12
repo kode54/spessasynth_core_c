@@ -820,6 +820,11 @@ void SPESSASYNTH_EXPORTS ss_processor_sysex(SS_Processor *proc, const uint8_t *d
  * time position of the synthesizer, which counts up monotonically every time
  * samples are rendered.
  */
+/** Recompute which effect buses are active from the current send levels and
+ *  channel assignments.  Call after changing a delay send or an EFX
+ *  assignment; the reset does it too. */
+void SPESSASYNTH_EXPORTS ss_processor_update_active_effects(SS_Processor *proc);
+
 void SPESSASYNTH_EXPORTS ss_processor_system_reset(SS_Processor *proc);
 
 /* ── Global parameters ───────────────────────────────────────────────────── */

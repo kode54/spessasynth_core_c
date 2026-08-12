@@ -204,6 +204,13 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 			}
 			break;
 
+		case SS_MIDCON_VARIATION_DEPTH:
+			/* CC#94 is the delay send.  Upstream recomputes which effects are
+			 * active here; without it the delay bus stays switched off and the
+			 * send is silent no matter what level is asked for. */
+			if(ch->synth) ss_processor_update_active_effects(ch->synth);
+			break;
+
 		case SS_MIDCON_RESET_ALL_CONTROLLERS: /* reset all controllers */
 			ss_channel_reset_rp15(ch, time);
 			break;
