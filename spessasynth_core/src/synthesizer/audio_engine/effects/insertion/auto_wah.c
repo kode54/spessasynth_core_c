@@ -165,12 +165,14 @@ static void aw_reset_impl(SS_AutoWahFX *e) {
 	e->pan = 0;
 	e->level = 96.0f / 127.0f;
 	e->phase = 0.2f;
-	e->envelope = 0;
 	aw_set_manual(e, 68);
 	e->last_fc = e->manual;
-	ss_biquad_identity(&e->coeffs);
+	/* Upstream's reset zeroes the filter states but leaves the envelope
+	 * follower and the coefficients alone — reset runs on a live effect
+	 * every time the EFX type changes, and the wah carries its envelope
+	 * across rather than restarting from silence.  Both are initialized
+	 * at construction instead. */
 	ss_biquad_zero(&e->state);
-	ss_biquad_identity(&e->hp_coeffs);
 	ss_biquad_zero(&e->hp_state);
 	ss_biquad_zero(&e->ls_s);
 	ss_biquad_zero(&e->hs_s);
