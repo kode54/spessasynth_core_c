@@ -732,6 +732,12 @@ typedef struct SS_Processor {
 	SS_ProcessorOptions options;
 
 	int port_select_channel_offset;
+
+	/* Random generator state, stepped by ss_random_next.  Per processor
+	 * rather than global so two synthesizers in one program cannot draw from
+	 * each other's sequence; seeded at creation and deliberately not reset,
+	 * since upstream's generator runs unbroken for the life of the engine. */
+	uint32_t random_state;
 } SS_Processor;
 
 /**
