@@ -1018,22 +1018,56 @@ void ss_sequencer_set_synthesizer(SS_Sequencer *seq, SS_Processor *proc) {
 	seq->proc = proc;
 }
 
-const uint8_t syx_reset_gm[] = { 0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7 };
+/* GS Reset: Roland DT1 to System Mode Set, 40 00 7F 00, checksum 0x41.
+ * Upstream sends this rather than a GM reset when driving an external
+ * synthesizer, so the device lands in GS mode as the corpus expects. */
+const uint8_t syx_reset_gs[] = {
+	0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7
+};
 
 static void dispatch_reset(SS_Sequencer *seq) {
-	if(seq->proc)
+	/* Stop everything sounding before resetting, as upstream's
+	 * sendMIDIReset does; otherwise held and sustained notes outlive the
+	 * reset that is supposed to clear them. */
+	dispatch_all_notes_off(seq);
+
+	if(seq->proc) {
 		ss_processor_system_reset(seq->proc);
+		return;
+	}
 	if(seq->callbacks.midi_command) {
 		for(int i = 0; i < SS_MIDI_PORT_COUNT; i++) {
 			if((seq->ports_active & (1ULL << i)) != 0) {
 				dispatch_port_select(seq, i, seq->base_time);
-				dispatch_midi(seq, syx_reset_gm, sizeof(syx_reset_gm), seq->base_time);
+				dispatch_midi(seq, syx_reset_gs, sizeof(syx_reset_gs), seq->base_time);
 			}
 		}
 	}
 }
 
 static void dispatch_all_notes_off(SS_Sequencer *seq) {
+	/* Release sustain first, on every channel, or held notes survive the
+	 * all-notes-off that follows.  Upstream's sendMIDIAllOff does this
+	 * unconditionally, in both playback modes. */
+	if(seq->proc) {
+		for(int ch = 0; ch < seq->proc->channel_count; ch++) {
+			SS_MIDIChannel *c = seq->proc->midi_channels[ch];
+			if(c) ss_channel_controller(c, SS_MIDCON_SUSTAIN_PEDAL, 0,
+			                            seq->base_time);
+		}
+	}
+	if(seq->callbacks.midi_command) {
+		for(int i = 0; i < SS_MIDI_PORT_COUNT; i++) {
+			if((seq->ports_active & (1ULL << i)) == 0) continue;
+			dispatch_port_select(seq, i, seq->base_time);
+			for(int ch = 0; ch < SS_CHANNEL_COUNT; ch++) {
+				const uint8_t msg[3] = { (uint8_t)(0xB0 | ch),
+					                     SS_MIDCON_SUSTAIN_PEDAL, 0 };
+				dispatch_midi(seq, msg, 3, seq->base_time);
+			}
+		}
+	}
+
 	if(seq->proc) {
 		for(int ch = 0; ch < seq->proc->channel_count; ch++) {
 			int port = ch >> 4;
