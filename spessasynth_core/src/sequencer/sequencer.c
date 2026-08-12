@@ -1013,22 +1013,27 @@ try_again:
 			}
 		}
 
-		/* End-of-sequence check (for tracks without a loop.end). */
-		if(e->ticks >= midi->last_voice_event_tick) {
-			if(song->event_index >= song->midi->timeline_count) {
-				if(infinite && !has_markers) {
-					ss_sequencer_set_tick(seq, 0);
-					target_time -= current_time;
-					current_time = 0;
-					continue;
-				}
-				if(seq->fading) break;
-				if(ss_sequencer_next_song(seq)) goto try_again;
-				dispatch_all_notes_off(seq);
-				seq->finished = true;
-				seq->is_playing = false;
-				break;
+		/* End-of-sequence check (for tracks without a loop.end).
+		 *
+		 * Either condition ends the song, as upstream's does: the events
+		 * running out, or the last voice event being reached.  Requiring
+		 * both keeps the song alive through whatever trails the final
+		 * note — end-of-track metas, a stray controller — and the
+		 * all-notes-off that ends the song lands that much late. */
+		if(e->ticks >= midi->last_voice_event_tick ||
+		   song->event_index >= song->midi->timeline_count) {
+			if(infinite && !has_markers) {
+				ss_sequencer_set_tick(seq, 0);
+				target_time -= current_time;
+				current_time = 0;
+				continue;
 			}
+			if(seq->fading) break;
+			if(ss_sequencer_next_song(seq)) goto try_again;
+			dispatch_all_notes_off(seq);
+			seq->finished = true;
+			seq->is_playing = false;
+			break;
 		}
 	}
 	seq->current_tick = ss_seconds_to_midi_tick(midi, target_time);
