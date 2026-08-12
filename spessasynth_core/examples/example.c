@@ -131,16 +131,21 @@ int main(int argc, char *argv[]) {
 	// parameters for a default file & soundfont, or with these arguments:
 	//
 	// ./example3-... <yoursoundfont>.sf2 <yourfile>.mid [.. more midi files]
-	// Optionally: --inf - play forever
+	// Optionally: --inf   - play forever
+	//             --exact - start at tick 0 instead of at the first note
 
 	bool playForever = false;
+	bool exactTiming = false;
 	int argPlayForever = -1;
+	int argExactTiming = -1;
 	int argSoundBank = -1;
 	for(int i = 1; i < argc; i++) {
 		if(strcmp(argv[i], "--inf") == 0) {
 			playForever = true;
 			argPlayForever = i;
-			break;
+		} else if(strcmp(argv[i], "--exact") == 0) {
+			exactTiming = true;
+			argExactTiming = i;
 		}
 	}
 
@@ -162,7 +167,7 @@ int main(int argc, char *argv[]) {
 	// Pick the SoundFont / sflist argument
 	const char *soundBankName = NULL;
 	for(int i = 1; i < argc; i++) {
-		if(i == argPlayForever) continue;
+		if(i == argPlayForever || i == argExactTiming) continue;
 		argSoundBank = i;
 		soundBankName = argv[i];
 		break;
@@ -208,9 +213,15 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
+	// Playback starts at the first note by default, skipping any setup-only
+	// lead-in of SysEx and program changes, which is what upstream does and
+	// what most players want.  Ask for exact file timing to keep the silence.
+	// Set this before loading, since it takes effect on the next load or seek.
+	ss_sequencer_set_skip_to_first_note_on(g_sequencer, !exactTiming);
+
 	size_t midisLoaded = 0;
 	for(int i = 1; i < argc; i++) {
-		if(i == argPlayForever || i == argSoundBank) continue;
+		if(i == argPlayForever || i == argExactTiming || i == argSoundBank) continue;
 		if(!load_midi_file(g_sequencer, argv[i])) {
 			return 1;
 		}
@@ -236,6 +247,14 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	// Finish configuring the sequencer before the device starts.  The audio
+	// thread ticks it from AudioCallback, so anything set afterwards races
+	// with playback that has already begun.  The sequencer only advances when
+	// it is ticked, so nothing moves until the callback runs.
+	ss_sequencer_set_loop_count(g_sequencer, playForever ? -1 : 1);
+
+	ss_sequencer_play(g_sequencer);
+
 	// Start the actual audio playback here
 	// The audio thread will begin to call our AudioCallback function
 	if(ma_device_start(&device) != MA_SUCCESS) {
@@ -243,10 +262,6 @@ int main(int argc, char *argv[]) {
 		ma_device_uninit(&device);
 		return 1;
 	}
-
-	ss_sequencer_set_loop_count(g_sequencer, playForever ? -1 : 1);
-
-	ss_sequencer_play(g_sequencer);
 
 	// Wait until the entire MIDI file has been played back (until the end of the linked message list is reached)
 	while(!ss_sequencer_is_finished(g_sequencer)) ma_sleep(100);
