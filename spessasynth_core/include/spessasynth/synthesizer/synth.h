@@ -680,6 +680,14 @@ typedef struct SS_ProcessorBankGroup {
 	bool external_banks; /* true = caller retains ownership of the SS_SoundBank(s) */
 } SS_ProcessorBankGroup;
 
+/** One message held back until the engine clock reaches its timestamp. */
+typedef struct SS_QueuedMessage {
+	uint8_t *data;
+	size_t length;
+	int channel_offset;
+	double time;
+} SS_QueuedMessage;
+
 typedef struct SS_Processor {
 	uint32_t sample_rate;
 	SS_MIDIChannel *midi_channels[SS_CHANNEL_COUNT * SS_MIDI_PORT_COUNT];
@@ -733,6 +741,14 @@ typedef struct SS_Processor {
 
 	int port_select_channel_offset;
 
+	/* Deferred messages, ordered by time.  Upstream's synthesizer keeps the
+	 * same queue: a message stamped later than the engine clock waits here
+	 * until a render call catches up to it, so a host may schedule ahead of
+	 * the block currently being mixed. */
+	struct SS_QueuedMessage *event_queue;
+	size_t event_queue_count;
+	size_t event_queue_allocated;
+
 	/* Random generator state, stepped by ss_random_next.  Per processor
 	 * rather than global so two synthesizers in one program cannot draw from
 	 * each other's sequence; seeded at creation and deliberately not reset,
@@ -756,6 +772,28 @@ typedef struct SS_Processor {
 SS_Processor SPESSASYNTH_EXPORTS *ss_processor_create(uint32_t sample_rate,
                                                       const SS_ProcessorOptions *opts);
 void SPESSASYNTH_EXPORTS ss_processor_free(SS_Processor *proc);
+
+/**
+ * Submit a raw MIDI message, honouring its timestamp the way upstream's
+ * processMessage does: anything stamped later than the engine clock is queued
+ * and applied by the first render call that reaches it, anything else is
+ * applied immediately.
+ *
+ * Voices are always stamped with the engine clock, never with @p time --
+ * the timestamp schedules the message, it does not date the sound.  Event
+ * timing is quantized to the render block by design, since the engine ramps
+ * gain, pan and filter parameters across a whole block.
+ *
+ * @param data      message bytes, status byte first; a SysEx starts with 0xF0.
+ * @param length    length of @p data in bytes.
+ * @param channel_offset added to the message's channel, for multi-port setups.
+ * @param time      seconds on the engine clock.
+ */
+void SPESSASYNTH_EXPORTS ss_processor_process_message(SS_Processor *proc,
+                                                      const uint8_t *data,
+                                                      size_t length,
+                                                      int channel_offset,
+                                                      double time);
 
 SS_SoundBank SPESSASYNTH_EXPORTS *ss_processor_get_soundbank(SS_Processor *proc, const char *id);
 bool SPESSASYNTH_EXPORTS ss_processor_load_soundbank(SS_Processor *proc,
