@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(spessasynth_core VERSION 4.2.12 LANGUAGES C)
+project(spessasynth_core VERSION 4.3.17 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -95,7 +95,7 @@ else()
     add_library(spessasynth STATIC ${SS_SOURCES})
 endif()
 
-set_target_properties(spessasynth PROPERTIES VERSION 4.3.0 SOVERSION 9)
+set_target_properties(spessasynth PROPERTIES VERSION 4.3.17 SOVERSION 10)
 
 target_include_directories(spessasynth
     PUBLIC  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
