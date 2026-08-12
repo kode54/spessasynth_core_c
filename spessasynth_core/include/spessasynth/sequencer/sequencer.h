@@ -106,6 +106,16 @@ typedef struct {
 	bool preload; /* true once initial events have been sent */
 	bool finished;
 
+	/* Exact position of the last dispatched event.
+	 *
+	 * current_tick/current_time track the rendered position and are rounded
+	 * to it; deriving event times from them loses up to half a tick, which
+	 * is enough to push an event across a render-block boundary.  This
+	 * cursor advances only in exact tick deltas, so event times accumulate
+	 * the same way upstream's do. */
+	size_t cursor_tick;
+	double cursor_time;
+
 	/* Sample count handed to the previous ss_sequencer_tick call.
 	 *
 	 * Events are dispatched for the block that has already been rendered,
