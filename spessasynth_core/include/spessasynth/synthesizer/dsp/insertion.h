@@ -29,9 +29,9 @@ typedef struct {
 typedef struct SS_InsertionProcessor {
 	uint32_t type; /* MSB<<8|LSB, e.g. 0x0100 = StereoEQ */
 
-	float send_level_to_reverb;
-	float send_level_to_chorus;
-	float send_level_to_delay;
+	double send_level_to_reverb;
+	double send_level_to_chorus;
+	double send_level_to_delay;
 
 	/**
 	 * Process one block. Adds to output buffers.

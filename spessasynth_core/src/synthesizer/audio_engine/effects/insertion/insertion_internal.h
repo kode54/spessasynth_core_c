@@ -97,10 +97,10 @@ SS_InsertionProcessor *ss_insertion_ph_auto_wah_create(uint32_t type, uint32_t s
 typedef struct {
 	SS_InsertionProcessor base;
 	double sample_rate;
-	float manual, manual_offset;
-	float rate, depth, reso, mix, low_gain, hi_gain, level;
-	float phase;
-	float prev_l, prev_r;
+	double manual, manual_offset;
+	double rate, depth, reso, mix, low_gain, hi_gain, level;
+	double phase;
+	double prev_l, prev_r;
 	float prev_in_l[SS_PHASER_STAGES], prev_out_l[SS_PHASER_STAGES];
 	float prev_in_r[SS_PHASER_STAGES], prev_out_r[SS_PHASER_STAGES];
 	SS_Biquad ls_c, hs_c;
@@ -121,8 +121,8 @@ typedef struct {
 	SS_InsertionProcessor base;
 	double sample_rate;
 	int fil_type, polarity;
-	float sens, manual, peak, rate, depth, pan, low_gain, hi_gain, level;
-	float phase, last_fc, envelope;
+	double sens, manual, peak, rate, depth, pan, low_gain, hi_gain, level;
+	double phase, last_fc, envelope;
 	double attack_coeff, release_coeff;
 	SS_Biquad coeffs, hp_coeffs;
 	SS_BiquadState state, hp_state;
