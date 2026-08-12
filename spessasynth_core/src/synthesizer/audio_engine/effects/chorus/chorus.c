@@ -47,7 +47,7 @@ SS_Chorus *ss_chorus_create(float sampleRate, int maxBufferSize) {
 	/*chorus->reverbGain = 0;
 	chorus->delayGain = 0;
 	chorus->depthSamples = 0;*/
-	chorus->delaySamples = 1;
+	chorus->delaySamples = 1.0f;
 	/*chorus->rateInc = 0;
 	chorus->feedbackGain = 0;*/
 
@@ -110,13 +110,13 @@ void ss_chorus_set_pre_lowpass(SS_Chorus *chorus, unsigned char value) {
 
 void ss_chorus_set_depth(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.depth = value;
-	chorus->depthSamples = (unsigned int)round(((float)value / 127.0) * 0.025 * chorus->sampleRate);
+	chorus->depthSamples = ((float)value / 127.0f) * 0.025f * chorus->sampleRate;
 }
 
 void ss_chorus_set_delay(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.delay = value;
-	const unsigned int delaySamples = (unsigned int)round(((float)value / 127.0) * 0.025 * chorus->sampleRate);
-	chorus->delaySamples = delaySamples > 1 ? delaySamples : 1;
+	const float delaySamples = ((float)value / 127.0f) * 0.025f * chorus->sampleRate;
+	chorus->delaySamples = delaySamples > 1.0f ? delaySamples : 1.0f;
 }
 
 void ss_chorus_set_feedback(SS_Chorus *chorus, unsigned char value) {
@@ -252,8 +252,8 @@ void ss_chorus_process(SS_Chorus *chorus,
 	float *bufferR = chorus->rightDelayBuffer;
 	const float rateInc = chorus->rateInc;
 	const unsigned int bufferLen = chorus->maxBufferSize;
-	const unsigned int depth = chorus->depthSamples;
-	const unsigned int delay = chorus->delaySamples;
+	const float depth = chorus->depthSamples;
+	const float delay = chorus->delaySamples;
 	const float gain = chorus->gain;
 	const float reverbGain = chorus->reverbGain;
 	const float delayGain = chorus->delayGain;
@@ -281,7 +281,7 @@ void ss_chorus_process(SS_Chorus *chorus,
 		const float lfo = 2.0f * fabsf(phase - 0.5f);
 
 		// Read position
-		const float dL = max(1.0f, min(delay + lfo * depth, bufferLen));
+		const float dL = max(1.0f, min(delay + lfo * depth, (float)bufferLen));
 		float readPosL = (float)write - dL;
 		if(readPosL < 0.0) readPosL += (float)bufferLen;
 
@@ -296,7 +296,7 @@ void ss_chorus_process(SS_Chorus *chorus,
 		bufferL[write] = inputSample + outL * feedback;
 
 		// Same for the right line (shared buffer for now for testing)
-		const float dR = max(1.0f, min(delay + (1.0f - lfo) * depth, bufferLen));
+		const float dR = max(1.0f, min(delay + (1.0f - lfo) * depth, (float)bufferLen));
 		float readPosR = (float)write - dR;
 		if(readPosR < 0.0) readPosR += (float)bufferLen;
 		readPosR = fmodf(readPosR, (float)bufferLen);
