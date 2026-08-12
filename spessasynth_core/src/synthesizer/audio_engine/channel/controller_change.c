@@ -52,26 +52,29 @@ void ss_channel_set_generator_override(SS_MIDIChannel *ch, SS_GeneratorType gen,
 }
 
 static void ss_channel_update_tuning(SS_MIDIChannel *ch) {
-	ch->channel_tuning_cents = (int)(ch->custom_controllers[SS_CUSTOM_CTRL_TUNING] + /* RPN channel fine tuning */
+	/* Not truncated to whole cents: upstream sums these as numbers and RPN
+	 * fine tuning resolves to 100/8192 of a cent. */
+	ch->channel_tuning_cents = (ch->custom_controllers[SS_CUSTOM_CTRL_TUNING] + /* RPN channel fine tuning */
 	                                 ch->custom_controllers[SS_CUSTOM_CTRL_TRANSPOSE_FINE] + /* User tuning (transpose) */
 	                                 ch->custom_controllers[SS_CUSTOM_CTRL_MASTER_TUNING] + /* Master tuning, set by sysEx */
 	                                 ch->custom_controllers[SS_CUSTOM_CTRL_TUNING_SEMITONES] *
-	                                 100.0f); /* RPN channel coarse tuning */
+	                            100.0); /* RPN channel coarse tuning */
 }
 
-void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val) {
+void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, double val) {
 	ch->custom_controllers[type] = val;
 	ss_channel_update_tuning(ch);
 }
 
-void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents) {
-	cents = roundf(cents);
+/* Not rounded: upstream stores the cents it was given.  RPN fine tuning has a
+ * resolution of 100/8192 of a cent, so rounding to whole cents throws away
+ * most of the parameter's range. */
+void ss_channel_set_tuning(SS_MIDIChannel *ch, double cents) {
 	ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_TUNING, cents);
 }
 
-void ss_channel_set_modulation_depth(SS_MIDIChannel *ch, float cents) {
-	cents = roundf(cents);
-	ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_MODULATION_MULTIPLIER, cents / 50.0f);
+void ss_channel_set_modulation_depth(SS_MIDIChannel *ch, double cents) {
+	ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_MODULATION_MULTIPLIER, cents / 50.0);
 }
 
 void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {

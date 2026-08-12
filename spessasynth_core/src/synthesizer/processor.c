@@ -34,8 +34,8 @@ extern void ss_channel_compute_modulators_for(SS_MIDIChannel *ch, double time,
 extern void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch, double time);
 extern void ss_voice_compute_modulators_for(SS_Voice *v, const SS_MIDIChannel *ch,
                                             double time, int source_uses_cc, int source_index);
-extern void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
-extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
+extern void ss_channel_set_tuning(SS_MIDIChannel *ch, double cents);
+extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, double val);
 extern void ss_processor_init_parameters(SS_Processor *proc);
 
 void ss_processor_set_midi_volume(SS_Processor *proc, float volume);

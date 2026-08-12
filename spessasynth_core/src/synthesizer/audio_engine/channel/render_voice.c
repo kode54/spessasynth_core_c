@@ -78,8 +78,8 @@ bool ss_voice_render(SS_Voice *v,
 
 	/* ── TUNING ────────────────────────────────────────────────────────── */
 	int target_key = v->target_key;
-	float cents = (float)v->modulated_generators[SS_GEN_FINE_TUNE] + (float)ch->channel_octave_tuning[v->midi_note] + (float)ch->channel_tuning_cents + ch->current_tuning + v->pitch_offset;
-	float semitones = (float)v->modulated_generators[SS_GEN_COARSE_TUNE];
+	double cents = (double)v->modulated_generators[SS_GEN_FINE_TUNE] + (double)ch->channel_octave_tuning[v->midi_note] + ch->channel_tuning_cents + ch->current_tuning + v->pitch_offset;
+	double semitones = (double)v->modulated_generators[SS_GEN_COARSE_TUNE];
 
 	/* MIDI tuning standard */
 	const int program = v->preset->program;

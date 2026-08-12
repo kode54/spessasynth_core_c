@@ -490,7 +490,7 @@ typedef struct SS_MIDIChannel {
 	SS_DynamicModulatorSystem dms;
 
 	int8_t channel_octave_tuning[128];
-	int channel_tuning_cents;
+	double channel_tuning_cents;
 	int16_t generator_offsets[SS_GEN_COUNT];
 	bool generator_offsets_enabled;
 	int16_t generator_overrides[SS_GEN_COUNT];
