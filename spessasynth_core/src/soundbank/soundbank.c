@@ -249,20 +249,13 @@ const SS_Modulator SS_DEFAULT_MODULATORS[] = {
 	250,
 	0),
 
-	/* 6. Cc 67 (soft pedal) to attenuation */
-	MODULATOR(
-	MODSRC(
-	SS_MODCURVE_SWITCH,
-	false,
-	false,
-	true,
-	SS_MIDCON_SOFT_PEDAL), /* Switch unipolar positive 67 */
-	0x0, /* No controller */
-	SS_GEN_INITIAL_ATTENUATION,
-	50,
-	0),
-
-	/* 7. Cc 67 (soft pedal) to filter fc */
+	/* 6. Cc 67 (soft pedal) to filter fc
+	 *
+	 * Soft pedal darkens the tone and nothing else: upstream dropped the
+	 * companion soft-pedal-to-attenuation modulator and halved this amount
+	 * to -1200 in "More accurate default modulators".  The same commit
+	 * dropped a CC#8 balance-to-pan default, since neither SC-VA nor GS
+	 * supports CC#8. */
 	MODULATOR(
 	MODSRC(
 	SS_MODCURVE_SWITCH,
@@ -272,20 +265,7 @@ const SS_Modulator SS_DEFAULT_MODULATORS[] = {
 	SS_MIDCON_SOFT_PEDAL), /* Switch unipolar positive 67 */
 	0x0, /* No controller */
 	SS_GEN_INITIAL_FILTER_FC,
-	-2400,
-	0),
-
-	/* 8. Cc 8 (balance) to pan */
-	MODULATOR(
-	MODSRC(
-	SS_MODCURVE_LINEAR,
-	true,
-	false,
-	true,
-	SS_MIDCON_BALANCE), /* Linear bipolar positive 8 */
-	0x0, /* No controller */
-	SS_GEN_PAN,
-	500,
+	-1200,
 	0)
 };
 
