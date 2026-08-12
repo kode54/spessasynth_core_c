@@ -10,6 +10,7 @@
  */
 
 import * as fs from "node:fs/promises";
+import * as fsSync from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { spawn } from "node:child_process";
@@ -36,8 +37,34 @@ const MIDI_EXTENSIONS = new Set([
     ".xmf"
 ]);
 
+/*
+ * Sound bank used when --sf is not given.
+ *
+ * Upstream renders its generated corpus against a square.sf2 that is not in
+ * the repo and is not fetched by CI — it is a local file on the maintainer's
+ * machine — so an exact match is not reproducible here. What the corpus
+ * actually needs is full GM/GS coverage: its tests select specific
+ * instruments, and examples/florestan-subset.sf2 contains only 17 presets,
+ * so most of the corpus lands on fallback presets and measures nothing
+ * useful. Point SPESSA_HARNESS_SF at a full bank, or pass --sf.
+ */
+const FALLBACK_SF = path.join(
+    REPO,
+    "spessasynth_core",
+    "examples",
+    "florestan-subset.sf2"
+);
+const CORPUS_SF = "/Users/Shared/SoundFonts/TyrolandGS30finalfixed.sf2";
+
+function defaultSoundBank() {
+    if (process.env.SPESSA_HARNESS_SF) {
+        return path.resolve(process.env.SPESSA_HARNESS_SF);
+    }
+    return fsSync.existsSync(CORPUS_SF) ? CORPUS_SF : FALLBACK_SF;
+}
+
 const DEFAULTS = {
-    sf: path.join(REPO, "spessasynth_core", "examples", "florestan-subset.sf2"),
+    sf: defaultSoundBank(),
     midiDir: path.join(JS_REPO, "tests", "midi_file", "generated"),
     out: path.join(HERE, "out"),
     rate: 48000,
@@ -57,7 +84,8 @@ const DEFAULTS = {
 function usage() {
     console.error(`usage: node harness/run.mjs [options] [midi files or dirs...]
 
-  --sf PATH           sound bank to render with (default: examples/florestan-subset.sf2)
+  --sf PATH           sound bank to render with
+                      (default: $SPESSA_HARNESS_SF, else ${DEFAULTS.sf})
   --out DIR           output directory (default: harness/out)
   --filter SUBSTR     only render files whose name contains SUBSTR
   --gen               run "npm run test:midi" in the JS repo first
