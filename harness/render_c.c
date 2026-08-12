@@ -41,6 +41,7 @@ typedef struct {
 	int loop_count;
 	bool emidi_filter;
 	bool preload_samples;
+	bool no_skip;
 	SS_InterpolationType interp;
 	const char *bank_path;
 	const char *midi_path;
@@ -144,6 +145,7 @@ int main(int argc, char *argv[]) {
 		.loop_count = 0,
 		.emidi_filter = false,
 		.preload_samples = false,
+		.no_skip = false,
 		.interp = SS_INTERP_HERMITE
 	};
 
@@ -181,6 +183,8 @@ int main(int argc, char *argv[]) {
 			o.effects = false;
 		} else if(strcmp(a, "--emidi-filter") == 0) {
 			o.emidi_filter = true;
+		} else if(strcmp(a, "--no-skip") == 0) {
+			o.no_skip = true;
 		} else if(strcmp(a, "--preload") == 0) {
 			o.preload_samples = true;
 		} else if(strcmp(a, "-h") == 0 || strcmp(a, "--help") == 0) {
@@ -264,6 +268,7 @@ int main(int argc, char *argv[]) {
 	/* The C sequencer defaults to one extra playthrough of the loop body;
 	 * the JS sequencer defaults to none.  Match the JS behavior. */
 	ss_sequencer_set_loop_count(seq, o.loop_count);
+	if(o.no_skip) ss_sequencer_set_skip_to_first_note_on(seq, false);
 	if(!ss_sequencer_load_midi(seq, midi)) {
 		fprintf(stderr, "Could not load the MIDI into the sequencer\n");
 		return 1;
