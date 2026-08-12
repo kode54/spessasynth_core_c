@@ -184,8 +184,8 @@ bool ss_voice_render(SS_Voice *v,
 	volume_excursion_cb -= v->resonance_offset;
 
 	/* ── Playback rate ────────────────────────────────────────────────── */
-	const double cents_total = (int)(cents + semitones * 100.0f);
-	const double cents_rounded = round(cents_total);
+	const double cents_total = (double)cents + (double)semitones * 100.0;
+	const int cents_rounded = (int)cents_total;
 	/* Round for testing if equal,
 	 * But let's allow sub-microtonal tunings, because why not? :-)
 	 */
