@@ -746,9 +746,17 @@ size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
 				sd->generators[g] = (int16_t)sum;
 			}
 			/* EMU initial attenuation correction: multiply by 0.4. All EMU sound
-			 * cards have this quirk; all SF2 editors and players emulate it. */
+			 * cards have this quirk; all SF2 editors and players emulate it.
+			 *
+			 * Floored, not truncated, and in floating point -- upstream's
+			 * Math.floor(gen * 0.4).  Integer division rounds toward zero, so
+			 * a zone with negative attenuation (one that boosts) landed a
+			 * centibel high: -46 gives -18 truncated where the floor is -19.
+			 * The multiply is left as * 0.4 rather than * 4 / 10 because 0.4
+			 * is not exact in binary, and the floor of a value that ought to
+			 * be a whole number lands either side depending on the sign. */
 			sd->generators[SS_GEN_INITIAL_ATTENUATION] =
-			(int16_t)((int)sd->generators[SS_GEN_INITIAL_ATTENUATION] * 4 / 10);
+			(int16_t)floor((double)sd->generators[SS_GEN_INITIAL_ATTENUATION] * 0.4);
 
 			/* Modulator list (SF2 spec §9.5):
 			 *  1. Inst zone mods
