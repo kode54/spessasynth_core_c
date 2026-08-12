@@ -828,7 +828,11 @@ void ss_processor_system_reset(SS_Processor *proc) {
 		SS_MIDIChannel *ch = proc->midi_channels[i];
 		if(!ch) continue;
 		ch->midi_params.efx_assign = false;
-		ss_channel_all_sound_off(ch);
+		/* No all-sound-off here.  Upstream's reset() resets parameters and
+		 * leaves sounding voices alone; only the 0xFF reset *message* stops
+		 * notes, and even that releases them gracefully rather than cutting
+		 * them.  A GM/GS/XG reset arriving mid-song must not silence what is
+		 * already ringing. */
 		ss_channel_reset(ch);
 		ch->drum_channel = (i % 16 == 9);
 		/* Reset bank/program */
