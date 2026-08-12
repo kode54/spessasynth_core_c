@@ -106,16 +106,16 @@ SS_DattorroReverb *ss_dattorro_reverb_create(float sampleRate) {
 	int i;
 
 	// reverb->preDelay = 0; // cleared already
-	reverb->preLPF = 0.5f;
-	reverb->inputDiffusion[0] = 0.75f;
-	reverb->inputDiffusion[1] = 0.625f;
-	reverb->decay = 0.5f;
-	reverb->decayDiffusion[0] = 0.7f;
-	reverb->decayDiffusion[1] = 0.5f;
-	reverb->damping = 0.005f;
-	reverb->excursionRate = 0.1f;
-	reverb->excursionDepth = 0.2f;
-	reverb->gain = 1.0f;
+	reverb->preLPF = 0.5;
+	reverb->inputDiffusion[0] = 0.75;
+	reverb->inputDiffusion[1] = 0.625;
+	reverb->decay = 0.5;
+	reverb->decayDiffusion[0] = 0.7;
+	reverb->decayDiffusion[1] = 0.5;
+	reverb->damping = 0.005;
+	reverb->excursionRate = 0.1;
+	reverb->excursionDepth = 0.2;
+	reverb->gain = 1.0;
 	reverb->sampleRate = sampleRate;
 	// reverb->lp[0] = 0;
 	// reverb->lp[1] = 0;

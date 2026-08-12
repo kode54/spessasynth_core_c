@@ -80,7 +80,7 @@ const int16_t ss_default_controller_values[128] = {
 
 enum { PORTAMENTO_CONTROL_UNSET = 1 };
 
-static const float custom_reset_array[SS_CUSTOM_CTRL_COUNT] = {
+static const double custom_reset_array[SS_CUSTOM_CTRL_COUNT] = {
 	[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER] = 1.0
 };
 

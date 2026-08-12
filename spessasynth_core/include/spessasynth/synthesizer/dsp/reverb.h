@@ -44,16 +44,16 @@ typedef struct {
 	float *delayRightOutput;
 	float *delayLeftInput;
 	float *delayPreLPF;
-	float sampleRate;
-	float preLPFfc;
-	float preLPFa;
-	float preLPFz;
-	float characterTimeCoefficient;
-	float characterGainCoefficient;
-	float characterLPFCoefficient;
-	float delayGain;
-	float panDelayFeedback;
-	float delayFeedback;
+	double sampleRate;
+	double preLPFfc;
+	double preLPFa;
+	double preLPFz;
+	double characterTimeCoefficient;
+	double characterGainCoefficient;
+	double characterLPFCoefficient;
+	double delayGain;
+	double panDelayFeedback;
+	double delayFeedback;
 } SS_Reverb;
 
 SS_Reverb SPESSASYNTH_EXPORTS *ss_reverb_create(float sampleRate, int maxBufferSize);
