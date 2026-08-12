@@ -62,7 +62,9 @@ void ss_channel_update_internal_params(SS_MIDIChannel *ch) {
 	                                   : (gs_key + gm_key + cs->key_shift + cm->key_shift));
 
 	/* Output gain — multiplicative across every layer. */
-	ch->current_gain = SS_GAIN_FACTOR * gs_gain * gm_gain * cs->gain;
+	/* The global MIDI layer is master volume, which is squared -- it
+	 * corresponds to CC volume, and upstream squares it for the same reason. */
+	ch->current_gain = SS_GAIN_FACTOR * gs_gain * (gm_gain * gm_gain) * cs->gain;
 	/* Per-channel MIDI gain is the volume/expression controllers. */
 }
 

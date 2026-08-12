@@ -81,6 +81,8 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 
 							/* Roland GS master volume */
 							case 0x04:
+								ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_GAIN,
+								                                (double)data / 127.0);
 								break;
 
 							/* Roland GS master key shift (transpose) */
@@ -91,8 +93,9 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 
 							/* Roland master pan */
 							case 0x06:
+								/* 63, not 64: the range is 1..127, not 0..127. */
 								ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_PAN,
-								                                (float)((int)data - 64) / 64.0f);
+								                                (double)((int)data - 64) / 63.0);
 								break;
 
 							case 0x7f:
