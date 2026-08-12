@@ -28,8 +28,8 @@ float ss_modcurve_get_value(int transform_type, SS_ModulatorCurveType curve_type
  * For now, supports CC (direct), velocity, key, pressure, pitch wheel.
  */
 
-static float get_source_value(const SS_MIDIChannel *ch, const SS_Voice *v,
-                              uint16_t source_enum) {
+static double get_source_value(const SS_MIDIChannel *ch, const SS_Voice *v,
+                               uint16_t source_enum) {
 	/* Decode packed source_enum:
 	 * bits 11-10: curve (0=linear, 1=concave, 2=convex, 3=switch)
 	 * bit 9: is_bipolar
@@ -122,9 +122,9 @@ static void resolve_base_generators(const SS_Voice *v, const SS_MIDIChannel *ch,
 
 /* Truncate toward zero and wrap into int16, as a JavaScript Int16Array store
  * does, for a value of any magnitude. */
-static int16_t to_int16_js(float value) {
+static int16_t to_int16_js(double value) {
 	if(!isfinite(value)) return 0;
-	double t = (value < 0.0f) ? ceil((double)value) : floor((double)value);
+	double t = (value < 0.0) ? ceil(value) : floor(value);
 	/* fmod keeps the wrap well-defined for magnitudes past int32. */
 	t = fmod(t, 65536.0);
 	return wrap_int16((int32_t)t);
@@ -140,34 +140,34 @@ static int16_t to_int16_js(float value) {
  * each contribution whole, while the filtered path re-adds them after they have
  * each lost their fraction.  Caching the full value here instead left the
  * filtered path a fraction high per modulator on a shared destination. */
-static float compute_one_modulator(SS_Voice *v, const SS_MIDIChannel *ch,
-                                   SS_Modulator *m) {
+static double compute_one_modulator(SS_Voice *v, const SS_MIDIChannel *ch,
+                                    SS_Modulator *m) {
 	if(!m->transform_amount) {
 		m->current_value = 0.0f;
 		return 0.0f;
 	}
 
-	float src = get_source_value(ch, v, m->source_enum);
+	double src = get_source_value(ch, v, m->source_enum);
 	/* The amount source is evaluated even when it is "no controller".  That
 	 * source is raw 16383 against a table of 16384 steps, so it contributes
 	 * 0.99993896 rather than 1 -- upstream's own comment there calls it 1, but
 	 * its arithmetic does not.  Short-circuiting it to 1 here left every
 	 * modulated generator a hair high, and wherever the true product sits just
 	 * below an integer the truncation into the generator differs by one. */
-	float asrc = get_source_value(ch, v, m->amount_source_enum);
+	double asrc = get_source_value(ch, v, m->amount_source_enum);
 
 	/* Effect modulators: scale CC91/CC93 as in spessasynth */
-	float transform_amount = (float)m->transform_amount;
+	double transform_amount = m->transform_amount;
 	if(m->is_effect_modulator && transform_amount <= 1000) {
 		transform_amount *= EFFECT_MODULATOR_TRANSFORM_MULTIPLIER;
 		if(transform_amount > 1000.0) transform_amount = 1000.0;
 	}
 
-	float val = src * asrc * transform_amount;
+	double val = src * asrc * transform_amount;
 
 	if(m->transform_type == SS_MODTRANS_ABSOLUTE) {
 		/* Abs value */
-		val = fabsf(val);
+		val = fabs(val);
 	}
 
 	/* Default resonant modulator: track separately */
@@ -222,14 +222,14 @@ void ss_voice_compute_modulators_for(SS_Voice *v, const SS_MIDIChannel *ch,
 			SS_Modulator *m = &v->modulators[mi];
 			if(m->dest_enum >= SS_GEN_COUNT) continue;
 
-			const float val = compute_one_modulator(v, ch, m);
+			const double val = compute_one_modulator(v, ch, m);
 			if(!m->transform_amount) continue;
 
 			/* Add in floating point and then truncate, rather than truncating
 			 * the contribution and adding an integer.  The fraction has to
 			 * meet the running total before it is dropped, or a destination
 			 * fed by several modulators drifts away from upstream. */
-			double sum = (double)v->modulated_generators[m->dest_enum] + (double)val;
+			double sum = (double)v->modulated_generators[m->dest_enum] + val;
 			if(sum > 32767.0) sum = 32767.0;
 			if(sum < -32768.0) sum = -32768.0;
 			v->modulated_generators[m->dest_enum] = store_int16(sum);

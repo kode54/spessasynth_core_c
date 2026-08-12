@@ -40,7 +40,7 @@ typedef struct {
 	uint16_t source_enum; /* packed ModulatorSource */
 	uint16_t amount_source_enum;
 	uint16_t dest_enum; /* SS_GeneratorType target */
-	int16_t transform_amount;
+	double transform_amount; /* fractional: the GS controller matrix sets it so */
 	uint16_t transform_type;
 	float current_value; /* runtime: computed modulator output */
 	bool is_effect_modulator;
