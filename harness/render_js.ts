@@ -33,6 +33,7 @@ interface Options {
     effects: boolean;
     loopCount: number;
     verbose: boolean;
+    noSkip: boolean;
     bankPath: string;
     midiPath: string;
     outPath: string;
@@ -64,6 +65,7 @@ function parseArgs(argv: string[]): Options {
         effects: true,
         loopCount: 0,
         verbose: false,
+        noSkip: false,
         bankPath: "",
         midiPath: "",
         outPath: ""
@@ -104,6 +106,9 @@ function parseArgs(argv: string[]): Options {
                 break;
             case "--verbose":
                 o.verbose = true;
+                break;
+            case "--no-skip":
+                o.noSkip = true;
                 break;
             case "-h":
             case "--help":
@@ -174,6 +179,7 @@ synth.setSystemParameter("effectsEnabled", o.effects);
 synth.setSystemParameter("voiceCap", o.voiceCap);
 
 const seq = new SpessaSynthSequencer(synth);
+seq.skipToFirstNoteOn = !o.noSkip;
 seq.loadNewSongList([midi]);
 seq.loopCount = o.loopCount;
 seq.play();
