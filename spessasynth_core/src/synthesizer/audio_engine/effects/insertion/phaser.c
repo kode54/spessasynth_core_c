@@ -12,13 +12,13 @@
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 
-static void phaser_set_manual(SS_PhaserFX *p, float m) {
-	if(m > 1000.0f) {
-		p->manual_offset = 600.0f * 1.5f * 4.0f;
+static void phaser_set_manual(SS_PhaserFX *p, double m) {
+	if(m > 1000.0) {
+		p->manual_offset = 600.0 * 1.5 * 4.0;
 		p->manual = m;
 	} else {
-		p->manual_offset = 600.0f;
-		p->manual = m * 4.0f;
+		p->manual_offset = 600.0;
+		p->manual = m * 4.0;
 	}
 }
 
@@ -94,22 +94,22 @@ void ss_phaser_set_param(SS_InsertionProcessor *self, int param, int v) {
 			p->rate = ss_ivc_rate1(v);
 			break;
 		case 0x05:
-			p->depth = (float)v / 128.0f;
+			p->depth = (double)v / 128.0;
 			break;
 		case 0x06:
-			p->reso = (float)v / 127.0f;
+			p->reso = (double)v / 127.0;
 			break;
 		case 0x07:
-			p->mix = (float)v / 127.0f;
+			p->mix = (double)v / 127.0;
 			break;
 		case 0x13:
-			p->low_gain = (float)(v - 64);
+			p->low_gain = (double)(v - 64);
 			break;
 		case 0x14:
-			p->hi_gain = (float)(v - 64);
+			p->hi_gain = (double)(v - 64);
 			break;
 		case 0x16:
-			p->level = (float)v / 127.0f;
+			p->level = (double)v / 127.0;
 			break;
 		default:
 			break;
@@ -119,15 +119,15 @@ void ss_phaser_set_param(SS_InsertionProcessor *self, int param, int v) {
 
 void ss_phaser_reset(SS_InsertionProcessor *self) {
 	SS_PhaserFX *p = (SS_PhaserFX *)self;
-	p->phase = 0.35f;
-	phaser_set_manual(p, 620.0f);
-	p->rate = 0.85f;
-	p->depth = 64.0f / 128.0f;
-	p->reso = 16.0f / 127.0f;
-	p->mix = 1.0f;
+	p->phase = 0.35;
+	phaser_set_manual(p, 620.0);
+	p->rate = 0.85;
+	p->depth = 64.0 / 128.0;
+	p->reso = 16.0 / 127.0;
+	p->mix = 1.0;
 	p->low_gain = 0;
 	p->hi_gain = 0;
-	p->level = 104.0f / 127.0f;
+	p->level = 104.0 / 127.0;
 	p->prev_l = p->prev_r = 0;
 	memset(p->prev_in_l, 0, sizeof(p->prev_in_l));
 	memset(p->prev_out_l, 0, sizeof(p->prev_out_l));
