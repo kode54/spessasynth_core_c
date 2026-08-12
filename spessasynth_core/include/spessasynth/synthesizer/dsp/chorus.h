@@ -37,7 +37,7 @@ typedef struct {
 	double preLPFz;
 	float *leftDelayBuffer;
 	float *rightDelayBuffer;
-	float sampleRate;
+	double sampleRate;
 	double phase;
 	unsigned int write;
 	double gain;
