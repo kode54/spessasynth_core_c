@@ -96,33 +96,33 @@ void ss_chorus_set_send_level_to_reverb(SS_Chorus *chorus, unsigned char value) 
 
 void ss_chorus_set_send_level_to_delay(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.sendLevelToDelay = value;
-	chorus->delayGain = (float)value / 127.0f;
+	chorus->delayGain = (double)value / 127.0;
 }
 
 void ss_chorus_set_pre_lowpass(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.preLowpass = value;
 	// GS sure loves weird mappings, huh?
 	// Maps to around 8000-300 Hz
-	chorus->preLPFfc = 8000.0f * powf(0.63f, (float)value);
-	const float decay = expf((float)((-2.0f * M_PI * chorus->preLPFfc) / chorus->sampleRate));
-	chorus->preLPFa = 1.0f - decay;
+	chorus->preLPFfc = 8000.0 * pow(0.63, (double)value);
+	const double decay = exp((-2.0 * M_PI * chorus->preLPFfc) / chorus->sampleRate);
+	chorus->preLPFa = 1.0 - decay;
 }
 
 void ss_chorus_set_depth(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.depth = value;
-	chorus->depthSamples = ((float)value / 127.0f) * 0.025f * chorus->sampleRate;
+	chorus->depthSamples = ((double)value / 127.0) * 0.025 * chorus->sampleRate;
 }
 
 void ss_chorus_set_delay(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.delay = value;
-	const float delaySamples = ((float)value / 127.0f) * 0.025f * chorus->sampleRate;
-	chorus->delaySamples = delaySamples > 1.0f ? delaySamples : 1.0f;
+	const double delaySamples = ((double)value / 127.0) * 0.025 * chorus->sampleRate;
+	chorus->delaySamples = delaySamples > 1.0 ? delaySamples : 1.0;
 }
 
 void ss_chorus_set_feedback(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.feedback = value;
 	/* GM2 section 4.5.4 */
-	chorus->feedbackGain = (float)value * 0.00763f;
+	chorus->feedbackGain = (double)value * 0.00763;
 }
 
 void ss_chorus_set_rate(SS_Chorus *chorus, unsigned char value) {
@@ -131,13 +131,13 @@ void ss_chorus_set_rate(SS_Chorus *chorus, unsigned char value) {
 	 * 127 - 15.50Hz, 1 - 0.12 Hz
 	 * And GM2 section 4.5.2 actually specifies the equation!
 	 */
-	const float rate = (float)value * 0.122;
+	const double rate = (double)value * 0.122;
 	chorus->rateInc = rate / chorus->sampleRate;
 }
 
 void ss_chorus_set_level(SS_Chorus *chorus, unsigned char value) {
 	chorus->parameters.level = value;
-	chorus->gain = ((float)value / 127.0f) * 1.3f;
+	chorus->gain = ((double)value / 127.0) * 1.3;
 }
 
 void ss_chorus_set_macro(SS_Chorus *chorus, unsigned char value) {
