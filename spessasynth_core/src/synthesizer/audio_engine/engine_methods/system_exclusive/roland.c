@@ -335,7 +335,9 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 
 								case 0x14:
 									/* Assign mode */
-									mch->midi_params.assign_mode = data;
+									ss_channel_set_midi_parameter(mch,
+									                              SS_CHANNEL_MIDI_ASSIGN_MODE,
+									                              (double)data);
 									break;
 
 								case 0x15: {
