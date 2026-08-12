@@ -39,6 +39,7 @@ typedef struct {
 	bool auto_allocate;
 	bool effects;
 	int loop_count;
+	bool loop_play_out;
 	bool emidi_filter;
 	bool preload_samples;
 	bool no_skip;
@@ -60,6 +61,9 @@ static void usage(const char *argv0) {
 	        "  --no-effects        disable reverb/chorus/delay\n"
 	        "  --interp T          linear|nearest|hermite|sinc (default hermite)\n"
 	        "  --loop-count N      sequencer loop count (default 0, i.e. no loop)\n"
+	        "  --loop-play-out     when the loop count runs out, stop looping and\n"
+	        "                      play the song out rather than fading, matching\n"
+	        "                      upstream -- use it to compare looped renders\n"
 	        "  --emidi-filter      apply the C port's EMIDI non-GM filtering\n"
 	        "  --preload           preload every sample before rendering\n",
 	        argv0, DEF_RATE, DEF_TAIL, DEF_BLOCK, DEF_VOICE_CAP);
@@ -177,6 +181,8 @@ int main(int argc, char *argv[]) {
 				fprintf(stderr, "Unknown interpolation type '%s'\n", argv[i]);
 				return 2;
 			}
+		} else if(strcmp(a, "--loop-play-out") == 0) {
+			o.loop_play_out = true;
 		} else if(strcmp(a, "--auto-allocate") == 0) {
 			o.auto_allocate = true;
 		} else if(strcmp(a, "--no-effects") == 0) {
@@ -268,6 +274,8 @@ int main(int argc, char *argv[]) {
 	/* The C sequencer defaults to one extra playthrough of the loop body;
 	 * the JS sequencer defaults to none.  Match the JS behavior. */
 	ss_sequencer_set_loop_count(seq, o.loop_count);
+	if(o.loop_play_out)
+		ss_sequencer_set_loop_end_behavior(seq, SS_LOOP_END_PLAY_OUT);
 	if(o.no_skip) ss_sequencer_set_skip_to_first_note_on(seq, false);
 	if(!ss_sequencer_load_midi(seq, midi)) {
 		fprintf(stderr, "Could not load the MIDI into the sequencer\n");

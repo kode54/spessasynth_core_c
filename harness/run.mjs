@@ -89,6 +89,7 @@ const DEFAULTS = {
     tail: 2,
     block: 128,
     voiceCap: 350,
+    loopCount: 0,
     jobs: Math.max(1, Math.min(8, Math.floor(os.cpus().length / 2))),
     failBelow: null,
     autoAllocate: false,
@@ -111,6 +112,11 @@ function usage() {
   --tail S            tail seconds after the song (default ${DEFAULTS.tail})
   --block N           render block size (default ${DEFAULTS.block})
   --voice-cap N       voice cap (default ${DEFAULTS.voiceCap})
+  --loop-count N      sequencer loop count (default ${DEFAULTS.loopCount}).
+                      The C renderer is run with --loop-play-out so it stops
+                      looping when the count runs out instead of fading, which
+                      is what upstream does and the only way a looped render
+                      is comparable
   --auto-allocate     uncapped voice allocation on both engines
   --no-effects        disable reverb/chorus/delay on both engines
   --jobs N            parallel renders (default ${DEFAULTS.jobs})
@@ -140,6 +146,7 @@ function parseArgs(argv) {
             case "--tail": o.tail = Number(value()); break;
             case "--block": o.block = Number(value()); break;
             case "--voice-cap": o.voiceCap = Number(value()); break;
+            case "--loop-count": o.loopCount = Number(value()); break;
             case "--jobs": o.jobs = Math.max(1, Number(value())); break;
             case "--fail-below": o.failBelow = Number(value()); break;
             case "--gen": o.generate = true; break;
@@ -223,12 +230,22 @@ async function renderOne(o, midiPath, dirs) {
         "--block", String(o.block),
         "--voice-cap", String(o.voiceCap),
         ...(o.autoAllocate ? ["--auto-allocate"] : []),
-        ...(o.effects ? [] : ["--no-effects"])
+        ...(o.effects ? [] : ["--no-effects"]),
+        ...(o.loopCount ? ["--loop-count", String(o.loopCount)] : [])
     ];
+
+    /*
+     * The C sequencer's finite loop count fades out and keeps looping; the JS
+     * one stops looping and plays the song out.  That is a deliberate player
+     * feature with no upstream equivalent, so it is switched off here rather
+     * than compared -- otherwise the last seconds of every looping file are
+     * a fade against a tail and score arbitrarily badly.
+     */
+    const cOnly = o.loopCount ? ["--loop-play-out"] : [];
 
     const started = Date.now();
     const [cRes, jsRes] = await Promise.all([
-        run(C_RENDERER, [...shared, o.sf, midiPath, cWav]),
+        run(C_RENDERER, [...shared, ...cOnly, o.sf, midiPath, cWav]),
         run(
             "tsx",
             [
@@ -338,7 +355,8 @@ function renderMarkdown(summary, o, midis) {
     lines.push(
         `- ${o.rate} Hz, block ${o.block}, tail ${o.tail} s, voice cap ${o.voiceCap}` +
             `, effects ${o.effects ? "on" : "off"}` +
-            `, auto-allocate ${o.autoAllocate ? "on" : "off"}`
+            `, auto-allocate ${o.autoAllocate ? "on" : "off"}` +
+            (o.loopCount ? `, loop count ${o.loopCount}` : "")
     );
     lines.push(`- Files: ${midis.length}`);
     lines.push("");
