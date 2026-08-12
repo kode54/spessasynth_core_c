@@ -19,6 +19,8 @@
 extern void ss_voice_release(SS_Voice *v, double current_time, double min_note_length);
 extern void ss_voice_exclusive_release(SS_Voice *v, double current_time);
 extern void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch, double time);
+extern void ss_voice_compute_modulators_for(SS_Voice *v, const SS_MIDIChannel *ch,
+                                            double time, int source_uses_cc, int source_index);
 extern bool ss_voice_render(SS_Voice *v, const SS_MIDIChannel *ch,
                             double time_now,
                             float *ol, float *or_,
@@ -43,6 +45,8 @@ extern void ss_channel_exclusive_release(SS_MIDIChannel *ch, int note, double ti
 extern void ss_channel_reset_drum_params(SS_MIDIChannel *ch);
 extern void ss_channel_reset_internal(SS_MIDIChannel *ch);
 extern void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time);
+extern void ss_channel_compute_modulators_for(SS_MIDIChannel *ch, double time,
+                                              int source_uses_cc, int source_index);
 
 SS_MIDIChannel *ss_channel_new(int channel_number, struct SS_Processor *synth) {
 	SS_MIDIChannel *ch = (SS_MIDIChannel *)calloc(1, sizeof(SS_MIDIChannel));
@@ -83,7 +87,7 @@ void ss_channel_pitch_wheel(SS_MIDIChannel *ch, int value, int midi_note, double
 		/* Global pitch wheel: disable per-note mode */
 		ch->per_note_pitch = false;
 		ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_PITCH_WHEEL] = (int16_t)value;
-		ss_channel_compute_modulators(ch, time);
+		ss_channel_compute_modulators_for(ch, time, 0, SS_MODSRC_PITCH_WHEEL);
 	} else {
 		/* Per-note pitch wheel */
 		if(!ch->per_note_pitch) {
@@ -97,7 +101,7 @@ void ss_channel_pitch_wheel(SS_MIDIChannel *ch, int value, int midi_note, double
 		for(size_t i = 0; i < ch->voice_count; i++) {
 			SS_Voice *v = ch->voices[i];
 			if(v && v->is_active && v->midi_note == midi_note) {
-				ss_voice_compute_modulators(v, ch, time);
+				ss_voice_compute_modulators_for(v, ch, time, 0, SS_MODSRC_PITCH_WHEEL);
 			}
 		}
 	}

@@ -120,10 +120,26 @@ static void resolve_base_generators(const SS_Voice *v, const SS_MIDIChannel *ch,
 		out[i] = wrap_int16((int32_t)v->generators[i] + (int32_t)ch->generator_offsets[i]);
 }
 
+/* Truncate toward zero and wrap into int16, as a JavaScript Int16Array store
+ * does, for a value of any magnitude. */
+static int16_t to_int16_js(float value) {
+	if(!isfinite(value)) return 0;
+	double t = (value < 0.0f) ? ceil((double)value) : floor((double)value);
+	/* fmod keeps the wrap well-defined for magnitudes past int32. */
+	t = fmod(t, 65536.0);
+	return wrap_int16((int32_t)t);
+}
+
 /* Compute one modulator's own output and cache it on the modulator.  The cached
  * value is this modulator's contribution alone, never a running total: the
  * source-filtered path below sums the cached values of every modulator sharing
- * a destination, and a total stored here would be counted twice. */
+ * a destination, and a total stored here would be counted twice.
+ *
+ * It is cached truncated, because upstream caches it in an Int16Array.  That
+ * makes the two recompute paths disagree by design: recomputing everything adds
+ * each contribution whole, while the filtered path re-adds them after they have
+ * each lost their fraction.  Caching the full value here instead left the
+ * filtered path a fraction high per modulator on a shared destination. */
 static float compute_one_modulator(SS_Voice *v, const SS_MIDIChannel *ch,
                                    SS_Modulator *m) {
 	if(!m->transform_amount) {
@@ -164,48 +180,119 @@ static float compute_one_modulator(SS_Voice *v, const SS_MIDIChannel *ch,
 		val *= ch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER];
 	}
 
-	m->current_value = val;
+	m->current_value = (float)to_int16_js(val);
 	return val;
 }
 
-void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch,
-                                 double time) {
+/* True if this modulator reads the source that just moved, on either input. */
+static bool modulator_uses_source(const SS_Modulator *m, bool source_is_cc,
+                                  int source_index) {
+	const bool primary_is_cc = (m->source_enum & 0x80) != 0;
+	const bool amount_is_cc = (m->amount_source_enum & 0x80) != 0;
+	return (primary_is_cc == source_is_cc && (m->source_enum & 0x7F) == source_index) ||
+	       (amount_is_cc == source_is_cc && (m->amount_source_enum & 0x7F) == source_index);
+}
+
+/*
+ * Recompute a voice's modulated generators.
+ *
+ * source_uses_cc < 0 recomputes everything.  Otherwise only the modulators
+ * reading the named source are recomputed and their destinations rebuilt, which
+ * is all a single controller moving can actually disturb.
+ *
+ * The two paths round differently, and deliberately so, because upstream's do.
+ * Recomputing everything accumulates through the int16 generator slot, so each
+ * contribution is truncated as it lands; the filtered path sums the cached
+ * contributions in floating point and truncates once at the end.  A destination
+ * driven by several modulators can differ by a count between them.
+ */
+void ss_voice_compute_modulators_for(SS_Voice *v, const SS_MIDIChannel *ch,
+                                     double time, int source_uses_cc,
+                                     int source_index) {
 	(void)time;
 
-	/* Everything: lay down the base generators, then fold each modulator
-	 * into its destination in turn. */
-	resolve_base_generators(v, ch, v->modulated_generators);
+	if(source_uses_cc < 0) {
+		/* Everything: lay down the base generators, then fold each modulator
+		 * into its destination in turn. */
+		resolve_base_generators(v, ch, v->modulated_generators);
 
-	v->resonance_offset = 0.0f;
+		v->resonance_offset = 0.0f;
+
+		for(size_t mi = 0; mi < v->modulator_count; mi++) {
+			SS_Modulator *m = &v->modulators[mi];
+			if(m->dest_enum >= SS_GEN_COUNT) continue;
+
+			const float val = compute_one_modulator(v, ch, m);
+			if(!m->transform_amount) continue;
+
+			/* Add in floating point and then truncate, rather than truncating
+			 * the contribution and adding an integer.  The fraction has to
+			 * meet the running total before it is dropped, or a destination
+			 * fed by several modulators drifts away from upstream. */
+			double sum = (double)v->modulated_generators[m->dest_enum] + (double)val;
+			if(sum > 32767.0) sum = 32767.0;
+			if(sum < -32768.0) sum = -32768.0;
+			v->modulated_generators[m->dest_enum] = store_int16(sum);
+		}
+
+		/* Apply generator-specific limits to all modulated generators.
+		 * Matches TypeScript computeModulators second pass (compute_modulator.ts lines 119-130).
+		 * This clamps base generator values (e.g. sustainVolEnv = -461 from preset+inst summing)
+		 * that were never touched by any modulator but still need to be in spec range. */
+		for(int g = 0; g < SS_GEN_COUNT; g++) {
+			v->modulated_generators[g] = ss_generator_clamp((SS_GeneratorType)g, v->modulated_generators[g]);
+		}
+		return;
+	}
+
+	/* Only the modulators reading the source that moved.  Each of their
+	 * destinations is rebuilt from the base generator plus every modulator
+	 * aimed there, cached values included, so the ones that were not
+	 * recomputed keep contributing what they last produced. */
+	const bool source_is_cc = (source_uses_cc != 0);
+	int16_t base[SS_GEN_COUNT];
+	bool base_ready = false;
 
 	for(size_t mi = 0; mi < v->modulator_count; mi++) {
 		SS_Modulator *m = &v->modulators[mi];
 		if(m->dest_enum >= SS_GEN_COUNT) continue;
+		if(!modulator_uses_source(m, source_is_cc, source_index)) continue;
 
-		const float val = compute_one_modulator(v, ch, m);
-		if(!m->transform_amount) continue;
+		if(!base_ready) {
+			resolve_base_generators(v, ch, base);
+			base_ready = true;
+		}
 
-		/* Add in floating point and then truncate, rather than truncating
-		 * the contribution and adding an integer.  The fraction has to
-		 * meet the running total before it is dropped, or a destination
-		 * fed by several modulators drifts away from upstream. */
-		double sum = (double)v->modulated_generators[m->dest_enum] + (double)val;
-		if(sum > 32767.0) sum = 32767.0;
-		if(sum < -32768.0) sum = -32768.0;
-		v->modulated_generators[m->dest_enum] = store_int16(sum);
-	}
+		const uint16_t dest = m->dest_enum;
+		compute_one_modulator(v, ch, m);
 
-	/* Apply generator-specific limits to all modulated generators.
-	 * Matches TypeScript computeModulators second pass (compute_modulator.ts lines 119-130).
-	 * This clamps base generator values (e.g. sustainVolEnv = -461 from preset+inst summing)
-	 * that were never touched by any modulator but still need to be in spec range. */
-	for(int g = 0; g < SS_GEN_COUNT; g++) {
-		v->modulated_generators[g] = ss_generator_clamp((SS_GeneratorType)g, v->modulated_generators[g]);
+		double out = (double)base[dest];
+		for(size_t mj = 0; mj < v->modulator_count; mj++)
+			if(v->modulators[mj].dest_enum == dest)
+				out += (double)v->modulators[mj].current_value;
+
+		/* Clamp to the generator's own limits rather than to the int16 range:
+		 * this path never reaches the sweeping limit pass above. */
+		const SS_GeneratorLimit *lim = &SS_GENERATOR_LIMITS[dest];
+		if(out > (double)lim->max) out = (double)lim->max;
+		if(out < (double)lim->min) out = (double)lim->min;
+		v->modulated_generators[dest] = store_int16(out);
 	}
 }
 
+void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch,
+                                 double time) {
+	ss_voice_compute_modulators_for(v, ch, time, -1, 0);
+}
+
 /* helper */
-void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time) {
+void ss_channel_compute_modulators_for(SS_MIDIChannel *ch, double time,
+                                       int source_uses_cc, int source_index) {
 	for(size_t v = 0; v < ch->voice_count; v++)
-		ss_voice_compute_modulators(ch->voices[v], ch, time);
+		ss_voice_compute_modulators_for(ch->voices[v], ch, time,
+		                                source_uses_cc, source_index);
+}
+
+void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time) {
+	ss_channel_compute_modulators_for(ch, time, -1, 0);
 }

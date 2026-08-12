@@ -20,6 +20,8 @@
 /* ── Controller change ───────────────────────────────────────────────────── */
 
 extern void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time);
+extern void ss_channel_compute_modulators_for(SS_MIDIChannel *ch, double time,
+                                              int source_uses_cc, int source_index);
 extern void ss_voice_release(SS_Voice *v, double current_time, double min_note_length);
 extern void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch,
                                         double time);
@@ -91,7 +93,9 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 		(ch->midi_controllers[actualCCNum] & 0x3f80) |
 		(val & 0x7f);
 
-		ss_channel_compute_modulators(ch, time);
+		/* Only the main controller moved, so only what reads it needs
+		 * recomputing. */
+		ss_channel_compute_modulators_for(ch, time, 1, actualCCNum);
 	}
 
 	ch->midi_controllers[cc] = (val << 7) | (ch->midi_controllers[cc] & 0x7f);
@@ -225,7 +229,7 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 		}
 
 		default: /* Compute modulators */
-			ss_channel_compute_modulators(ch, time);
+			ss_channel_compute_modulators_for(ch, time, 1, cc);
 			break;
 	}
 }
