@@ -1,0 +1,170 @@
+#!/usr/bin/env node
+/**
+ * Generates a single-note grid corpus.
+ *
+ * Modelled on the probe method in ../TabulaSonora (specv2/docs/COMPARING_RENDERS.md):
+ * one note, one program, one parameter varied per axis, so a result is read
+ * *down* a column rather than from any single file. A deficit that is constant
+ * across an axis exonerates that path; one that grows with the parameter
+ * indicts it; and a two-axis grid separates an interaction from either axis
+ * alone — which is how that project caught a send feed that was not
+ * pan-independent.
+ *
+ * Everything here is deliberately trivial: two seconds, one note, no effects
+ * beyond the one under test. When a file from this corpus differs, the cause
+ * has almost nowhere to hide.
+ *
+ *   node harness/tools/make_grid_probes.mjs [outDir]
+ */
+
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+    TPQ,
+    buildFile,
+    cc,
+    gs,
+    noteOff,
+    noteOn,
+    program,
+    tempo
+} from "./midi_writer.mjs";
+
+const CH = 0;
+const NOTE = 60;
+const VEL = 100;
+const PROGRAM = 0;
+const HOLD = TPQ * 2; // two beats at 120 BPM = 1 s
+const TAIL = TPQ * 2;
+
+const CC_VOLUME = 7;
+const CC_PAN = 10;
+const CC_EXPRESSION = 11;
+const CC_REVERB = 91;
+const CC_CHORUS = 93;
+const CC_DELAY = 94;
+
+/**
+ * One cell: a program change, some controller setup, one note, silence.
+ * setup is a list of [controller, value] pairs applied before the note.
+ */
+function cell({ setup = [], prog = PROGRAM, note = NOTE, vel = VEL, sysex = [] }) {
+    const events = [tempo(120), program(0, CH, prog)];
+    for (const [controller, value] of setup) {
+        events.push(cc(0, CH, controller, value));
+    }
+    for (const sx of sysex) {
+        events.push(sx);
+    }
+    events.push(noteOn(TPQ / 4, CH, note, vel));
+    events.push(noteOff(TPQ / 4 + HOLD, CH, note));
+    events.push(cc(TPQ / 4 + HOLD + TAIL, CH, CC_EXPRESSION, 127)); // pad the tail
+    return buildFile(events);
+}
+
+const files = new Map();
+
+/* ── Axis: pan, dry only ──────────────────────────────────────────────────
+ * The dry path's deficit should be flat across this axis.  A pan law that
+ * loses energy off centre shows up here and nowhere else. */
+const PANS = [0, 32, 64, 94, 127];
+for (const pan of PANS) {
+    files.set(`grid_pan-${String(pan).padStart(3, "0")}_send-none`, cell({
+        setup: [[CC_PAN, pan], [CC_REVERB, 0], [CC_CHORUS, 0], [CC_DELAY, 0]]
+    }));
+}
+
+/* ── Axis: each send on its own, centred ─────────────────────────────────
+ * A send whose deficit never rises above the dry baseline is right; one that
+ * grows with the send level is not. */
+const SENDS = [0, 40, 127];
+for (const [name, controller] of [
+    ["reverb", CC_REVERB],
+    ["chorus", CC_CHORUS],
+    ["delay", CC_DELAY]
+]) {
+    for (const level of SENDS) {
+        files.set(`grid_${name}-${String(level).padStart(3, "0")}_pan-064`, cell({
+            setup: [
+                [CC_PAN, 64],
+                [CC_REVERB, 0],
+                [CC_CHORUS, 0],
+                [CC_DELAY, 0],
+                [controller, level]
+            ]
+        }));
+    }
+}
+
+/* ── Grid: pan x chorus send ─────────────────────────────────────────────
+ * Separates an interaction from either axis alone.  A send fed from a
+ * pre-pan mono signal must show the same wet return at every pan; if the
+ * error is a monotonic function of pan, the feed or the return is panned. */
+for (const pan of PANS) {
+    for (const level of [0, 127]) {
+        files.set(
+            `grid2_pan-${String(pan).padStart(3, "0")}_chorus-${String(level).padStart(3, "0")}`,
+            cell({
+                setup: [
+                    [CC_PAN, pan],
+                    [CC_REVERB, 0],
+                    [CC_DELAY, 0],
+                    [CC_CHORUS, level]
+                ]
+            })
+        );
+    }
+}
+
+/* ── Axis: velocity ──────────────────────────────────────────────────────
+ * Velocity zone selection and the velocity-to-attenuation curve. */
+for (const vel of [1, 16, 32, 64, 96, 127]) {
+    files.set(`grid_velocity-${String(vel).padStart(3, "0")}`, cell({
+        setup: [[CC_PAN, 64], [CC_REVERB, 0], [CC_CHORUS, 0], [CC_DELAY, 0]],
+        vel
+    }));
+}
+
+/* ── Axis: note, one per octave ──────────────────────────────────────────
+ * Sample zone selection and the pitch/interpolation path. */
+for (const note of [24, 36, 48, 60, 72, 84, 96]) {
+    files.set(`grid_note-${String(note).padStart(3, "0")}`, cell({
+        setup: [[CC_PAN, 64], [CC_REVERB, 0], [CC_CHORUS, 0], [CC_DELAY, 0]],
+        note
+    }));
+}
+
+/* ── Axis: channel volume and expression ─────────────────────────────────
+ * Both scale the same voice; upstream applies them at different points. */
+for (const level of [0, 32, 64, 100, 127]) {
+    files.set(`grid_volume-${String(level).padStart(3, "0")}`, cell({
+        setup: [[CC_PAN, 64], [CC_REVERB, 0], [CC_CHORUS, 0], [CC_DELAY, 0],
+                [CC_VOLUME, level]]
+    }));
+    files.set(`grid_expression-${String(level).padStart(3, "0")}`, cell({
+        setup: [[CC_PAN, 64], [CC_REVERB, 0], [CC_CHORUS, 0], [CC_DELAY, 0],
+                [CC_EXPRESSION, level]]
+    }));
+}
+
+/* ── Axis: GS velocity sense depth ───────────────────────────────────────
+ * Address 40 1x 1a, part 1.  The depth scales incoming velocity by
+ * depth/64, so 64 is unity and 100 pushes most velocities into the clamp. */
+for (const depth of [0, 32, 64, 100, 127]) {
+    files.set(`grid_vsensedepth-${String(depth).padStart(3, "0")}`, cell({
+        setup: [[CC_PAN, 64], [CC_REVERB, 0], [CC_CHORUS, 0], [CC_DELAY, 0]],
+        sysex: [gs(0, 0x40, 0x11, 0x1a, [depth])]
+    }));
+}
+
+const outDir = path.resolve(
+    process.argv[2] ??
+        path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "grid")
+);
+await fs.mkdir(outDir, { recursive: true });
+
+for (const [name, data] of files) {
+    await fs.writeFile(path.join(outDir, `${name}.mid`), data);
+}
+console.log(`${files.size} grid probe files in ${outDir}`);
