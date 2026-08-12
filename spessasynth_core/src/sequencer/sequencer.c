@@ -170,6 +170,7 @@ bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 		seq->base_time = 0.0;
 		seq->current_tick = 0;
 		seq->current_time = 0.0;
+		seq->pending_tick_samples = 0;
 		seq->finished = false;
 		seq->loops_played = 0;
 		seq->ports_active = 0;
@@ -227,6 +228,7 @@ void ss_sequencer_stop(SS_Sequencer *seq) {
 	seq->base_time = 0.0;
 	seq->current_tick = 0;
 	seq->current_time = 0.0;
+	seq->pending_tick_samples = 0;
 	end_fade(seq);
 	seq->loops_played = 0;
 	seq->ports_active = 0;
@@ -254,6 +256,7 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 	double target_event_time = seq->current_time;
 	seq->current_time = seconds;
 	seq->current_tick = ss_seconds_to_midi_tick(midi, seconds);
+	seq->pending_tick_samples = 0;
 
 	/* Reset processor */
 	dispatch_reset(seq);
@@ -311,6 +314,7 @@ void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick) {
 	double target_event_time = seq->current_time;
 	seq->current_time = seconds;
 	seq->current_tick = target_tick;
+	seq->pending_tick_samples = 0;
 
 	/* Reset processor */
 	dispatch_reset(seq);
@@ -670,6 +674,22 @@ static bool apply_fade(SS_Sequencer *seq, double abs_time) {
 
 void ss_sequencer_tick(SS_Sequencer *seq, uint32_t sample_count) {
 	if(!seq->is_playing || seq->is_paused || seq->finished) return;
+
+	/* Dispatch for the block that has already been rendered, not the one
+	 * about to be.  Upstream's sequencer compares event times against the
+	 * synthesizer's *elapsed* time, which only advances once a block has
+	 * been rendered, so an event at tick 0 is not seen until the second
+	 * quantum.  Deferring the caller's sample_count by one call reproduces
+	 * that without disturbing the tick/tempo/loop bookkeeping below, all of
+	 * which stays internally consistent — it simply runs one block behind.
+	 *
+	 * Sub-block event timestamps are not an option here: the engine ramps
+	 * gain, pan and filter parameters across a whole block, so event timing
+	 * is quantized to the block grid by design. */
+	const uint32_t elapsed_samples = seq->pending_tick_samples;
+	seq->pending_tick_samples = sample_count;
+	if(elapsed_samples == 0) return;
+	sample_count = elapsed_samples;
 
 	SS_SequencerSong *song;
 try_again:
