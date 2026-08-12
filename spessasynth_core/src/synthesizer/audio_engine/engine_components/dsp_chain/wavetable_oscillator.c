@@ -56,10 +56,10 @@ static bool get_sample_linear(SS_Voice *v, float *out, int count, double step) {
 			int floor_i = (int)cur;
 			int ceil_i = floor_i + 1;
 			while(ceil_i >= (int)s->loop_end) ceil_i -= (int)loop_len;
-			float frac = (float)(cur - (double)floor_i);
-			float lo = data[floor_i];
-			float hi = data[ceil_i];
-			out[i] = lo + (hi - lo) * frac;
+			const double frac = cur - (double)floor_i;
+			const double lo = data[floor_i];
+			const double hi = data[ceil_i];
+			out[i] = (float)(lo + (hi - lo) * frac);
 			cur += step;
 		}
 	} else {
@@ -70,10 +70,10 @@ static bool get_sample_linear(SS_Voice *v, float *out, int count, double step) {
 				memset(out + i, 0, (count - i) * sizeof(float));
 				return false;
 			}
-			float frac = (float)(cur - (double)floor_i);
-			float lo = data[floor_i];
-			float hi = data[ceil_i];
-			out[i] = lo + (hi - lo) * frac;
+			const double frac = cur - (double)floor_i;
+			const double lo = data[floor_i];
+			const double hi = data[ceil_i];
+			out[i] = (float)(lo + (hi - lo) * frac);
 			cur += step;
 		}
 	}
@@ -94,41 +94,41 @@ static bool get_sample_hermite(SS_Voice *v, float *out, int count, double step) 
 			while(cur >= (double)s->loop_end) cur -= (double)loop_len;
 			int y0 = (int)cur;
 			int y1 = y0 + 1, y2 = y0 + 2, y3 = y0 + 3;
-			float t = (float)(cur - (double)y0);
+			const double t = cur - (double)y0;
 			if(y1 >= (int)s->loop_end) y1 -= loop_len;
 			if(y2 >= (int)s->loop_end) y2 -= loop_len;
 			if(y3 >= (int)s->loop_end) y3 -= loop_len;
-			float xm1 = data[y0];
-			float x0 = data[y1];
-			float x1 = data[y2];
-			float x2 = data[y3];
-			float c = (x1 - xm1) * 0.5f;
-			float vv = x0 - x1;
-			float w = c + vv;
-			float a = w + vv + (x2 - x0) * 0.5f;
-			float b = w + a;
-			out[i] = ((a * t - b) * t + c) * t + x0;
+			const double xm1 = data[y0];
+			const double x0 = data[y1];
+			const double x1 = data[y2];
+			const double x2 = data[y3];
+			const double c = (x1 - xm1) * 0.5;
+			const double vv = x0 - x1;
+			const double w = c + vv;
+			const double a = w + vv + (x2 - x0) * 0.5;
+			const double b = w + a;
+			out[i] = (float)(((a * t - b) * t + c) * t + x0);
 			cur += step;
 		}
 	} else {
 		for(int i = 0; i < count; i++) {
 			int y0 = (int)cur;
 			int y1 = y0 + 1, y2 = y0 + 2, y3 = y0 + 3;
-			float t = (float)(cur - (double)y0);
+			const double t = cur - (double)y0;
 			if(y1 >= (int)s->end || y2 >= (int)s->end || y3 >= (int)s->end) {
 				memset(out + i, 0, (count - i) * sizeof(float));
 				return false;
 			}
-			float xm1 = data[y0];
-			float x0 = data[y1];
-			float x1 = data[y2];
-			float x2 = data[y3];
-			float c = (x1 - xm1) * 0.5f;
-			float vv = x0 - x1;
-			float w = c + vv;
-			float a = w + vv + (x2 - x0) * 0.5f;
-			float b = w + a;
-			out[i] = ((a * t - b) * t + c) * t + x0;
+			const double xm1 = data[y0];
+			const double x0 = data[y1];
+			const double x1 = data[y2];
+			const double x2 = data[y3];
+			const double c = (x1 - xm1) * 0.5;
+			const double vv = x0 - x1;
+			const double w = c + vv;
+			const double a = w + vv + (x2 - x0) * 0.5;
+			const double b = w + a;
+			out[i] = (float)(((a * t - b) * t + c) * t + x0);
 			cur += step;
 		}
 	}
