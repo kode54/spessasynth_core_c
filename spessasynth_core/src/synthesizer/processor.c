@@ -503,12 +503,18 @@ void ss_processor_render(SS_Processor *proc,
 			                         0, block_count);
 		}
 
-		/* These mix into the output, with the option of chorus and/or delay emitting into the reverb buffers */
-		ss_chorus_process(proc->chorus, chorus, out_left, out_right, reverb, delay, block_count);
-		if(proc->delay_active && proc->midi_params.system != SS_SYSTEM_XG) {
-			ss_delay_process(proc->delay, delay, out_left, out_right, reverb, block_count);
+		/* These mix into the output, with the option of chorus and/or delay
+		 * emitting into the reverb buffers.  All of it is gated on the effects
+		 * switch, as upstream gates its whole effects block: disabling effects
+		 * had been leaving chorus and reverb running and only silencing the
+		 * insertion processor. */
+		if(proc->system_params.effects_enabled) {
+			ss_chorus_process(proc->chorus, chorus, out_left, out_right, reverb, delay, block_count);
+			if(proc->delay_active && proc->midi_params.system != SS_SYSTEM_XG) {
+				ss_delay_process(proc->delay, delay, out_left, out_right, reverb, block_count);
+			}
+			ss_reverb_process(proc->reverb, reverb, out_left, out_right, block_count);
 		}
-		ss_reverb_process(proc->reverb, reverb, out_left, out_right, block_count);
 
 		out_left += block_count;
 		out_right += block_count;
