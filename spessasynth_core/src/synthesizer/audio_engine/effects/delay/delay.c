@@ -160,7 +160,7 @@ void ss_delay_set_time_ratio_right(SS_Delay *delay, unsigned char value) {
 	 * Turn that into multiplier
 	 */
 	delay->delay_right_multiplier = (float)value * (100.0f / 2400.0f);
-	delay->delayRight->time = (unsigned int)(delay->delay_center_time * delay->delay_right_multiplier);
+	ss_delay_line_set_time(delay->delayRight, delay->delay_center_time * delay->delay_right_multiplier);
 }
 
 void ss_delay_set_time_ratio_left(SS_Delay *delay, unsigned char value) {
@@ -171,7 +171,7 @@ void ss_delay_set_time_ratio_left(SS_Delay *delay, unsigned char value) {
 	 * Turn that into multiplier
 	 */
 	delay->delay_left_multiplier = (float)value * (100.0f / 2400.0f);
-	delay->delayLeft->time = (unsigned int)(delay->delay_center_time * delay->delay_left_multiplier);
+	ss_delay_line_set_time(delay->delayLeft, delay->delay_center_time * delay->delay_left_multiplier);
 }
 
 void ss_delay_set_time_center(SS_Delay *delay, unsigned char value) {
@@ -190,9 +190,9 @@ void ss_delay_set_time_center(SS_Delay *delay, unsigned char value) {
 	delay->delay_center_time = delay->sample_rate * (delayMs / 1000.0f);
 	if(delay->delay_center_time < 2.0f) delay->delay_center_time = 2.0f;
 
-	delay->delayCenter->time = (unsigned int)delay->delay_center_time;
-	delay->delayLeft->time = (unsigned int)(delay->delay_center_time * delay->delay_left_multiplier);
-	delay->delayRight->time = (unsigned int)(delay->delay_center_time * delay->delay_right_multiplier);
+	ss_delay_line_set_time(delay->delayCenter, delay->delay_center_time);
+	ss_delay_line_set_time(delay->delayLeft, delay->delay_center_time * delay->delay_left_multiplier);
+	ss_delay_line_set_time(delay->delayRight, delay->delay_center_time * delay->delay_right_multiplier);
 }
 
 void ss_delay_set_macro(SS_Delay *delay, unsigned char value) {

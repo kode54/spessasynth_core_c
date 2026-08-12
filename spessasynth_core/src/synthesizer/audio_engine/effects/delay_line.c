@@ -36,6 +36,22 @@ SS_DelayLine *ss_delay_line_create(unsigned int maxDelay) {
 	return delayLine;
 }
 
+void ss_delay_line_set_time(SS_DelayLine *delayLine, float samples) {
+	/* Upstream's setter is `Math.min(bufferLength, value) | 0`.  The clamp is
+	 * load-bearing rather than defensive: the GS delay time ratios reach
+	 * 100/24 * 127, so a centre time near the one-second buffer limit asks
+	 * for a delay several times longer than the buffer holds. */
+	if(!(samples > 0.0f)) { /* also catches NaN */
+		delayLine->time = 0;
+		return;
+	}
+	if(samples >= (float)delayLine->bufferLength) {
+		delayLine->time = delayLine->bufferLength;
+		return;
+	}
+	delayLine->time = (unsigned int)samples;
+}
+
 void ss_delay_line_process(SS_DelayLine *delayLine,
                            const float *in, float *out,
                            int sample_count) {
