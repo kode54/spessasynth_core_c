@@ -59,6 +59,12 @@ esac
 
 "$CC" -O2 -g -std=c11 -Wall -Wextra \
     -I"$CORE_SRC/include" \
+    -o "$BUILD_DIR/midi_convert" \
+    "$HERE/tools/midi_convert.c" \
+    "$LIB" "${RPATH[@]}" "${EXTRA_LIBS[@]}"
+
+"$CC" -O2 -g -std=c11 -Wall -Wextra \
+    -I"$CORE_SRC/include" \
     -o "$BUILD_DIR/event_queue_test" \
     "$HERE/tools/event_queue_test.c" \
     "$LIB" "${RPATH[@]}" "${EXTRA_LIBS[@]}"
@@ -72,5 +78,6 @@ esac
 echo "Built $BUILD_DIR/ss_render_c against $LIB"
 echo "Built $BUILD_DIR/callback_lead_in_test"
 echo "Built $BUILD_DIR/seek_test"
+echo "Built $BUILD_DIR/midi_convert"
 echo "Built $BUILD_DIR/event_queue_test"
 echo "Built $BUILD_DIR/sinc_test"

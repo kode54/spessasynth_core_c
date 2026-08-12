@@ -131,7 +131,7 @@ static void ss_file_memory_read_bytes(SS_File *file, uint8_t *out, size_t count)
 static bool ss_file_memory_write_u8(SS_File *file, uint8_t v) {
 	SS_FileMemory *fm = (SS_FileMemory *)file;
 
-	if(file->current_offset + 1 < fm->allocated) {
+	if(file->current_offset + 1 > fm->allocated) {
 		size_t new_min_size = file->current_offset + 1;
 		size_t new_allocated = fm->allocated;
 		do {
@@ -157,7 +157,7 @@ static bool ss_file_memory_write_u8(SS_File *file, uint8_t v) {
 static bool ss_file_memory_write_bytes(SS_File *file, const uint8_t *src, size_t count) {
 	SS_FileMemory *fm = (SS_FileMemory *)file;
 
-	if(file->current_offset + count < fm->allocated) {
+	if(file->current_offset + count > fm->allocated) {
 		size_t new_min_size = file->current_offset + count;
 		size_t new_allocated = fm->allocated;
 		do {
@@ -918,7 +918,12 @@ size_t ss_file_tell(SS_File *file) {
 }
 
 bool ss_file_retrieve_memory(SS_File *file, uint8_t **out, size_t *out_size) {
-	if(!file || !out || !out_size || file->read_u8 || file->read_bytes || file->read_u8 != ss_file_memory_read_u8) {
+	/* The only requirement is that this is a memory-backed file.  A blank
+	 * memory file is write-only and sets no reader, so testing the reader --
+	 * as this did, and contradictorily, rejecting a set reader while also
+	 * demanding it be the memory one -- could never succeed for the writers
+	 * this function exists to serve. */
+	if(!file || !out || !out_size || file->write_u8 != ss_file_memory_write_u8) {
 		return false;
 	}
 
