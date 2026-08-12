@@ -40,8 +40,8 @@ typedef struct {
 	float excursionDepth;
 	float gain;
 	float sampleRate;
-	float lp[3];
-	float excPhase;
+	double lp[3];
+	double excPhase;
 	unsigned int pDWrite;
 	unsigned int pDLength;
 	short *taps;

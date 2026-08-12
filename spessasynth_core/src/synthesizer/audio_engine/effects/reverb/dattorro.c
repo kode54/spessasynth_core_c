@@ -65,38 +65,38 @@ void ss_dattorro_delay_line_free(SS_DattorroDelayLine *delayLine) {
 	free(delayLine);
 }
 
-static float ss_dattorro_delay_line_read(SS_DattorroReverb *reverb, int index) {
+static double ss_dattorro_delay_line_read(SS_DattorroReverb *reverb, int index) {
 	SS_DattorroDelayLine *delayLine = reverb->delays[index];
 	return delayLine->buffer[delayLine->readIndex];
 }
 
-static float ss_dattorro_delay_line_read_at(SS_DattorroReverb *reverb, int index, int offset) {
+static double ss_dattorro_delay_line_read_at(SS_DattorroReverb *reverb, int index, int offset) {
 	SS_DattorroDelayLine *delayLine = reverb->delays[index];
 	return delayLine->buffer[(delayLine->readIndex + offset) & delayLine->mask];
 }
 
-static float ss_dattorro_delay_line_read_cubic_at(SS_DattorroReverb *reverb, int index, float offset) {
+static double ss_dattorro_delay_line_read_cubic_at(SS_DattorroReverb *reverb, int index, double offset) {
 	SS_DattorroDelayLine *delayLine = reverb->delays[index];
-	const float frac = offset - (float)((int)offset);
+	const double frac = offset - (double)((int)offset);
 	const unsigned int mask = delayLine->mask;
 
 	unsigned int intOffset = ((int)offset) + delayLine->readIndex - 1;
 
-	const float x0 = delayLine->buffer[intOffset++ & mask],
-	            x1 = delayLine->buffer[intOffset++ & mask],
-	            x2 = delayLine->buffer[intOffset++ & mask],
-	            x3 = delayLine->buffer[intOffset & mask];
+	const double x0 = delayLine->buffer[intOffset++ & mask],
+	             x1 = delayLine->buffer[intOffset++ & mask],
+	             x2 = delayLine->buffer[intOffset++ & mask],
+	             x3 = delayLine->buffer[intOffset & mask];
 
-	const float a = (3.0f * (x1 - x2) - x0 + x3) / 2.0f,
-	            b = 2.0f * x2 + x0 - (5.0f * x1 + x3) / 2.0f,
-	            c = (x2 - x0) / 2.0f;
+	const double a = (3.0 * (x1 - x2) - x0 + x3) / 2.0,
+	             b = 2.0 * x2 + x0 - (5.0 * x1 + x3) / 2.0,
+	             c = (x2 - x0) / 2.0;
 
 	return ((a * frac + b) * frac + c) * frac + x1;
 }
 
-static float ss_dattorro_delay_line_write(SS_DattorroReverb *reverb, int index, float input) {
+static double ss_dattorro_delay_line_write(SS_DattorroReverb *reverb, int index, double input) {
 	SS_DattorroDelayLine *delayLine = reverb->delays[index];
-	return (delayLine->buffer[delayLine->writeIndex] = input);
+	return (delayLine->buffer[delayLine->writeIndex] = (float)input);
 }
 
 SS_DattorroReverb *ss_dattorro_reverb_create(float sampleRate) {
@@ -176,20 +176,20 @@ void ss_dattorro_reverb_free(SS_DattorroReverb *reverb) {
 
 void ss_dattorro_reverb_process(SS_DattorroReverb *reverb, const float *input, float *outputLeft, float *outputRight, int sample_count) {
 	const unsigned int pd = reverb->preDelay;
-	const float fi = reverb->inputDiffusion[0];
-	const float si = reverb->inputDiffusion[1];
-	const float dc = reverb->decay;
-	const float ft = reverb->decayDiffusion[0];
-	const float st = reverb->decayDiffusion[1];
-	const float dp = 1.0f - reverb->damping;
-	const float ex = reverb->excursionRate / reverb->sampleRate;
-	const float ed = (reverb->excursionDepth * reverb->sampleRate) / 1000.0f;
+	const double fi = reverb->inputDiffusion[0];
+	const double si = reverb->inputDiffusion[1];
+	const double dc = reverb->decay;
+	const double ft = reverb->decayDiffusion[0];
+	const double st = reverb->decayDiffusion[1];
+	const double dp = 1.0 - reverb->damping;
+	const double ex = (double)reverb->excursionRate / (double)reverb->sampleRate;
+	const double ed = ((double)reverb->excursionDepth * (double)reverb->sampleRate) / 1000.0;
 	const short *taps = reverb->taps;
 
 	const unsigned int blockStart = reverb->pDWrite;
 	const unsigned int blockLength = reverb->pDLength;
 
-	const float gain = reverb->gain;
+	const double gain = reverb->gain;
 
 	int i, j;
 
@@ -209,20 +209,20 @@ void ss_dattorro_reverb_process(SS_DattorroReverb *reverb, const float *input, f
 #define delayReadCAt(n, p) ss_dattorro_delay_line_read_cubic_at(reverb, n, p)
 
 		// Pre-tank
-		float pre = delayWrite(0, reverb->lp[0] - fi * delayRead(0));
+		double pre = delayWrite(0, reverb->lp[0] - fi * delayRead(0));
 		pre = delayWrite(1, fi * (pre - delayRead(1)) + delayRead(0));
 		pre = delayWrite(2, fi * pre + delayRead(1) - si * delayRead(2));
 		pre = delayWrite(3, si * (pre - delayRead(3)) + delayRead(2));
 
-		const float split = si * pre + delayRead(3);
+		const double split = si * pre + delayRead(3);
 
 		// Excursions
 		// Could be optimized?
-		const float exc = ed * (1.0f + cosf(reverb->excPhase * 6.28f));
-		const float exc2 = ed * (1.0f + sinf(reverb->excPhase * 6.2847f));
+		const double exc = ed * (1.0 + cos(reverb->excPhase * 6.28));
+		const double exc2 = ed * (1.0 + sin(reverb->excPhase * 6.2847));
 
 		// Left loop
-		float temp = delayWrite(4, split + dc * delayRead(11) + ft * delayReadCAt(4, exc)); // Tank diffuse 1
+		double temp = delayWrite(4, split + dc * delayRead(11) + ft * delayReadCAt(4, exc)); // Tank diffuse 1
 		delayWrite(5, delayReadCAt(4, exc) - ft * temp); // Long delay 1
 		reverb->lp[1] += dp * (delayRead(5) - reverb->lp[1]); // Damp 1
 		temp = delayWrite(6, dc * reverb->lp[1] - st * delayRead(6)); // Tank diffuse 2
@@ -236,7 +236,7 @@ void ss_dattorro_reverb_process(SS_DattorroReverb *reverb, const float *input, f
 		delayWrite(11, delayRead(10) + st * temp); // Long delay 4
 
 		// Mix down
-		const float leftSample =
+		const double leftSample =
 		delayReadAt(9, taps[0]) +
 		delayReadAt(9, taps[1]) -
 		delayReadAt(10, taps[2]) +
@@ -245,7 +245,7 @@ void ss_dattorro_reverb_process(SS_DattorroReverb *reverb, const float *input, f
 		delayReadAt(6, taps[5]) -
 		delayReadAt(7, taps[6]);
 
-		const float rightSample =
+		const double rightSample =
 		delayReadAt(5, taps[7]) +
 		delayReadAt(5, taps[8]) -
 		delayReadAt(6, taps[9]) +
