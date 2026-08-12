@@ -138,35 +138,134 @@ static bool get_sample_hermite(SS_Voice *v, float *out, int count, double step) 
 
 /* ── Sinc interpolation ──────────────────────────────────────────────────── */
 
-enum { radius = 2 };
-extern double ss_lanczos(double d);
+/* Ported from Tabula Sonora's SincInterpolator, which is itself derived from
+ * the fixed-window version this replaces.
+ *
+ * The old kernel scaled its argument by min(1, 1/step) — dropping the cutoff
+ * as the read sped up, which is the band-limiting — but then clamped the tap
+ * window to a fixed eight samples.  The taps the stretch calls for were
+ * simply never summed, so rejection collapsed at exactly the ratios the sinc
+ * exists to serve.  Widening the window with the scale is the whole
+ * mechanism, and it is why the tap count cannot be fixed: the kernel spans
+ * radius/scale samples each side, so a 6x read wants about 50 taps, not 8.
+ *
+ * The count costs nothing when it is not needed.  Past the radius the kernel
+ * is zero, so at unity the eight-tap and the sixty-four-tap sums are the same
+ * number.
+ *
+ * The kernel is a windowed sinc rather than the Lanczos it replaces: a sinc
+ * at SINC_CUTOFF under a Blackman window whose shoulder is left free.  Both
+ * constants come from Tabula Sonora, fitted by least squares against the
+ * SC-VA 4-tap bank's averaged magnitude response, so ordinary playback rates
+ * keep that instrument's character while the rejection above them improves.
+ */
 
-static float itpSinc(const float *buf, double pos, double incr, size_t loop_end, size_t loop_length) {
-	size_t offset = (size_t)(pos);
-	double frac = pos - (double)offset;
-	double scale = 1. / incr > 1. ? 1. : 1. / incr;
-	double density = 0.;
-	double sample = 0.;
-	double fpos = 3. + frac; // 3.5 is the center position
+/* Half-width in source samples at unity ratio: 8 taps. */
+enum { SINC_RADIUS = 4 };
+/* Largest half-width the widening may ask for, bounding a read at 8x. */
+enum { SINC_MAX_RADIUS = 32 };
+/* Entries per source sample in the kernel table. */
+enum { SINC_RESOLUTION = 1024 };
+enum { SINC_TABLE_COUNT = (2 * SINC_RADIUS * SINC_RESOLUTION) + 1 };
 
-	int min = (int)((double)-radius / scale + fpos - 0.5);
-	int max = (int)((double)radius / scale + fpos + 0.5);
+/* Cutoff in cycles per sample, and the window's shoulder.  Fitted, not chosen. */
+#define SINC_CUTOFF 0.29
+#define SINC_SHOULDER 0.20
 
-	if(min < 0) min = 0;
-	if(max > 8) max = 8;
+static double sinc_table[SINC_TABLE_COUNT];
+static bool sinc_table_ready = false;
 
-	for(int m = min; m < max; ++m) {
-		double factor = ss_lanczos((m - fpos + 0.5) * scale);
-		size_t index = offset + m;
-		if(loop_length && index >= loop_end) {
-			index -= loop_length;
+/* Tabulated rather than evaluated: the inner loop asks for up to 64 weights
+ * per output sample, and a sine and a pair of cosines apiece would dominate
+ * the render.  One entry per 1/1024 of a source sample, read with linear
+ * interpolation, puts the table error far below the fit error.
+ *
+ * Racing initializers would write identical values, so no lock is needed. */
+void ss_sinc_table_init(void) {
+	if(sinc_table_ready) return;
+	for(int i = 0; i < SINC_TABLE_COUNT; i++) {
+		const double d = ((double)i / (double)SINC_RESOLUTION) - (double)SINC_RADIUS;
+		if(fabs(d) >= (double)SINC_RADIUS) {
+			sinc_table[i] = 0.0;
+			continue;
 		}
-		density += factor;
-		sample += buf[index] * factor;
+		const double x = 2.0 * SINC_CUTOFF * d;
+		const double sinc = (x == 0.0) ? 1.0 : sin(M_PI * x) / (M_PI * x);
+		/* A Blackman with the shoulder left free, the second fitted constant. */
+		const double t = ((d / (double)SINC_RADIUS) + 1.0) / 2.0;
+		const double window = ((1.0 - SINC_SHOULDER) / 2.0) -
+		                      (0.5 * cos(2.0 * M_PI * t)) +
+		                      ((SINC_SHOULDER / 2.0) * cos(4.0 * M_PI * t));
+		sinc_table[i] = sinc * window;
 	}
-	if(density > 0.) sample /= density; // Normalize
+	sinc_table_ready = true;
+}
 
-	return (float)sample;
+/* kernel(d), linearly interpolated between table entries. */
+static inline double sinc_weight(double d) {
+	const double at = (d + (double)SINC_RADIUS) * (double)SINC_RESOLUTION;
+	if(at <= 0.0 || at >= (double)(SINC_TABLE_COUNT - 1)) return 0.0;
+	const int i = (int)at;
+	const double f = at - (double)i;
+	return (sinc_table[i] * (1.0 - f)) + (sinc_table[i + 1] * f);
+}
+
+/* The scale the kernel argument takes, and the half-width that scale needs.
+ * Capped, because the cost is linear and a runaway ratio must not be able to
+ * ask for an unbounded loop. */
+static inline void sinc_span(double step, double *scale_out, int *half_out) {
+	const double scale = (step > 1.0) ? (1.0 / step) : 1.0;
+	int half = (int)ceil((double)SINC_RADIUS / scale);
+	if(half > SINC_MAX_RADIUS) half = SINC_MAX_RADIUS;
+	if(half < SINC_RADIUS) half = SINC_RADIUS;
+	*scale_out = scale;
+	*half_out = half;
+}
+
+/* loop_length of zero means the sample is not looping, and indices clamp to
+ * the buffer instead of wrapping. */
+static float itpSinc(const float *buf, double pos, double step,
+                     size_t loop_start, size_t loop_end, size_t loop_length,
+                     size_t buffer_length) {
+	const double base_f = floor(pos);
+	const long base = (long)base_f;
+	const double fraction = pos - base_f;
+
+	double scale;
+	int half;
+	sinc_span(step, &scale, &half);
+
+	double sum = 0.0;
+	double density = 0.0;
+	for(int m = -half + 1; m <= half; m++) {
+		const double w = sinc_weight(((double)m - fraction) * scale);
+		if(w == 0.0) continue;
+
+		long at = base + m;
+		if(loop_length) {
+			/* Wrap into [loop_start, loop_end).  A wide window over a short
+			 * loop can travel several loop lengths, so this is a modulo and
+			 * not a single subtraction. */
+			if(at >= (long)loop_end) {
+				at = (long)loop_start +
+				     (long)(((size_t)(at - (long)loop_start)) % loop_length);
+			} else if(at < (long)loop_start) {
+				const long behind = (long)loop_start - at;
+				const long wrapped = (long)(((size_t)(behind - 1)) % loop_length);
+				at = (long)loop_end - 1 - wrapped;
+			}
+		} else {
+			if(at < 0) at = 0;
+			if(buffer_length && at >= (long)buffer_length) at = (long)buffer_length - 1;
+		}
+		if(at < 0) continue;
+
+		sum += (double)buf[at] * w;
+		density += w;
+	}
+	/* Normalised by the weights actually summed, so every fractional position
+	 * has unity DC gain even where the window is truncated at an edge. */
+	return density > 0.0 ? (float)(sum / density) : 0.0f;
 }
 
 static bool get_sample_sinc(SS_Voice *v, float *out, int count, double step) {
@@ -178,7 +277,8 @@ static bool get_sample_sinc(SS_Voice *v, float *out, int count, double step) {
 		int loop_len = (int)(s->loop_end - s->loop_start);
 		for(int i = 0; i < count; i++) {
 			while(cur >= (double)s->loop_end) cur -= (double)loop_len;
-			out[i] = itpSinc(data, cur, step, s->loop_end, loop_len);
+			out[i] = itpSinc(data, cur, step, s->loop_start, s->loop_end,
+			                 (size_t)loop_len, s->sample_data_len);
 			cur += step;
 		}
 	} else {
@@ -187,7 +287,7 @@ static bool get_sample_sinc(SS_Voice *v, float *out, int count, double step) {
 				memset(out + i, 0, (count - i) * sizeof(float));
 				return false;
 			}
-			out[i] = itpSinc(data, cur, step, 0, 0);
+			out[i] = itpSinc(data, cur, step, 0, 0, 0, s->sample_data_len);
 			cur += step;
 		}
 	}
