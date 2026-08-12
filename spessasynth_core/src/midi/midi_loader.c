@@ -630,14 +630,18 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 			/* ── Meta event ─────────────────────────────────────────────── */
 			switch(sb) {
 				case SS_META_END_OF_TRACK:
-					/* Remove mid-track End of Track events */
+					/* Remove mid-track End of Track events.
+					 *
+					 * A trailing one does NOT extend last_voice_event_tick:
+					 * upstream counts voice messages only, and a file whose
+					 * tracks end on a bar line rather than on their last note
+					 * would otherwise report a longer duration, loop later and
+					 * finish later than upstream does.  Trailing silence is
+					 * the caller's business -- that is what a render tail is
+					 * for. */
 					if(ei != track->event_count - 1) {
 						ss_midi_track_delete_event(track, ei);
 						ei--;
-					} else {
-						/* Note last voice event as the end of the longest track */
-						if(e->ticks > m->last_voice_event_tick)
-							m->last_voice_event_tick = e->ticks;
 					}
 					break;
 
