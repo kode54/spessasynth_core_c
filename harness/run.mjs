@@ -82,7 +82,9 @@ function defaultSoundBank() {
 const DEFAULTS = {
     sf: defaultSoundBank(),
     midiDir: path.join(JS_REPO, "tests", "midi_file", "generated"),
-    out: path.join(HERE, "out"),
+    // Renders land in the repo, not /tmp: /tmp is a tmpfs here and a full
+    // corpus run is about a gigabyte.  Both directories are gitignored.
+    out: path.join(HERE, "corpus"),
     rate: 48000,
     tail: 2,
     block: 128,

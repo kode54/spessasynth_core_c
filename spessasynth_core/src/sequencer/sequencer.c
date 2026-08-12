@@ -979,9 +979,17 @@ try_again:
 				 * a seek, and a seek already rebases absolute_start_time onto
 				 * the position it lands on.  Shifting it again moved the
 				 * derived clock a whole loop further on, so the rest of the
-				 * song was consumed in one tick and the file fell silent. */
-				target_time -= loop_end_time - loop_start_time;
-				continue;
+				 * song was consumed in one tick and the file fell silent.
+				 *
+				 * The tick ends here, as upstream's returns after a jump.
+				 * Carrying on would dispatch the start of the new pass using
+				 * a window whose far edge is still the old timeline's, and
+				 * would then store that back over the position the seek just
+				 * established -- putting the whole second pass a fraction of
+				 * a block early. */
+				(void)loop_end_time;
+				(void)loop_start_time;
+				return;
 			}
 		}
 
