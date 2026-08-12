@@ -362,59 +362,71 @@ void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick) {
 	if(!song) return;
 	SS_MIDIFile *midi = song->midi;
 
-	double seconds = ss_midi_ticks_to_seconds(midi, target_tick);
-
-	/* Rewind and replay non-note events up to target time */
+	/* Rewind and replay the lead-up to the target. */
 	song_rewind(song);
-	seq->base_time += seq->current_time - seconds;
-	double target_event_time = seq->current_time;
-	seq->current_time = seconds;
-	seq->current_tick = target_tick;
-	seq->pending_tick_samples = 0;
-	seq->cursor_tick = target_tick;
-	seq->cursor_time = seconds;
+	const double previous_time = seq->current_time;
 
 	/* Reset processor */
 	dispatch_reset(seq);
 
-	/* Fast-forward: process all events whose absolute time <= seconds without audio */
-	/* We use the tempo map to convert ticks → seconds. */
-	/* Replay just CC/program/pitch wheel/sysex events; skip notes. */
-	bool done = false;
+	/* Fast-forward: replay CC / Program / Pitch wheel / SysEx only, skipping
+	 * notes and pressure so the seek is silent.
+	 *
+	 * The landing time is accumulated from exact tick deltas rather than
+	 * converted from the target tick.  ss_midi_ticks_to_seconds rounds
+	 * through the tempo map, and half a tick of error is enough to drop the
+	 * first event after the seek into the following render block.  Stopping
+	 * on the tick rather than on a converted time avoids the same rounding
+	 * on the loop bound.  Both match upstream's setTimeTo. */
+	double played = 0.0;
 	double one_tick_sec = (midi->time_division > 0) ? (60.0 / (120.0 * (double)midi->time_division)) : (60.0 / (120.0 * 480.0));
 
-	while(!done) {
-		size_t ei = song->event_index;
-		SS_MIDIMessage *e = &midi->timeline[ei];
-		double ev_time = ss_midi_ticks_to_seconds(midi, e->ticks);
-
-		if(ev_time >= seconds) break;
+	while(song->event_index < midi->timeline_count) {
+		SS_MIDIMessage *e = &midi->timeline[song->event_index];
+		if(e->ticks >= target_tick) break;
 
 		song->event_index++;
 
 		uint8_t sb = e->status_byte;
 
-		/* Update tempo (so subsequent ticks-to-seconds conversions are right) */
+		/* Update tempo before measuring the delta that follows it. */
 		if(sb == SS_META_SET_TEMPO && e->data_length >= 3) {
 			double bpm = read_tempo_bpm(e->data);
 			if(midi->time_division > 0)
 				one_tick_sec = 60.0 / (bpm * (double)midi->time_division);
 		}
 
-		/* Replay CC / Program / Pitch wheel / SysEx only; skip notes
-		 * and pressure so the seek is silent. */
 		if(sb >= 0x80 && sb < 0xF0) {
 			uint8_t type = sb & 0xF0;
 			if(type == 0x90 && e->data_length >= 2 && e->data[1] == 0)
-				dispatch_voice_event(seq, midi, e, target_event_time);
+				dispatch_voice_event(seq, midi, e, previous_time);
 			else if(type == 0x80 || type == 0xB0 || type == 0xC0 || type == 0xE0)
-				dispatch_voice_event(seq, midi, e, target_event_time);
+				dispatch_voice_event(seq, midi, e, previous_time);
 		} else if(sb == 0xF0) {
-			dispatch_sysex_event(seq, midi, e, target_event_time);
+			dispatch_sysex_event(seq, midi, e, previous_time);
+		}
+
+		if(song->event_index < midi->timeline_count) {
+			const SS_MIDIMessage *next = &midi->timeline[song->event_index];
+			size_t d = next->ticks > e->ticks ? next->ticks - e->ticks : 0;
+			played += one_tick_sec * (double)d;
 		}
 	}
 
 	seq->one_tick_seconds = one_tick_sec;
+
+	/* Land on the first event at or after the target, timed in the same
+	 * accumulated frame the dispatch loop works in — upstream likewise
+	 * rebases its clock onto the accumulated playedTime, not onto the
+	 * requested position. */
+	seq->base_time += previous_time - played;
+	seq->current_time = played;
+	seq->current_tick = target_tick;
+	seq->pending_tick_samples = 0;
+	seq->cursor_time = played;
+	seq->cursor_tick = (song->event_index < midi->timeline_count)
+	                       ? midi->timeline[song->event_index].ticks
+	                       : target_tick;
 }
 
 bool ss_sequencer_is_finished(const SS_Sequencer *seq) {
