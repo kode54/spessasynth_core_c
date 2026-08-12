@@ -171,6 +171,8 @@ bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 		seq->current_tick = 0;
 		seq->current_time = 0.0;
 		seq->pending_tick_samples = 0;
+		seq->cursor_tick = 0;
+		seq->cursor_time = 0.0;
 		seq->finished = false;
 		seq->loops_played = 0;
 		seq->ports_active = 0;
@@ -229,6 +231,8 @@ void ss_sequencer_stop(SS_Sequencer *seq) {
 	seq->current_tick = 0;
 	seq->current_time = 0.0;
 	seq->pending_tick_samples = 0;
+	seq->cursor_tick = 0;
+	seq->cursor_time = 0.0;
 	end_fade(seq);
 	seq->loops_played = 0;
 	seq->ports_active = 0;
@@ -257,6 +261,8 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 	seq->current_time = seconds;
 	seq->current_tick = ss_seconds_to_midi_tick(midi, seconds);
 	seq->pending_tick_samples = 0;
+	seq->cursor_tick = seq->current_tick;
+	seq->cursor_time = seconds;
 
 	/* Reset processor */
 	dispatch_reset(seq);
@@ -315,6 +321,8 @@ void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick) {
 	seq->current_time = seconds;
 	seq->current_tick = target_tick;
 	seq->pending_tick_samples = 0;
+	seq->cursor_tick = target_tick;
+	seq->cursor_time = seconds;
 
 	/* Reset processor */
 	dispatch_reset(seq);
@@ -541,6 +549,8 @@ static bool ss_sequencer_next_song(SS_Sequencer *seq) {
 		seq->base_time += seq->current_time;
 		seq->current_tick = 0;
 		seq->current_time = 0.0;
+		seq->cursor_tick = 0;
+		seq->cursor_time = 0.0;
 		seq->one_tick_seconds = 0.0;
 		seq->loops_played = 0;
 		seq->ports_active = 0;
@@ -647,6 +657,8 @@ static void loop_rewind_to_tick(SS_Sequencer *seq, size_t target_tick,
 
 	seq->current_tick = target_tick;
 	seq->current_time = new_song_time;
+	seq->cursor_tick = target_tick;
+	seq->cursor_time = new_song_time;
 
 	/* Kill any hanging notes */
 	dispatch_all_notes_off(seq);
@@ -756,15 +768,21 @@ try_again:
 
 		size_t ei = song->event_index;
 		SS_MIDIMessage *e = &midi->timeline[ei];
+		/* Accumulate from the exact event cursor, never from the rendered
+		 * position: current_tick is re-derived from target_time at the end
+		 * of every tick, and that seconds→tick rounding loses up to half a
+		 * tick — enough to drop an event into the following render block. */
 		size_t delta_ticks = 0;
-		if(e->ticks > seq->current_tick) delta_ticks = e->ticks - seq->current_tick;
+		if(e->ticks > seq->cursor_tick) delta_ticks = e->ticks - seq->cursor_tick;
 		double delta_time = (double)delta_ticks * seq->one_tick_seconds;
-		double ev_time = delta_time + current_time;
+		double ev_time = delta_time + seq->cursor_time;
 
 		if(ev_time > target_time) break;
 
+		seq->cursor_time = ev_time;
+		seq->cursor_tick = e->ticks;
 		current_time = ev_time;
-		seq->current_tick += delta_ticks;
+		seq->current_tick = e->ticks;
 
 		song->event_index++;
 		process_event(seq, midi, e, e->track_index);
