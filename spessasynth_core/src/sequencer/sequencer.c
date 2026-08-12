@@ -1026,11 +1026,24 @@ const uint8_t syx_reset_gs[] = {
 	0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7
 };
 
+/** The absolute time the processor is at right now.
+ *
+ *  Upstream's sendMIDIAllOff and sendMIDIReset release notes at
+ *  synthCore.currentTime -- the engine clock -- not at any song-derived
+ *  timestamp.  base_time alone is short by the whole song position, which
+ *  stamps a release far enough in the past that the envelope starts its
+ *  ramp already finished. */
+static double dispatch_now(const SS_Sequencer *seq) {
+	if(seq->proc) return seq->proc->current_time;
+	return seq->base_time + seq->current_time;
+}
+
 static void dispatch_reset(SS_Sequencer *seq) {
 	/* Stop everything sounding before resetting, as upstream's
 	 * sendMIDIReset does; otherwise held and sustained notes outlive the
 	 * reset that is supposed to clear them. */
 	dispatch_all_notes_off(seq);
+	const double now = dispatch_now(seq);
 
 	if(seq->proc) {
 		ss_processor_system_reset(seq->proc);
@@ -1039,14 +1052,15 @@ static void dispatch_reset(SS_Sequencer *seq) {
 	if(seq->callbacks.midi_command) {
 		for(int i = 0; i < SS_MIDI_PORT_COUNT; i++) {
 			if((seq->ports_active & (1ULL << i)) != 0) {
-				dispatch_port_select(seq, i, seq->base_time);
-				dispatch_midi(seq, syx_reset_gs, sizeof(syx_reset_gs), seq->base_time);
+				dispatch_port_select(seq, i, now);
+				dispatch_midi(seq, syx_reset_gs, sizeof(syx_reset_gs), now);
 			}
 		}
 	}
 }
 
 static void dispatch_all_notes_off(SS_Sequencer *seq) {
+	const double now = dispatch_now(seq);
 	/* Release sustain first, on every channel, or held notes survive the
 	 * all-notes-off that follows.  Upstream's sendMIDIAllOff does this
 	 * unconditionally, in both playback modes. */
@@ -1054,17 +1068,17 @@ static void dispatch_all_notes_off(SS_Sequencer *seq) {
 		for(int ch = 0; ch < seq->proc->channel_count; ch++) {
 			SS_MIDIChannel *c = seq->proc->midi_channels[ch];
 			if(c) ss_channel_controller(c, SS_MIDCON_SUSTAIN_PEDAL, 0,
-			                            seq->base_time);
+			                            now);
 		}
 	}
 	if(seq->callbacks.midi_command) {
 		for(int i = 0; i < SS_MIDI_PORT_COUNT; i++) {
 			if((seq->ports_active & (1ULL << i)) == 0) continue;
-			dispatch_port_select(seq, i, seq->base_time);
+			dispatch_port_select(seq, i, now);
 			for(int ch = 0; ch < SS_CHANNEL_COUNT; ch++) {
 				const uint8_t msg[3] = { (uint8_t)(0xB0 | ch),
 					                     SS_MIDCON_SUSTAIN_PEDAL, 0 };
-				dispatch_midi(seq, msg, 3, seq->base_time);
+				dispatch_midi(seq, msg, 3, now);
 			}
 		}
 	}
@@ -1074,20 +1088,20 @@ static void dispatch_all_notes_off(SS_Sequencer *seq) {
 			int port = ch >> 4;
 			if((seq->ports_active & (1ULL << port)) != 0) {
 				SS_MIDIChannel *c = seq->proc->midi_channels[ch];
-				if(c) ss_channel_all_notes_off(c, seq->base_time);
+				if(c) ss_channel_all_notes_off(c, now);
 			}
 		}
 	}
 	if(seq->callbacks.midi_command) {
 		for(int i = 0; i < SS_MIDI_PORT_COUNT; i++) {
 			if((seq->ports_active & (1ULL << i)) != 0) {
-				dispatch_port_select(seq, i, seq->base_time);
+				dispatch_port_select(seq, i, now);
 				for(int ch = 0; ch < SS_CHANNEL_COUNT; ch++) {
 					uint8_t msg[3];
 					msg[0] = 0xB0 | ch;
 					msg[1] = 123; /* All notes off */
 					msg[2] = 0;
-					dispatch_midi(seq, msg, 3, seq->base_time);
+					dispatch_midi(seq, msg, 3, now);
 				}
 			}
 		}

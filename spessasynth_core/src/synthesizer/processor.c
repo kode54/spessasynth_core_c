@@ -802,10 +802,11 @@ void ss_processor_system_reset(SS_Processor *proc) {
 
 	proc->port_select_channel_offset = 0;
 
-	// Reset the effects processors' buffers
-	ss_reverb_clear(proc->reverb);
-	ss_chorus_clear(proc->chorus);
-	ss_delay_clear(proc->delay);
+	/* The reverb, chorus and delay tails deliberately survive a reset.
+	 * Upstream's reset() re-applies the three macros and resets the
+	 * insertion processor, but never touches the send buffers -- and a
+	 * hard loop jump routes through a seek, which resets.  Clearing them
+	 * cuts the whole wet tail off at the loop point. */
 
 	// Hall2 default
 	ss_reverb_set_macro(proc->reverb, 4);
