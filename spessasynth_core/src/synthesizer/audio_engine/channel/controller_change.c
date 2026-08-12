@@ -56,9 +56,7 @@ static void ss_channel_update_tuning(SS_MIDIChannel *ch) {
 	 * fine tuning resolves to 100/8192 of a cent. */
 	ch->channel_tuning_cents = (ch->custom_controllers[SS_CUSTOM_CTRL_TUNING] + /* RPN channel fine tuning */
 	                                 ch->custom_controllers[SS_CUSTOM_CTRL_TRANSPOSE_FINE] + /* User tuning (transpose) */
-	                                 ch->custom_controllers[SS_CUSTOM_CTRL_MASTER_TUNING] + /* Master tuning, set by sysEx */
-	                                 ch->custom_controllers[SS_CUSTOM_CTRL_TUNING_SEMITONES] *
-	                            100.0); /* RPN channel coarse tuning */
+	                                 ch->custom_controllers[SS_CUSTOM_CTRL_MASTER_TUNING]); /* Master tuning, set by sysEx */
 }
 
 void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, double val) {

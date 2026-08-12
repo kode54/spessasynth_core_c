@@ -43,9 +43,13 @@ void ss_channel_data_entry(SS_MIDIChannel *ch, double time) {
 				break;
 
 			case SS_RPN_COARSE_TUNING: {
-				/* Semitones */
+				/* Semitones, LSB discarded.  This is a key shift, not a tuning
+				 * offset: it moves which sample zone the note selects rather
+				 * than bending the one already chosen, which is what upstream
+				 * does and what the SC-8820 does. */
 				const int semitones = (data_value >> 7) - 64;
-				ss_channel_set_custom_controller(ch, SS_CUSTOM_CTRL_TUNING_SEMITONES, (float)semitones);
+				ss_channel_set_midi_parameter(ch, SS_CHANNEL_MIDI_KEY_SHIFT,
+				                              (double)semitones);
 				break;
 			}
 
