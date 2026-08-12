@@ -40,8 +40,8 @@ void ss_channel_reset_parameters_to_defaults(SS_MIDIChannel *ch) {
 	 * We reset them here since in the loop, the data entries would come before params
 	 */
 	ch->last_parameter_is_registered = true;
-	ch->midi_controllers[SS_MIDCON_NRPN_LSB] = 127 << 7;
-	ch->midi_controllers[SS_MIDCON_NRPN_MSB] = 127 << 7;
+	ch->midi_controllers[SS_MIDCON_NRPN_LSB] = 0;
+	ch->midi_controllers[SS_MIDCON_NRPN_MSB] = 0;
 	ch->midi_controllers[SS_MIDCON_RPN_LSB] = 127 << 7;
 	ch->midi_controllers[SS_MIDCON_RPN_MSB] = 127 << 7;
 	ch->midi_controllers[SS_MIDCON_DATA_ENTRY_MSB] = 0;
@@ -69,10 +69,13 @@ const int16_t ss_default_controller_values[128] = {
 	[SS_MIDCON_GENERAL_PURPOSE_CONTROLLER_6] = 64 << 7,
 	[SS_MIDCON_GENERAL_PURPOSE_CONTROLLER_8] = 64 << 7,
 
+	/* Upstream: DEFAULT_RPN is 0x7f, DEFAULT_NRPN is 0.  The two are not
+	 * the same value — a null RPN selection is 127/127, a null NRPN
+	 * selection is 0/0. */
 	[SS_MIDCON_RPN_LSB] = 127 << 7,
 	[SS_MIDCON_RPN_MSB] = 127 << 7,
-	[SS_MIDCON_NRPN_LSB] = 127 << 7,
-	[SS_MIDCON_NRPN_MSB] = 127 << 7,
+	[SS_MIDCON_NRPN_LSB] = 0,
+	[SS_MIDCON_NRPN_MSB] = 0,
 };
 
 enum { PORTAMENTO_CONTROL_UNSET = 1 };
