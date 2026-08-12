@@ -102,6 +102,15 @@ export function compareRenders(refWav, candWav, opts = {}) {
         windowCorrelations.length > 0
             ? windowCorrelations[windowCorrelations.length >> 1]
             : null;
+    // The median is too forgiving: a file can be a perfect match everywhere
+    // except two notes and still read as 0.999998. The worst window is what
+    // says whether anything is actually wrong.
+    const worstWindowCorrelation =
+        windowCorrelations.length > 0 ? windowCorrelations[0] : null;
+    const worstWindowSec =
+        worstWindowCorrelation === null
+            ? null
+            : track.find((t) => t.correlation === worstWindowCorrelation)?.tSec;
 
     // Per-channel figures, measured at the aligned offset.
     const channels = [];
@@ -216,10 +225,11 @@ export function compareRenders(refWav, candWav, opts = {}) {
                 `(SNR ${fmtDb(trackedSnrDb)} dB once the drift is tracked out)`
         );
     }
-    if (medianWindowCorrelation !== null && medianWindowCorrelation < 0.9) {
+    if (worstWindowCorrelation !== null && worstWindowCorrelation < 0.99) {
         notes.push(
-            `Even window-by-window the waveforms only correlate to ` +
-                `${round(medianWindowCorrelation, 4)} — a genuine synthesis difference`
+            `Worst window correlates to only ${round(worstWindowCorrelation, 4)} ` +
+                `at ${round(worstWindowSec, 3)} s (median ${round(medianWindowCorrelation, 4)}) ` +
+                `— a genuine synthesis difference, not offset or drift`
         );
     }
     if (firstDivergenceSec !== undefined && firstDivergenceSec > 0.01) {
@@ -278,6 +288,8 @@ export function compareRenders(refWav, candWav, opts = {}) {
             snrAfterLagDb: round(snrAfterLagDb, 2),
             trackedSnrDb: round(trackedSnrDb, 2),
             medianWindowCorrelation: round(medianWindowCorrelation, 6),
+            worstWindowCorrelation: round(worstWindowCorrelation, 6),
+            worstWindowCorrelationSec: round(worstWindowSec, 3),
             driftSamplesPerSec: round(drift.samplesPerSecond, 4),
             driftCents: round(drift.cents, 4),
             firstDivergenceSec: firstDivergenceSec ?? null,
@@ -312,7 +324,8 @@ export function formatReport(report, label = "") {
     lines.push(
         `${head}${report.verdict.toUpperCase()}  SNR ${fmtDb(report.headlineSnrDb)} dB` +
             `${o.lagSamples !== 0 ? ` (aligned; raw ${fmtDb(o.snrDb)} dB)` : ""}  ` +
-            `window-corr ${o.medianWindowCorrelation ?? "n/a"}  ` +
+            `window-corr ${o.worstWindowCorrelation ?? "n/a"} worst / ` +
+            `${o.medianWindowCorrelation ?? "n/a"} median  ` +
             `gain ${fmtDb(o.bestFitGainDb)} dB  lag ${o.lagSamples} smp  ` +
             `drift ${o.driftCents ?? 0} ¢`
     );

@@ -265,7 +265,8 @@ function summarize(results) {
             verdict: r.report.verdict,
             snr: r.report.headlineSnrDb,
             rawSnr: r.report.overall.snrDb,
-            corr: r.report.overall.medianWindowCorrelation,
+            corr: r.report.overall.worstWindowCorrelation,
+            medianCorr: r.report.overall.medianWindowCorrelation,
             globalCorr: r.report.overall.correlation,
             gainDb: r.report.overall.bestFitGainDb,
             lag: r.report.overall.lagSamples,
@@ -311,7 +312,7 @@ function renderMarkdown(summary, o, midis) {
     lines.push("## Per-file results (worst first)");
     lines.push("");
     lines.push(
-        "| File | Verdict | SNR dB (aligned) | SNR dB (raw) | Window corr | Gain dB | Lag | Drift ¢ | First div. (s) |"
+        "| File | Verdict | SNR dB (aligned) | SNR dB (raw) | Worst window corr | Gain dB | Lag | Drift ¢ | First div. (s) |"
     );
     lines.push("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |");
     for (const row of summary.rows) {
