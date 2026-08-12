@@ -166,9 +166,15 @@ static void channel_clear_note_state(SS_MIDIChannel *ch) {
 
 void ss_channel_all_notes_off(SS_MIDIChannel *ch, double time) {
 	channel_clear_note_state(ch);
+	/* Every active voice is released, including ones already releasing:
+	 * upstream's stopAllNotes checks isActive only, and releaseVoice
+	 * overwrites releaseStartTime unconditionally.  Skipping the ones
+	 * already in release leaves them ramping from their own note-off
+	 * instead of restarting from here, which is audible for the whole
+	 * tail of a loop jump. */
 	for(size_t i = 0; i < ch->voice_count; i++) {
 		SS_Voice *v = ch->voices[i];
-		if(v->is_active && !v->is_in_release)
+		if(v->is_active)
 			ss_voice_release(v, time, SS_MIN_NOTE_LENGTH);
 	}
 	ch->sustained_count = 0;
