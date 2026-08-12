@@ -95,6 +95,28 @@ static ZoneIndex read_zone_index(SS_File *file) {
 
 /* ── Sample header reader (SHDR sub-chunk) ───────────────────────────────── */
 
+/* Drop the generators that only name what a zone points at.
+ *
+ * sampleID, instrument, keyRange and velRange are not values to be summed
+ * into a voice -- they say which sample or instrument the zone selects and
+ * over what range it applies.  Upstream routes all four into zone fields
+ * and never puts them in the generator list, so they read as zero in a
+ * voice's generator set.  The port extracts them into the same fields, so
+ * the leftover entries are dropped here to match; kept, they sum into the
+ * voice's generators as though they were real parameters. */
+static void zone_strip_index_generators(SS_Zone *z) {
+	if(!z || !z->generators) return;
+	size_t out = 0;
+	for(size_t i = 0; i < z->gen_count; i++) {
+		const SS_GeneratorType t = z->generators[i].type;
+		if(t == SS_GEN_KEY_RANGE || t == SS_GEN_VEL_RANGE ||
+		   t == SS_GEN_SAMPLE_ID || t == SS_GEN_INSTRUMENT)
+			continue;
+		z->generators[out++] = z->generators[i];
+	}
+	z->gen_count = out;
+}
+
 static void read_sample_header(SS_File *file, SS_BasicSample *s,
                                uint32_t *out_start, uint32_t *out_end,
                                uint32_t *out_link, uint16_t *out_type,
@@ -581,6 +603,7 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 			gz->gen_count = ge - gs;
 			gz->generators = (SS_Generator *)malloc(gz->gen_count * sizeof(SS_Generator));
 			if(gz->generators) memcpy(gz->generators, igens + gs, gz->gen_count * sizeof(SS_Generator));
+			zone_strip_index_generators(gz);
 			gz->mod_count = me - ms;
 			gz->modulators = (SS_Modulator *)malloc(gz->mod_count * sizeof(SS_Modulator));
 			if(gz->modulators) memcpy(gz->modulators, imods + ms, gz->mod_count * sizeof(SS_Modulator));
@@ -649,6 +672,8 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 					}
 				}
 			}
+
+			zone_strip_index_generators(&iz->base);
 
 			/* Parse modulators */
 			iz->base.mod_count = me - ms;
@@ -739,6 +764,7 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 			gz->gen_count = ge - gs;
 			gz->generators = (SS_Generator *)malloc(gz->gen_count * sizeof(SS_Generator));
 			if(gz->generators) memcpy(gz->generators, pgens + gs, gz->gen_count * sizeof(SS_Generator));
+			zone_strip_index_generators(gz);
 			gz->mod_count = me - ms;
 			gz->modulators = (SS_Modulator *)malloc(gz->mod_count * sizeof(SS_Modulator));
 			if(gz->modulators) memcpy(gz->modulators, pmods + ms, gz->mod_count * sizeof(SS_Modulator));
@@ -788,6 +814,8 @@ SS_SoundBank *ss_soundfont_load(SS_File *main_file, bool riff64) {
 					}
 				}
 			}
+			zone_strip_index_generators(&pz->base);
+
 			pz->base.mod_count = me - ms;
 			pz->base.modulators = (SS_Modulator *)malloc(pz->base.mod_count * sizeof(SS_Modulator));
 			if(pz->base.modulators)
