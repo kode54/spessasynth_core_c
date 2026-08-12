@@ -580,26 +580,29 @@ void ss_processor_poly_pressure(SS_Processor *proc, int ch, int note, int pressu
 void ss_processor_system_reset(SS_Processor *proc) {
 	if(!proc) return;
 
-	for(int i = 0; i < proc->channel_count; i++) {
-		SS_MIDIChannel *ch = proc->midi_channels[i];
-		if(!ch) continue;
-		ss_channel_all_sound_off(ch);
-		ss_channel_reset(ch);
-		ch->drum_channel = (i % 16 == 9);
-		/* Reset bank/program */
-		ch->bank_msb = 0;
-		ch->bank_lsb = 0;
-		ch->program = 0;
-		/* Look up the default preset */
-		SS_BasicPreset *p = find_preset_all_banks(proc, 0, 0, 0,
-		                                          ch->drum_channel);
-		if(p) ch->preset = p;
+	/* Global state first, channels after.  A channel reset reads the MIDI
+	 * system to pick its drum map, its portamento default and its default
+	 * bank, so resetting channels before the system would have them adopt
+	 * the outgoing mode.  Upstream orders it the same way. */
+	ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_SYSTEM,
+	                                (double)SS_SYSTEM_GS);
+	ss_processor_set_midi_volume(proc, 1.0);
+	ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_PAN, 0.0);
+	ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_KEY_SHIFT, 0.0);
+	ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_FINE_TUNE, 0.0);
+
+	/* Drop any MIDI Tuning Standard grid back to "no change". */
+	if(proc->tunings) {
+		for(int i = 0; i < 128; i++) {
+			if(!proc->tunings[i]) continue;
+			for(int n = 0; n < 128; n++) {
+				proc->tunings[i][n].midi_note = -1;
+				proc->tunings[i][n].cent_tuning = 0.0f;
+			}
+		}
 	}
 
 	proc->port_select_channel_offset = 0;
-
-	// Reset the volume
-	ss_processor_set_midi_volume(proc, 1.0);
 
 	// Reset the effects processors' buffers
 	ss_reverb_clear(proc->reverb);
@@ -623,9 +626,22 @@ void ss_processor_system_reset(SS_Processor *proc) {
 		proc->insertion->send_level_to_delay = 0.0f;
 	}
 	proc->insertion_active = false;
+
 	for(int i = 0; i < proc->channel_count; i++) {
-		if(proc->midi_channels[i])
-			proc->midi_channels[i]->midi_params.efx_assign = false;
+		SS_MIDIChannel *ch = proc->midi_channels[i];
+		if(!ch) continue;
+		ch->midi_params.efx_assign = false;
+		ss_channel_all_sound_off(ch);
+		ss_channel_reset(ch);
+		ch->drum_channel = (i % 16 == 9);
+		/* Reset bank/program */
+		ch->bank_msb = 0;
+		ch->bank_lsb = 0;
+		ch->program = 0;
+		/* Look up the default preset */
+		SS_BasicPreset *p = find_preset_all_banks(proc, 0, 0, 0,
+		                                          ch->drum_channel);
+		if(p) ch->preset = p;
 	}
 
 	ss_processor_event_emit(proc, SS_EVENT_STOP_ALL, -1, 0, 0);
