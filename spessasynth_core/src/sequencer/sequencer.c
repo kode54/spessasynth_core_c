@@ -251,6 +251,7 @@ bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 		seq->base_time = 0.0;
 		seq->current_tick = 0;
 		seq->current_time = 0.0;
+		seq->absolute_start_time = seq->engine_time;
 		seq->pending_tick_samples = 0;
 		seq->cursor_tick = 0;
 		seq->cursor_time = 0.0;
@@ -312,6 +313,7 @@ void ss_sequencer_stop(SS_Sequencer *seq) {
 	seq->base_time = 0.0;
 	seq->current_tick = 0;
 	seq->current_time = 0.0;
+	seq->absolute_start_time = seq->engine_time;
 	seq->pending_tick_samples = 0;
 	seq->cursor_tick = 0;
 	seq->cursor_time = 0.0;
@@ -503,6 +505,8 @@ static void seek_to(SS_Sequencer *seq, size_t target_tick,
 	 * requested position. */
 	seq->base_time += previous_time - played;
 	seq->current_time = played;
+	seq->absolute_start_time = seq->engine_time -
+	                           (seq->playback_rate > 0.0 ? played / seq->playback_rate : played);
 	seq->current_tick = by_ticks ? target_tick
 	                             : ss_seconds_to_midi_tick(midi, played);
 	/* Deliberately NOT clearing pending_tick_samples.  It holds the block
@@ -664,6 +668,7 @@ static bool ss_sequencer_next_song(SS_Sequencer *seq) {
 		seq->base_time += seq->current_time;
 		seq->current_tick = 0;
 		seq->current_time = 0.0;
+		seq->absolute_start_time = seq->engine_time;
 		seq->cursor_tick = 0;
 		seq->cursor_time = 0.0;
 		seq->one_tick_seconds = 0.0;
@@ -782,6 +787,9 @@ static void loop_rewind_to_tick(SS_Sequencer *seq, size_t target_tick,
 
 	seq->current_tick = target_tick;
 	seq->current_time = new_song_time;
+	seq->absolute_start_time = seq->engine_time -
+	                           (seq->playback_rate > 0.0 ? new_song_time / seq->playback_rate
+	                                                     : new_song_time);
 	seq->cursor_tick = target_tick;
 	seq->cursor_time = new_song_time;
 
@@ -846,9 +854,9 @@ try_again:
 	else if(seq->callbacks.sample_rate > 0)
 		sr = seq->callbacks.sample_rate;
 	if(sr == 0) sr = 44100;
-	double dt = (double)sample_count * (1.0 / (double)sr);
-	dt *= seq->playback_rate;
-	double target_time = seq->current_time + dt;
+	seq->engine_time += (double)sample_count * (1.0 / (double)sr);
+	double target_time = (seq->engine_time - seq->absolute_start_time) *
+	                     seq->playback_rate;
 	double current_time = seq->current_time;
 
 	/* Apply fade for this block up-front.  If the fade has run its
@@ -962,6 +970,8 @@ try_again:
 					loop_rewind_to_tick(seq, midi->loop.start, loop_end_time);
 				else
 					ss_sequencer_set_tick(seq, midi->loop.start);
+				seq->absolute_start_time += (loop_end_time - loop_start_time) /
+				                            (seq->playback_rate > 0.0 ? seq->playback_rate : 1.0);
 				target_time -= loop_end_time - loop_start_time;
 				continue;
 			}

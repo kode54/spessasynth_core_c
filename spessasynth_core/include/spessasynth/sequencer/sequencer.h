@@ -73,6 +73,13 @@ typedef struct {
 	double base_time; /* absolute time */
 	size_t current_tick; /* absolute timestamp */
 	double current_time; /* seconds, same units as proc->current_time */
+	/* Song time is derived from these two, not accumulated: upstream reads it
+	 * as (synth.currentTime - absoluteStartTime) * playbackRate on every tick.
+	 * Accumulating instead gives a different sum in the last bits, and an
+	 * event landing within a part in a quadrillion of a block boundary then
+	 * falls on the other side of it. */
+	double engine_time; /* mirrors the engine clock, accumulated from zero */
+	double absolute_start_time; /* engine time the current song time is measured from */
 	double playback_rate; /* 1.0 = normal */
 	double one_tick_seconds; /* current tempo ratio */
 	size_t ports_active; /* bit mask */
