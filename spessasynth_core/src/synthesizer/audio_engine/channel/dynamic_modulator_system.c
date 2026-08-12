@@ -126,8 +126,13 @@ void ss_dynamic_modulator_system_setup_receiver(SS_DynamicModulatorSystem *dms,
 	const float normalizedNotCentered = (float)data / 127.0f;
 	switch(addr3 & 0x0f) {
 		case 0x00: {
-			/* Pitch control */
-			set_modulator(dms, source, SS_GEN_FINE_TUNE, centeredValue * 100, is_bipolar);
+			/* Pitch control, clamped to +/-24 semitones.  The parameter's
+			 * range reaches +/-63, and without the clamp a value past 24
+			 * bends by as much as it asks for instead of topping out. */
+			int v = centeredValue;
+			if(v < -24) v = -24;
+			if(v > 24) v = 24;
+			set_modulator(dms, source, SS_GEN_FINE_TUNE, v * 100, is_bipolar);
 			break;
 		}
 
