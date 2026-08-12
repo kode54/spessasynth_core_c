@@ -54,13 +54,29 @@ const FALLBACK_SF = path.join(
     "examples",
     "florestan-subset.sf2"
 );
-const CORPUS_SF = "/Users/Shared/SoundFonts/TyrolandGS30finalfixed.sf2";
+
+/*
+ * Same bank, same filename, different base directory per machine. The
+ * capitalization is load-bearing on Linux and forgiven on macOS, so it is
+ * written once here rather than per path.
+ */
+const CORPUS_SF_NAME = "TyrolandGS30finalfixed.sf2";
+const CORPUS_SF_DIRS = [
+    "/Users/Shared/SoundFonts", // macOS development
+    "/usr/share/soundfonts" // Linux
+];
 
 function defaultSoundBank() {
     if (process.env.SPESSA_HARNESS_SF) {
         return path.resolve(process.env.SPESSA_HARNESS_SF);
     }
-    return fsSync.existsSync(CORPUS_SF) ? CORPUS_SF : FALLBACK_SF;
+    for (const dir of CORPUS_SF_DIRS) {
+        const candidate = path.join(dir, CORPUS_SF_NAME);
+        if (fsSync.existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    return FALLBACK_SF;
 }
 
 const DEFAULTS = {
@@ -422,6 +438,23 @@ const dirs = {
 };
 for (const dir of Object.values(dirs)) {
     await fs.mkdir(dir, { recursive: true });
+}
+
+/*
+ * Always say which bank was resolved, and say loudly when it is the in-repo
+ * subset: that fallback still renders and still scores, but against 17
+ * presets, so the numbers look comparable to a full-coverage run and are not.
+ * A silent fallback is the one failure here that produces wrong answers
+ * rather than no answers.
+ */
+console.error(`Sound bank: ${o.sf}`);
+if (path.resolve(o.sf) === path.resolve(FALLBACK_SF)) {
+    console.error(
+        "  WARNING: this is the in-repo 17-preset subset, not a full GM/GS bank.\n" +
+            "  Most of the corpus will land on fallback presets, so the results\n" +
+            "  measure preset resolution rather than synthesis and are NOT\n" +
+            "  comparable to a full-bank run. Set SPESSA_HARNESS_SF or pass --sf."
+    );
 }
 
 console.error(

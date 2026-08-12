@@ -8,7 +8,15 @@
  * is what this measures.
  */
 
+/* -std=c11 defines __STRICT_ANSI__, under which glibc withholds M_PI. Ask for
+ * it explicitly and fall back, so this builds the same on glibc and on the
+ * BSD/macOS libm that exposes it regardless. */
+#define _USE_MATH_DEFINES
 #include <math.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
