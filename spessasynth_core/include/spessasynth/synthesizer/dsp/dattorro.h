@@ -31,15 +31,15 @@ SS_DattorroDelayLine *delayLine);
 
 typedef struct {
 	unsigned int preDelay;
-	float preLPF;
-	float inputDiffusion[2];
-	float decay;
-	float decayDiffusion[2];
-	float damping;
-	float excursionRate;
-	float excursionDepth;
-	float gain;
-	float sampleRate;
+	double preLPF;
+	double inputDiffusion[2];
+	double decay;
+	double decayDiffusion[2];
+	double damping;
+	double excursionRate;
+	double excursionDepth;
+	double gain;
+	double sampleRate;
 	double lp[3];
 	double excPhase;
 	unsigned int pDWrite;

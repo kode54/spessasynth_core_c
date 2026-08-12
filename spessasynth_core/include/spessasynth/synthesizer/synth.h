@@ -54,7 +54,7 @@ typedef enum {
 typedef struct {
 	const float *sample_data; /* non-owning ptr into SS_BasicSample.audio_data */
 	size_t sample_data_len;
-	float playback_step; /* base playback rate */
+	double playback_step; /* base playback rate */
 	double cursor; /* current read position (fractional) */
 	int root_key;
 	size_t loop_start;
@@ -68,13 +68,13 @@ typedef struct {
 
 typedef struct {
 	int resonance_cb;
-	float current_initial_fc; /* current smoothed cutoff, abs cents */
-	float last_target_cutoff;
+	double current_initial_fc; /* current smoothed cutoff, abs cents */
+	double last_target_cutoff;
 	double a0, a1, a2, a3, a4; /* biquad coefficients */
 	double x1, x2; /* input history */
 	double y1, y2; /* output history */
 	bool initialized;
-	float max_cutoff; /* Hz: sample_rate * 0.45 */
+	double max_cutoff; /* Hz: sample_rate * 0.45 */
 	uint32_t sample_rate;
 } SS_LowpassFilter;
 
@@ -98,7 +98,7 @@ typedef enum {
 typedef struct {
 	uint32_t sample_rate;
 	uint32_t update_interval;
-	float output_gain;
+	double output_gain;
 	double attenuation_cb;
 	SS_VolumeEnvelopeState state;
 	uint64_t sample_time;
@@ -123,14 +123,14 @@ typedef struct {
 	double decay_duration;
 	double hold_duration;
 	double release_duration;
-	float sustain_level;
+	double sustain_level;
 	double delay_end;
 	double attack_end;
 	double hold_end;
 	double decay_end;
 	double release_start_time;
-	float release_start_level;
-	float current_value;
+	double release_start_level;
+	double current_value;
 	bool entered_release;
 } SS_ModulationEnvelope;
 
@@ -185,7 +185,7 @@ typedef struct SS_Voice {
 
 	const SS_BasicPreset *preset; /* non-owning */
 
-	float gain;
+	double gain;
 	int16_t generators[SS_GEN_COUNT];
 	int16_t modulated_generators[SS_GEN_COUNT];
 
@@ -193,7 +193,7 @@ typedef struct SS_Voice {
 	size_t modulator_count;
 	size_t modulator_capacity; /* allocated slots; retained across pool reuse */
 
-	float resonance_offset;
+	double resonance_offset;
 	bool is_active;
 	bool is_in_release;
 	bool has_rendered; /* set to true after the first render call */
@@ -213,9 +213,9 @@ typedef struct SS_Voice {
 
 	int current_tuning_cents;
 	double current_tuning_calculated;
-	float current_pan;
+	double current_pan;
 	bool override_pan_active;
-	float override_pan;
+	double override_pan;
 
 	int portamento_from_key; /* -1 = off */
 	double portamento_duration;
@@ -223,15 +223,15 @@ typedef struct SS_Voice {
 	/* LFO triangle-wave phase accumulators [0,1), initialized to 0.25 */
 	double vib_lfo_start_time;
 	double mod_lfo_start_time;
-	float vib_lfo_phase;
-	float mod_lfo_phase;
+	double vib_lfo_phase;
+	double mod_lfo_phase;
 
 	int exclusive_class;
 
-	float pitch_offset; /* per-voice pitch offset in cents (drum params) */
-	float reverb_send; /* per-voice reverb send multiplier */
-	float chorus_send; /* per-voice chorus send multiplier */
-	float delay_send; /* per-voice delay send multiplier */
+	double pitch_offset; /* per-voice pitch offset in cents (drum params) */
+	double reverb_send; /* per-voice reverb send multiplier */
+	double chorus_send; /* per-voice chorus send multiplier */
+	double delay_send; /* per-voice delay send multiplier */
 
 	/**
 	 * In timecents, where zero means disabled (use the modulatedGenerators table).
@@ -474,7 +474,7 @@ typedef enum {
 typedef struct SS_MIDIChannel {
 	int16_t midi_controllers[SS_MIDI_CONTROLLER_COUNT];
 	bool locked_controllers[SS_MIDI_CONTROLLER_COUNT];
-	float custom_controllers[SS_CUSTOM_CTRL_COUNT];
+	double custom_controllers[SS_CUSTOM_CTRL_COUNT];
 
 	bool last_parameter_is_registered;
 
@@ -498,9 +498,9 @@ typedef struct SS_MIDIChannel {
 
 	/* Aggregates recomputed by ss_channel_update_internal_params() from the
 	 * four parameter structs; consumed on the hot rendering path. */
-	float current_gain; /* output gain multiplier */
+	double current_gain; /* output gain multiplier */
 	float current_pan; /* added pan offset in the -500..500 range */
-	float current_tuning; /* added tuning in cents */
+	double current_tuning; /* added tuning in cents */
 	int current_key_shift; /* added key shift in semitones */
 
 	uint8_t bank_msb;
@@ -726,9 +726,9 @@ typedef struct SS_Processor {
 	SS_GlobalMIDIParameter midi_params;
 	SS_TuningEntry **tunings; /* [128][128] MTS tuning grid, or NULL */
 	float pan_left, pan_right;
-	float volume_envelope_smoothing_factor;
-	float filter_smoothing_factor;
-	float pan_smoothing_factor;
+	double volume_envelope_smoothing_factor;
+	double filter_smoothing_factor;
+	double pan_smoothing_factor;
 
 	bool delay_active; /* whether the delay effect has been activated via sysex */
 	bool custom_channel_numbers; /* whether any channel uses a non-default rx_channel */

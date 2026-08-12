@@ -177,7 +177,7 @@ void ss_lowpass_filter_apply(SS_LowpassFilter *f,
 	}
 
 	/* Check if the frequency has changed. if so, calculate new coefficients */
-	if(fabsf(f->last_target_cutoff - target_cutoff) > 1.0f || f->resonance_cb != mod_resonance) {
+	if(fabs(f->last_target_cutoff - target_cutoff) > 1.0f || f->resonance_cb != mod_resonance) {
 		f->last_target_cutoff = target_cutoff;
 		f->resonance_cb = mod_resonance;
 		calculate_coefficients(f, target_cutoff);
