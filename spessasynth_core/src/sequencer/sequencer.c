@@ -894,6 +894,11 @@ try_again:
 				break;
 			}
 			if(ss_sequencer_next_song(seq)) goto try_again;
+			/* Upstream's songIsFinished pauses, and pausing sends its
+			 * all-off: sustain down on every channel, then a graceful
+			 * all-notes-off.  Without it the last notes of a song hang
+			 * for as long as the caller keeps rendering. */
+			dispatch_all_notes_off(seq);
 			seq->finished = true;
 			seq->is_playing = false;
 			break;
@@ -988,6 +993,7 @@ try_again:
 				}
 				if(seq->fading) break;
 				if(ss_sequencer_next_song(seq)) goto try_again;
+				dispatch_all_notes_off(seq);
 				seq->finished = true;
 				seq->is_playing = false;
 				break;
