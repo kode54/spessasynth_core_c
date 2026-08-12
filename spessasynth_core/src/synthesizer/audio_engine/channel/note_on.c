@@ -9,9 +9,11 @@
 #include <string.h>
 #if __has_include(<spessasynth_core/spessasynth.h>)
 #include <spessasynth_core/midi_enums.h>
+#include <spessasynth_core/random.h>
 #include <spessasynth_core/synth.h>
 #else
 #include "spessasynth/midi/midi_enums.h"
+#include "spessasynth/utils/random.h"
 #include "spessasynth/synthesizer/synth.h"
 #endif
 
@@ -121,6 +123,14 @@ static void enforce_voice_cap(SS_Processor *proc, double time,
 		lowest->is_active = false;
 }
 
+/* The sequence belongs to the processor, so panning is reproducible per
+ * synthesizer rather than per program.  A channel with no processor attached
+ * is degenerate but must not crash; it gets its own state. */
+static double channel_random(SS_MIDIChannel *ch) {
+	static uint32_t orphan_state = SS_RANDOM_DEFAULT_SEED;
+	return ss_random_next(ch->synth ? &ch->synth->random_state : &orphan_state);
+}
+
 /* ── Note on ─────────────────────────────────────────────────────────────── */
 
 void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
@@ -214,7 +224,15 @@ void ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, b
 	float drum_gain = 1.0f;
 	int drum_exclusive_override = 0;
 	bool pan_override_active = false;
-	float pan_override;
+	float pan_override = 0.0f; /* upstream: let panOverride = 0 */
+
+	/* Upstream applies the channel's random pan before the drum block, so a
+	 * drum channel whose key sits at the default pan still pans randomly; the
+	 * drum block only overrides it when the key asks for something. */
+	if(ch->midi_params.random_pan) {
+		pan_override = (float)round(channel_random(ch) * 1000.0 - 500.0);
+		pan_override_active = true;
+	}
 
 	if(ch->drum_channel) {
 		const SS_DrumParameters *dp = &ch->drum_params[note];
@@ -234,7 +252,7 @@ void ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, b
 		if(drum_pan != 0) {
 			if(drum_pan == -64) {
 				/* Random pan [-500, 500] */
-				pan_override = (float)(rand() % 1001) - 500.0f;
+				pan_override = (float)round(channel_random(ch) * 1000.0 - 500.0);
 				pan_override_active = true;
 			} else {
 				float ch_pan = (float)(ch->midi_controllers[SS_MIDCON_PAN] >> 7) - 64.0f;
@@ -245,9 +263,6 @@ void ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, b
 				pan_override_active = true;
 			}
 		}
-	} else if(ch->midi_params.random_pan) {
-		pan_override = (float)(rand() % 1001) - 500.0f;
-		pan_override_active = true;
 	}
 
 	const int program = ch->preset->program;

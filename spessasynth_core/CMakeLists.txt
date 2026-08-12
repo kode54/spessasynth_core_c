@@ -13,6 +13,7 @@ option(SS_BUILD_EXAMPLES     "Build example tools"                              
 # ── Core source list ─────────────────────────────────────────────────────────
 set(SS_SOURCES
     src/utils/byte_functions.c
+    src/utils/random.c
     src/utils/file.c
     src/utils/riff_chunk.c
     src/utils/sync_primitives.c

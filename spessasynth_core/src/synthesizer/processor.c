@@ -11,9 +11,11 @@
 #if __has_include(<spessasynth_core/spessasynth.h>)
 #include <spessasynth_core/midi_enums.h>
 #include <spessasynth_core/synth.h>
+#include <spessasynth_core/random.h>
 #else
 #include "spessasynth/midi/midi_enums.h"
 #include "spessasynth/synthesizer/synth.h"
+#include "spessasynth/utils/random.h"
 #endif
 
 /* 1 / cos(pi/4)^2 = 2.0: corrects insertion send levels from 0-1 to 0-2 range */
@@ -158,6 +160,8 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 
 	/* Build the sinc kernel table once, before any voice can ask for it. */
 	ss_sinc_table_init();
+
+	proc->random_state = SS_RANDOM_DEFAULT_SEED;
 
 	ss_processor_system_reset(proc);
 
