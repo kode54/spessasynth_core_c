@@ -33,6 +33,19 @@ node run.mjs path/to/file.mid         # specific files or directories
 node run.mjs --sf /path/to/bank.sf2   # a different sound bank
 ```
 
+### Which sound bank
+
+Upstream renders its generated corpus against a `square.sf2` that is not in
+the repo and is not fetched by CI — its workflows only build releases and
+docs. It is a local file on the maintainer's machine, so that exact bank
+cannot be reproduced here.
+
+What the corpus actually needs is a bank with full GM/GS coverage: its tests
+select specific instruments, and `examples/florestan-subset.sf2` holds only 17
+presets, so most of the corpus lands on fallback presets and measures nothing
+useful. Set `SPESSA_HARNESS_SF` to a full bank, or pass `--sf`; the in-repo
+subset is only the fallback when neither is available.
+
 Useful options: `--filter SUBSTR`, `--jobs N`, `--rate`, `--block`, `--tail`,
 `--voice-cap`, `--auto-allocate`, `--no-effects`, `--fail-below DB`
 (non-zero exit when any file scores below a given SNR — for CI),
