@@ -1,4 +1,5 @@
 build/
-out/
+out*/
+grid/
 probes/
 node_modules/
