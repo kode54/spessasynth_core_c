@@ -164,6 +164,10 @@ void SPESSASYNTH_EXPORTS ss_sequencer_stop(SS_Sequencer *seq);
 /** Set playback position in seconds. */
 void SPESSASYNTH_EXPORTS ss_sequencer_set_time(SS_Sequencer *seq, double seconds);
 
+/** Set playback position by MIDI tick.  Same seek as ss_sequencer_set_time,
+ *  bounded by tick rather than by elapsed seconds. */
+void SPESSASYNTH_EXPORTS ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick);
+
 /** Configure how many times the looped section plays (counting the
  *  initial pass).  Interpretation:
  *   -1    loop forever; loops_played keeps counting upward.  Setting

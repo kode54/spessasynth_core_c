@@ -367,6 +367,12 @@ static void seek_to(SS_Sequencer *seq, size_t target_tick,
 	/* Rewind and replay the lead-up to the target. */
 	song_rewind(song);
 	const double previous_time = seq->current_time;
+	/* Absolute time as the processor sees it.  process_event stamps events
+	 * with current_time + base_time, so anything the seek dispatches has to
+	 * use the same origin — passing the song-relative time alone lands every
+	 * replayed event base_time in the past whenever a seek happens after
+	 * playback has already moved the base. */
+	const double now = seq->base_time + previous_time;
 
 	/* Reset processor */
 	dispatch_reset(seq);
@@ -446,18 +452,18 @@ static void seek_to(SS_Sequencer *seq, size_t target_tick,
 					} else if(seek_cc_is_non_skippable(cc)) {
 						/* Bank selects, parameter selection and data entry
 						 * carry sequencing that a snapshot cannot express. */
-						dispatch_voice_event(seq, midi, e, previous_time);
+						dispatch_voice_event(seq, midi, e, now);
 					} else {
 						cs->controllers[cc] = (int16_t)(value << 7);
 					}
 				}
 			} else if(type == 0xC0 || type == 0xD0) {
 				/* Program change and channel pressure go through live. */
-				dispatch_voice_event(seq, midi, e, previous_time);
+				dispatch_voice_event(seq, midi, e, now);
 			}
 			/* Note-off and poly pressure are simply skipped. */
 		} else if(sb == 0xF0) {
-			dispatch_sysex_event(seq, midi, e, previous_time);
+			dispatch_sysex_event(seq, midi, e, now);
 		}
 
 		if(song->event_index < midi->timeline_count) {
@@ -478,15 +484,14 @@ static void seek_to(SS_Sequencer *seq, size_t target_tick,
 			if(!mch) continue;
 			const SS_SeekChannelState *cs = &snapshot[i];
 
-			ss_channel_pitch_wheel(mch, cs->pitch_wheel, -1, previous_time);
+			ss_channel_pitch_wheel(mch, cs->pitch_wheel, -1, now);
 
 			if(cs->portamento_note >= 0) mch->last_note = cs->portamento_note;
 
 			for(int cc = 0; cc < 128; cc++) {
 				if(cs->controllers[cc] == ss_default_controller_values[cc]) continue;
 				if(seek_cc_is_non_skippable((uint8_t)cc)) continue;
-				ss_channel_controller(mch, cc, cs->controllers[cc] >> 7,
-				                      previous_time);
+				ss_channel_controller(mch, cc, cs->controllers[cc] >> 7, now);
 			}
 		}
 	}
@@ -500,7 +505,13 @@ static void seek_to(SS_Sequencer *seq, size_t target_tick,
 	seq->current_time = played;
 	seq->current_tick = by_ticks ? target_tick
 	                             : ss_seconds_to_midi_tick(midi, played);
-	seq->pending_tick_samples = 0;
+	/* Deliberately NOT clearing pending_tick_samples.  It holds the block
+	 * the caller last rendered, and the sequencer runs one block behind by
+	 * design; zeroing it makes the next tick a no-op while the caller still
+	 * renders, so every seek would drop the sequencer another block further
+	 * behind.  A fresh sequencer already has it at zero, which is what
+	 * produces the leading silent block at load.
+	 */
 	seq->cursor_time = played;
 	seq->cursor_tick = (song->event_index < midi->timeline_count)
 	                       ? midi->timeline[song->event_index].ticks
