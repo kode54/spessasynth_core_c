@@ -9,7 +9,7 @@
 
 /* ── Conversion table (InsertionValueConverter) ───────────────────────────── */
 /* Columns: PreDly,Dly1,Dly2,Dly3,Dly4, Rate1,Rate2, HF,Cut,EQ,LPF,Manual,Azim,Accl */
-static const float IVC[128][14] = {
+static const double IVC[128][14] = {
 	{ 0.0f, 200, 200, 0.0f, 0, 0.05f, 0.05f, 315, 250, 200, 250, 100, -180, 0 },
 	{ 0.1f, 205, 205, 0.1f, 5, 0.10f, 0.10f, 315, 250, 200, 250, 110, -180, 1 },
 	{ 0.2f, 210, 210, 0.2f, 10, 0.15f, 0.15f, 315, 250, 200, 250, 120, -180, 2 },
@@ -140,12 +140,12 @@ static const float IVC[128][14] = {
 	{ 100.f, 1000, 1000, 500.f, 635, 10.0f, 6.40f, 13500, 8000, 6300, 13500, 8000, -180, 15 },
 };
 
-float ss_ivc_rate1(int v) {
+double ss_ivc_rate1(int v) {
 	return IVC[v & 127][5];
 }
-float ss_ivc_manual(int v) {
+double ss_ivc_manual(int v) {
 	return IVC[v & 127][11];
 }
-float ss_ivc_eq_freq(int v) {
+double ss_ivc_eq_freq(int v) {
 	return IVC[v & 127][9];
 }

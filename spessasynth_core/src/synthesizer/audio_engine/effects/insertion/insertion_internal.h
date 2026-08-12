@@ -25,9 +25,9 @@
 
 /* ── convert.c — InsertionValueConverter ─────────────────────────────────── */
 
-float ss_ivc_rate1(int v);
-float ss_ivc_manual(int v);
-float ss_ivc_eq_freq(int v);
+double ss_ivc_rate1(int v);
+double ss_ivc_manual(int v);
+double ss_ivc_eq_freq(int v);
 
 /* ── utils.c — biquads, pan tables, LFOs ─────────────────────────────────── */
 
