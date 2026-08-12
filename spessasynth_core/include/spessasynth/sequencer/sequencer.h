@@ -106,6 +106,13 @@ typedef struct {
 	bool preload; /* true once initial events have been sent */
 	bool finished;
 
+	/* Sample count handed to the previous ss_sequencer_tick call.
+	 *
+	 * Events are dispatched for the block that has already been rendered,
+	 * never for the one that is about to be, so the sequencer runs exactly
+	 * one render block behind the caller.  See ss_sequencer_tick. */
+	uint32_t pending_tick_samples;
+
 	/* When non-NULL midi_command is supplied, events are dispatched
 	 * through the callbacks instead of SS_Processor.  proc is NULL
 	 * in that mode and the callback's sample_rate is used for timing. */
@@ -163,7 +170,17 @@ void SPESSASYNTH_EXPORTS ss_sequencer_set_fade_seconds(SS_Sequencer *seq, double
  *  sequencer will report finished after the current tick instead). */
 void SPESSASYNTH_EXPORTS ss_sequencer_next(SS_Sequencer *seq);
 
-/** Must be called once per audio render quantum, BEFORE ss_processor_render(). */
+/** Must be called once per audio render quantum, BEFORE ss_processor_render().
+ *
+ *  Events are dispatched for the quantum that has *already* been rendered
+ *  rather than the one about to be, so a note at tick 0 first sounds one
+ *  render block in.  This matches upstream spessasynth_core, whose sequencer
+ *  dispatches against the synthesizer's elapsed time; the engine ramps
+ *  parameters over a fixed block duration, so the offset cannot be expressed
+ *  as a sub-block event timestamp instead.
+ *
+ *  sample_count is therefore consumed on the *following* call: pass the same
+ *  block size every time, as the engine requires anyway. */
 void SPESSASYNTH_EXPORTS ss_sequencer_tick(SS_Sequencer *seq, uint32_t sample_count);
 
 bool SPESSASYNTH_EXPORTS ss_sequencer_is_finished(const SS_Sequencer *seq);
