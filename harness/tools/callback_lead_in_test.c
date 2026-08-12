@@ -50,6 +50,18 @@ int main(int argc, char **argv) {
 	ss_sequencer_set_loop_count(seq, 0);
 	if(!ss_sequencer_load_midi(seq, midi)) { fprintf(stderr, "load failed\n"); return 1; }
 
+	if(midi->first_note_on == 0) {
+		/* Nothing to skip, so the flag is never armed and there is nothing to
+		 * assert.  Say so rather than reporting a failure: the probe corpus
+		 * puts its first note at tick 0, and only a file with a setup-only
+		 * lead-in exercises this path. */
+		printf("%s has no lead-in (first note at tick 0) — nothing to test.\n"
+		       "Point this at a file that configures the synth before its first "
+		       "note.\n",
+		       argv[1]);
+		return 0;
+	}
+
 	printf("first_note_on tick=%zu (%.4f s)  lead_in at load=%s\n",
 	       (size_t)midi->first_note_on,
 	       ss_midi_ticks_to_seconds(midi, midi->first_note_on),
