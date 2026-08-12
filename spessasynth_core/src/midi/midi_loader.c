@@ -243,10 +243,49 @@ static void scan_loops(SS_MIDIFile *m) {
 	size_t loop_end = LOOP_UNSET;
 	SS_MIDILoopType loop_type = SS_LOOP_TYPE_HARD;
 
-	/* Pre-pass: does anything in the file mark it as EMIDI?  If so, its
-	 * CC 111 events are EMIDI commands rather than RPG Maker loop
-	 * markers, so scan 2 below must not read them as loops. */
+	/* Pre-pass: work out which of the three conventions that write CC 110
+	 * and CC 111 this file is using, because they collide.
+	 *
+	 *   EMIDI     CC 110 designates a track for a sound card, CC 111
+	 *             excludes it from one.  Neither is a loop marker.
+	 *   LeapFrog  CC 110 begins a loop, CC 111 ends it.
+	 *   RPG Maker CC 111 with value 0 starts a loop.  No CC 110.
+	 *
+	 * A CC 112-119 anywhere settles it as EMIDI: no other convention
+	 * touches that part of the block.  Failing that, the two readings of
+	 * CC 110 are told apart by where it sits.  A designation declares
+	 * what a track is, so it is written at the head of the track, before
+	 * any of its content; a LeapFrog loop begins somewhere inside the
+	 * song.  Across the 36 EMIDI-ish files to hand the split is total:
+	 * every one of the 32 EMIDI files puts all its designations at tick
+	 * 0 or 1, and the four LeapFrog files (Shattered Steel's MISS5,
+	 * MISSA, MISSB and SPACE) put their lone CC 110 at tick 189 or
+	 * later.
+	 *
+	 * midi_processing and libmidi instead stop looking for a LeapFrog
+	 * loop only at a CC 112-119, so they read the tick-0 designations in
+	 * BRIEFING.MID and APOGEE.MID as a loop that begins and ends before
+	 * the first note. */
 	const bool any_emidi = ss_midi_has_emidi(m);
+
+	bool any_designation = false; /* CC 110 at the head of a track */
+	size_t leapfrog_start = LOOP_UNSET; /* earliest CC 110 within the song */
+	if(!any_emidi) {
+		for(size_t ti = 0; ti < m->track_count; ti++) {
+			const SS_MIDITrack *t = &m->tracks[ti];
+			for(size_t ei = 0; ei < t->event_count; ei++) {
+				const SS_MIDIMessage *e = &t->events[ei];
+				if(!is_cc(e) || e->data[0] != 110) continue;
+				if(e->ticks <= 1) {
+					any_designation = true;
+				} else if(leapfrog_start == LOOP_UNSET ||
+				          e->ticks < leapfrog_start) {
+					leapfrog_start = e->ticks;
+				}
+			}
+		}
+	}
+	const bool leapfrog = leapfrog_start != LOOP_UNSET;
 
 	/* Scan 1 — Touhou (format 0 only): CC 2 = start, CC 4 = end.  A
 	 * non-zero value on either voids the entire Touhou result. */
@@ -285,9 +324,10 @@ static void scan_loops(SS_MIDIFile *m) {
 		}
 	}
 
-	/* Scan 2 — RPG Maker: CC 111 = start.  Disabled when EMIDI is
-	 * present anywhere in the file. */
-	if(!any_emidi) {
+	/* Scan 2 — RPG Maker: CC 111 with value 0 = start.  Only when no
+	 * CC 110 has claimed the pair for one of the other two conventions,
+	 * in either of its readings. */
+	if(!any_emidi && !any_designation && !leapfrog) {
 		for(size_t ti = 0; ti < m->track_count; ti++) {
 			const SS_MIDITrack *t = &m->tracks[ti];
 			for(size_t ei = 0; ei < t->event_count; ei++) {
@@ -296,6 +336,31 @@ static void scan_loops(SS_MIDIFile *m) {
 				if(loop_start == LOOP_UNSET || e->ticks < loop_start)
 					loop_start = e->ticks;
 			}
+		}
+	}
+
+	/* Scan 2b — LeapFrog: CC 110 = begin, CC 111 = end.  The begin was
+	 * found in the pre-pass; the end is the last CC 111 at or after it,
+	 * whatever its value.  An end marker makes the loop soft, as the
+	 * equivalent XMI and Touhou markers do below. */
+	if(leapfrog) {
+		if(loop_start == LOOP_UNSET || leapfrog_start < loop_start)
+			loop_start = leapfrog_start;
+		size_t lf_end = LOOP_UNSET;
+		for(size_t ti = 0; ti < m->track_count; ti++) {
+			const SS_MIDITrack *t = &m->tracks[ti];
+			for(size_t ei = 0; ei < t->event_count; ei++) {
+				const SS_MIDIMessage *e = &t->events[ei];
+				if(!is_cc(e) || e->data[0] != 111) continue;
+				if(e->ticks < leapfrog_start) continue;
+				if(lf_end == LOOP_UNSET || e->ticks > lf_end)
+					lf_end = e->ticks;
+			}
+		}
+		if(lf_end != LOOP_UNSET) {
+			if(loop_end == LOOP_UNSET || lf_end > loop_end)
+				loop_end = lf_end;
+			loop_type = SS_LOOP_TYPE_SOFT;
 		}
 	}
 

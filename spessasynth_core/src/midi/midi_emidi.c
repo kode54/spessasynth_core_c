@@ -79,15 +79,21 @@ SS_EMIDIKind ss_midi_track_emidi_kind(const SS_MIDITrack *track) {
 
 /* Controllers whose presence marks a file as EMIDI.
  *
- * CC 110 is the track designation; 112 through 119 are the rest of the
- * block Apogee's Extended MIDI claims.  CC 111 is deliberately not in the
- * set: RPG Maker writes it as a loop start and LeapFrog as a loop end, so
- * on its own it indicates nothing — it is the ambiguous controller that
- * the others are used to disambiguate.  libmidi tests the same set. */
+ * Only 112 through 119.  Neither CC 110 nor CC 111 belongs here, because
+ * both are claimed by other conventions: LeapFrog writes CC 110 as a loop
+ * begin and CC 111 as its end, and RPG Maker writes CC 111 as a loop
+ * start.  That pair is the ambiguous one; 112-119 is the part of the
+ * block no other convention touches, which is what makes it the test.
+ *
+ * The cost is that an EMIDI file using nothing but track designations is
+ * no longer recognised, and so is not filtered — Duke Nukem 3D's
+ * BRIEFING.MID and Xenophage's APOGEE.MID are the two such files to hand.
+ * Loop scanning tells the two readings of CC 110 apart by position
+ * instead; see scan_loops in midi_loader.c. */
 static bool is_emidi_indication(const SS_MIDIMessage *e) {
 	if((e->status_byte & 0xF0) != 0xB0 || e->data_length < 2) return false;
 	const uint8_t cc = e->data[0];
-	return cc == 110 || (cc >= 112 && cc <= 119);
+	return cc >= 112 && cc <= 119;
 }
 
 bool ss_midi_has_emidi(const SS_MIDIFile *midi) {
