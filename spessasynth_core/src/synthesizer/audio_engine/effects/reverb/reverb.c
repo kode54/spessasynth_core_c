@@ -132,9 +132,10 @@ static void ss_reverb_update_time(SS_Reverb *reverb) {
 	const unsigned int timeSamples = (calcSamples > 21) ? calcSamples : 21;
 	if(p->character == 7) {
 		// Half the delay time
-		reverb->delayRight->time = reverb->delayLeft->time = timeSamples / 2;
+		ss_delay_line_set_time(reverb->delayLeft, (float)(timeSamples / 2));
+		ss_delay_line_set_time(reverb->delayRight, (float)(timeSamples / 2));
 	} else {
-		reverb->delayLeft->time = timeSamples;
+		ss_delay_line_set_time(reverb->delayLeft, (float)timeSamples);
 	}
 }
 
