@@ -427,7 +427,7 @@ void ss_reverb_process(SS_Reverb *reverb,
 			}
 
 			// Mix right into left
-			const float fb = reverb->panDelayFeedback;
+			const double fb = reverb->panDelayFeedback;
 			float *delayLeftInput = reverb->delayLeftInput;
 			float *delayLeftOutput = reverb->delayLeftOutput;
 			float *delayRightOutput = reverb->delayRightOutput;
@@ -439,7 +439,7 @@ void ss_reverb_process(SS_Reverb *reverb,
 			// Process right
 			ss_delay_line_process(reverb->delayRight, delayLeftOutput, delayRightOutput, sample_count);
 			// Mix
-			const float g = reverb->delayGain;
+			const double g = reverb->delayGain;
 			for(i = 0; i < sample_count; i++) {
 				*outputL++ += delayLeftOutput[i] * g;
 				*outputR++ += delayRightOutput[i] * g;
