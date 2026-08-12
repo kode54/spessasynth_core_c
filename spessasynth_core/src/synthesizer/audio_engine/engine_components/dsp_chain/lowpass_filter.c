@@ -141,7 +141,7 @@ void ss_lowpass_filter_apply(SS_LowpassFilter *f,
                              const int16_t *mod_gens,
                              float *buffer, int count,
                              float fc_excursion, float smoothing,
-                             float gain, float gain_inc) {
+                             double gain, double gain_inc) {
 	int initial_fc = mod_gens[SS_GEN_INITIAL_FILTER_FC];
 
 	if(f->initialized) {
@@ -170,7 +170,7 @@ void ss_lowpass_filter_apply(SS_LowpassFilter *f,
 		f->current_initial_fc = 13500.0f;
 		/* Filter is open, apply gain */
 		for(int i = 0; i < count; i++) {
-			buffer[i] *= gain;
+			buffer[i] = (float)((double)buffer[i] * gain);
 			gain += gain_inc;
 		}
 		return;

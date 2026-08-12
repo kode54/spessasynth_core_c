@@ -115,9 +115,9 @@ bool ss_voice_render(SS_Voice *v,
 	float volume_excursion_cb = 0.0f;
 
 	/* voice_gain: amplitude generator + LFO amplitude depths (matches TS voiceGain) */
-	float voice_gain = v->gain * (1.0f + (float)v->modulated_generators[SS_GEN_AMPLITUDE] / 1000.0f);
+	double voice_gain = v->gain * (1.0 + (double)v->modulated_generators[SS_GEN_AMPLITUDE] / 1000.0);
 	if(ch && ch->preset && ch->preset->parent_bank) voice_gain *= ch->preset->parent_bank->gain;
-	if(voice_gain < 0.0f) voice_gain = 0.0f;
+	if(voice_gain < 0.0) voice_gain = 0.0;
 
 	/* Vibrato LFO — triangle wave with phase accumulator, matching TypeScript render_voice.ts.
 	 * Triangle: value = 1 - 4*|phase - 0.5|, phase in [0,1).
@@ -233,11 +233,11 @@ bool ss_voice_render(SS_Voice *v,
 
 	/* Volume envelope */
 	/* Get the previous value */
-	float gain = v->volume_env.output_gain;
+	double gain = v->volume_env.output_gain;
 	/* Compute the new value */
 	const bool env_active = ss_volume_envelope_process(&v->volume_env, sample_count, gain_target);
 	/* Calculate increase */
-	const float gain_inc = (v->volume_env.output_gain - gain) / (float)sample_count;
+	const double gain_inc = (v->volume_env.output_gain - gain) / (double)sample_count;
 
 	/* Low pass filter */
 	ss_lowpass_filter_apply(&v->filter, v->modulated_generators, buf, sample_count,
@@ -252,36 +252,36 @@ bool ss_voice_render(SS_Voice *v,
 	/* Generator pan in the -500..500 range. The channel pan controller (CC#10)
 	 * is already integrated into the generator by the default modulators;
 	 * ch->current_pan carries the global/channel system + global MIDI pan. */
-	float pan;
+	double pan;
 	if(v->override_pan_active) {
 		pan = v->override_pan;
 	} else {
 		/* Smooth only the generator pan to prevent clicking. */
-		v->current_pan += ((float)v->modulated_generators[SS_GEN_PAN] - v->current_pan) * pan_smoothing;
+		v->current_pan += ((double)v->modulated_generators[SS_GEN_PAN] - v->current_pan) * pan_smoothing;
 		pan = v->current_pan;
 	}
 
 	/* current_gain folds in the global system/MIDI gain and the channel
 	 * system gain (see ss_channel_update_internal_params). */
-	const float output_gain = ch->current_gain * voice_gain;
-	const float reverb_amt = (float)v->modulated_generators[SS_GEN_REVERB_EFFECTS_SEND] * v->reverb_send;
-	const float chorus_amt = (float)v->modulated_generators[SS_GEN_CHORUS_EFFECTS_SEND] * v->chorus_send;
+	const double output_gain = ch->current_gain * voice_gain;
+	const double reverb_amt = (double)v->modulated_generators[SS_GEN_REVERB_EFFECTS_SEND] * v->reverb_send;
+	const double chorus_amt = (double)v->modulated_generators[SS_GEN_CHORUS_EFFECTS_SEND] * v->chorus_send;
 
 	/* Equal-power panning */
 	ss_init_pan_table(); /* just in case */
-	float pan_combined = pan + ch->current_pan;
-	if(pan_combined < (float)MIN_PAN) pan_combined = (float)MIN_PAN;
-	if(pan_combined > (float)MAX_PAN) pan_combined = (float)MAX_PAN;
-	int pan_index = (int)(pan_combined - (float)MIN_PAN);
+	double pan_combined = pan + ch->current_pan;
+	if(pan_combined < (double)MIN_PAN) pan_combined = (double)MIN_PAN;
+	if(pan_combined > (double)MAX_PAN) pan_combined = (double)MAX_PAN;
+	int pan_index = (int)(pan_combined - (double)MIN_PAN);
 	const float pan_left = ss_panTableLeft[pan_index];
 	const float pan_right = ss_panTableRight[pan_index];
-	const float gain_left = pan_left * output_gain;
-	const float gain_right = pan_right * output_gain;
+	const double gain_left = pan_left * output_gain;
+	const double gain_right = pan_right * output_gain;
 
 	for(int i = 0; i < sample_count; i++) {
-		float s = buf[i];
-		out_left[i] += s * gain_left;
-		out_right[i] += s * gain_right;
+		const double s = buf[i];
+		out_left[i] += gain_left * s;
+		out_right[i] += gain_right * s;
 	}
 
 	/* Dry output is unconditional; the sends are not.  Upstream returns here
@@ -295,20 +295,20 @@ bool ss_voice_render(SS_Voice *v,
 	if(ch->synth && ch->synth->delay_active && delay) {
 		const int delaySend = (int)(ch->midi_controllers[SS_MIDCON_VARIATION_DEPTH] * v->delay_send);
 		if(delaySend > 0) {
-			const float delayGain =
+			const double delayGain =
 			output_gain *
 			ch->synth->system_params.delay_gain *
-			((float)(delaySend >> 7) / 127.0f);
+			((double)(delaySend >> 7) / 127.0);
 			for(int i = 0; i < sample_count; i++) {
-				const float s = delayGain * buf[i];
+				const double s = delayGain * buf[i];
 				delay[i] += s;
 			}
 		}
 	}
 
 	if(reverb && reverb_amt > 0) {
-		const float reverb_gain = output_gain * (reverb_amt / 1000.0f) *
-		                          (ch->synth ? ch->synth->system_params.reverb_gain : 1.0f);
+		const double reverb_gain = output_gain * (reverb_amt / 1000.0) *
+		                           (ch->synth ? ch->synth->system_params.reverb_gain : 1.0);
 		for(int i = 0; i < sample_count; i++) {
 			float s = buf[i];
 			reverb[i] += s * reverb_gain;
@@ -316,8 +316,8 @@ bool ss_voice_render(SS_Voice *v,
 	}
 
 	if(chorus && chorus_amt > 0) {
-		const float chorus_gain = output_gain * (chorus_amt / 1000.0f) *
-		                          (ch->synth ? ch->synth->system_params.chorus_gain : 1.0f);
+		const double chorus_gain = output_gain * (chorus_amt / 1000.0) *
+		                           (ch->synth ? ch->synth->system_params.chorus_gain : 1.0);
 		for(int i = 0; i < sample_count; i++) {
 			float s = buf[i];
 			chorus[i] += s * chorus_gain;
@@ -346,9 +346,9 @@ void ss_channel_render(SS_MIDIChannel *ch,
 		interp = (SS_InterpolationType)ch->system_params.interpolation_type;
 	else if(proc)
 		interp = proc->system_params.interpolation_type;
-	float vol_smoothing = proc ? proc->volume_envelope_smoothing_factor : 0.01f;
-	float filter_smoothing = proc ? proc->filter_smoothing_factor : 0.1f;
-	float pan_smoothing = proc ? proc->pan_smoothing_factor : 0.1f;
+	double vol_smoothing = proc ? proc->volume_envelope_smoothing_factor : 0.01;
+	double filter_smoothing = proc ? proc->filter_smoothing_factor : 0.1;
+	double pan_smoothing = proc ? proc->pan_smoothing_factor : 0.1;
 
 	for(size_t i = 0; i < ch->voice_count; i++) {
 		SS_Voice *v = ch->voices[i];
