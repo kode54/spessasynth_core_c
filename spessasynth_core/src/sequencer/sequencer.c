@@ -537,12 +537,9 @@ double ss_sequencer_get_time(const SS_Sequencer *seq) {
  * the status byte; for SysEx it is 0xF0 followed by the payload and
  * terminating 0xF7.  length counts every byte.
  *
- * When callbacks are configured, the buffer is passed verbatim.  When
- * driving the built-in SS_Processor, 0xF0 SysExes are passed to
- * ss_processor_sysex with the leading 0xF0 stripped (the existing
- * contract), while channel voice messages are dispatched via the
- * typed ss_processor_* calls.  Other system-common status bytes
- * (0xF5 port-select and friends) are passed raw to ss_processor_sysex.
+ * When callbacks are configured, the buffer is passed verbatim along with the
+ * song-timeline timestamp.  Otherwise it goes to ss_processor_process_message
+ * as due immediately, which is what every message the sequencer emits is.
  */
 static void dispatch_midi(SS_Sequencer *seq, const uint8_t *data,
                           size_t length, double timestamp) {
@@ -555,56 +552,19 @@ static void dispatch_midi(SS_Sequencer *seq, const uint8_t *data,
 	}
 	if(!seq->proc) return;
 
-	uint8_t sb = data[0];
-	if(sb == 0xF0) {
-		if(length >= 2)
-			ss_processor_sysex(seq->proc, data + 1, length - 1, timestamp);
-		return;
-	}
-	if(sb >= 0xF1) {
-		ss_processor_sysex(seq->proc, data, length, timestamp);
-		return;
-	}
-
-	uint8_t type = sb & 0xF0;
-	int ch = sb & 0x0F;
-	switch(type) {
-		case 0x80:
-			if(length >= 2)
-				ss_processor_note_off(seq->proc, ch, data[1], timestamp);
-			break;
-		case 0x90:
-			if(length >= 3) {
-				if(data[2] > 0)
-					ss_processor_note_on(seq->proc, ch, data[1], data[2], timestamp);
-				else
-					ss_processor_note_off(seq->proc, ch, data[1], timestamp);
-			}
-			break;
-		case 0xA0:
-			if(length >= 3)
-				ss_processor_poly_pressure(seq->proc, ch, data[1], data[2],
-				                           timestamp);
-			break;
-		case 0xB0:
-			if(length >= 3)
-				ss_processor_control_change(seq->proc, ch, data[1], data[2],
-				                            timestamp);
-			break;
-		case 0xC0:
-			if(length >= 2)
-				ss_processor_program_change(seq->proc, ch, data[1], timestamp);
-			break;
-		case 0xD0:
-			if(length >= 2)
-				ss_processor_channel_pressure(seq->proc, ch, data[1], timestamp);
-			break;
-		case 0xE0:
-			if(length >= 3)
-				ss_processor_pitch_wheel(seq->proc, ch,
-				                         (data[2] << 7) | data[1], -1, timestamp);
-			break;
-	}
+	/* Stamp with the engine clock, not the song timeline, exactly as upstream
+	 * does -- its sequencer passes synth.currentTime and never a song time.
+	 *
+	 * The two are different origins.  A sequencer timestamp is base_time plus
+	 * song time, which a seek deliberately rebases and which a skip to the
+	 * first note leaves far ahead of an engine clock still sitting at zero.
+	 * Handing that to the queue would defer the whole replayed lead-in --
+	 * program changes, controllers, the lot -- to some future block instead of
+	 * applying it before the first note, which is not a scheduling decision the
+	 * sequencer ever means to make.  Everything it emits is due now; only a
+	 * host scheduling ahead of the mix has reason to say otherwise. */
+	ss_processor_process_message(seq->proc, data, length, 0,
+	                             seq->proc->current_time);
 }
 
 /** Route a master-volume change to the active sink. */

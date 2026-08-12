@@ -168,6 +168,9 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 	return proc;
 }
 
+/* Defined with the message queue, below the dispatch entry points it calls. */
+static void drain_event_queue(SS_Processor *proc);
+
 void ss_processor_free(SS_Processor *proc) {
 	if(!proc) return;
 
@@ -175,6 +178,13 @@ void ss_processor_free(SS_Processor *proc) {
 		ss_channel_free(proc->midi_channels[i]);
 		proc->midi_channels[i] = NULL;
 	}
+
+	for(size_t i = 0; i < proc->event_queue_count; i++)
+		free(proc->event_queue[i].data);
+	free(proc->event_queue);
+	proc->event_queue = NULL;
+	proc->event_queue_count = 0;
+	proc->event_queue_allocated = 0;
 
 	/* Channels retire their voices into the pool; free it once they're gone. */
 	ss_voice_pool_free(&proc->voice_pool);
@@ -413,6 +423,11 @@ static void ss_processor_render_internal(SS_Processor *proc,
 	float *chr = chorus;
 	float *dly = delay;
 
+	/* Queued messages are applied against the clock of the block about to be
+	 * rendered, matching upstream, which drains its queue at the top of
+	 * renderAudio before any voice is touched. */
+	drain_event_queue(proc);
+
 	proc->voice_count = 0;
 
 	double time_now = proc->current_time;
@@ -516,21 +531,140 @@ void ss_processor_render_interleaved(SS_Processor *proc,
 	}
 }
 
+/* ── Message queue ───────────────────────────────────────────────────────── */
+
+/* Apply a message now, decoding it exactly as upstream's processMessageInternal
+ * does.  The typed entry points below take a timestamp of their own, which they
+ * ignore for voice timing; the engine clock is the only voice clock. */
+static void process_message_internal(SS_Processor *proc, const uint8_t *data,
+                                     size_t length, int channel_offset) {
+	if(!proc || !data || length == 0) return;
+
+	const double t = proc->current_time;
+	const uint8_t sb = data[0];
+
+	/* SysEx keeps the existing contract: 0xF0 is stripped, other system-common
+	 * status bytes are passed through whole. */
+	if(sb == 0xF0) {
+		if(length >= 2) ss_processor_sysex(proc, data + 1, length - 1, t);
+		return;
+	}
+	if(sb >= 0xF1) {
+		ss_processor_sysex(proc, data, length, t);
+		return;
+	}
+
+	const int ch = (sb & 0x0F) + channel_offset;
+	switch(sb & 0xF0) {
+		case 0x80:
+			if(length >= 2) ss_processor_note_off(proc, ch, data[1], t);
+			break;
+		case 0x90:
+			if(length >= 3) {
+				if(data[2] > 0)
+					ss_processor_note_on(proc, ch, data[1], data[2], t);
+				else
+					ss_processor_note_off(proc, ch, data[1], t);
+			}
+			break;
+		case 0xA0:
+			if(length >= 3)
+				ss_processor_poly_pressure(proc, ch, data[1], data[2], t);
+			break;
+		case 0xB0:
+			if(length >= 3)
+				ss_processor_control_change(proc, ch, data[1], data[2], t);
+			break;
+		case 0xC0:
+			if(length >= 2) ss_processor_program_change(proc, ch, data[1], t);
+			break;
+		case 0xD0:
+			if(length >= 2) ss_processor_channel_pressure(proc, ch, data[1], t);
+			break;
+		case 0xE0:
+			if(length >= 3)
+				ss_processor_pitch_wheel(proc, ch, (data[2] << 7) | data[1], -1, t);
+			break;
+		default:
+			break;
+	}
+}
+
+void ss_processor_process_message(SS_Processor *proc, const uint8_t *data,
+                                  size_t length, int channel_offset,
+                                  double time) {
+	if(!proc || !data || length == 0) return;
+
+	if(time <= proc->current_time) {
+		process_message_internal(proc, data, length, channel_offset);
+		return;
+	}
+
+	if(proc->event_queue_count == proc->event_queue_allocated) {
+		size_t want = proc->event_queue_allocated ? proc->event_queue_allocated * 2 : 16;
+		SS_QueuedMessage *grown = realloc(proc->event_queue, want * sizeof(*grown));
+		/* Dropping a scheduled message would desynchronize the song far worse
+		 * than applying it a block early, so fall back to immediate dispatch. */
+		if(!grown) { process_message_internal(proc, data, length, channel_offset); return; }
+		proc->event_queue = grown;
+		proc->event_queue_allocated = want;
+	}
+
+	uint8_t *copy = malloc(length);
+	if(!copy) { process_message_internal(proc, data, length, channel_offset); return; }
+	memcpy(copy, data, length);
+
+	/* Insert in time order.  Upstream sorts the whole queue on every push;
+	 * messages arrive in time order in practice, so an insertion from the back
+	 * settles in one comparison and keeps equal timestamps in arrival order. */
+	size_t at = proc->event_queue_count;
+	while(at > 0 && proc->event_queue[at - 1].time > time) {
+		proc->event_queue[at] = proc->event_queue[at - 1];
+		at--;
+	}
+	proc->event_queue[at].data = copy;
+	proc->event_queue[at].length = length;
+	proc->event_queue[at].channel_offset = channel_offset;
+	proc->event_queue[at].time = time;
+	proc->event_queue_count++;
+}
+
+/** Apply every queued message the engine clock has now reached. */
+static void drain_event_queue(SS_Processor *proc) {
+	if(proc->event_queue_count == 0) return;
+
+	size_t done = 0;
+	while(done < proc->event_queue_count &&
+	      proc->event_queue[done].time <= proc->current_time) {
+		SS_QueuedMessage *q = &proc->event_queue[done];
+		process_message_internal(proc, q->data, q->length, q->channel_offset);
+		free(q->data);
+		done++;
+	}
+	if(done == 0) return;
+
+	proc->event_queue_count -= done;
+	if(proc->event_queue_count)
+		memmove(proc->event_queue, proc->event_queue + done,
+		        proc->event_queue_count * sizeof(*proc->event_queue));
+}
+
 /* ── MIDI event dispatch ─────────────────────────────────────────────────── */
 
-/* Upstream treats a message's timestamp purely as a scheduling key: it decides
- * whether a message waits for a later block, and every voice it then touches is
- * stamped with synthCore.currentTime.  The event's own time never dates a voice.
+/* Upstream treats a message's timestamp purely as a scheduling key:
+ * processMessage() queues anything stamped later than the synthesizer clock and
+ * otherwise runs it immediately, and every voice it then touches is stamped with
+ * synthCore.currentTime.  The event's own time never reaches a voice.
  *
- * Threading the caller's timestamp down here instead put voice clocks on the
+ * Threading the caller's timestamp down instead put voice clocks on the
  * sequencer's song timeline, which the block-deferred tick leaves one quantum
  * behind the block being rendered.  Anything comparing a voice time against the
  * render clock then fired a block early -- the LFO delay gates most visibly,
  * since a sub-block delay had always elapsed by the voice's first render, so
- * vibrato ran a step ahead of upstream for the life of the note.
+ * vibrato ran one LFO step ahead of upstream for the life of the note.
  *
- * These entry points therefore ignore their timestamp for voice timing; the
- * engine clock is the only voice clock. */
+ * These entry points therefore ignore their timestamp for voice timing.
+ * Scheduling lives one level up, in ss_processor_process_message. */
 void ss_processor_note_on(SS_Processor *proc, int ch, int note, int vel, double t) {
 	if(vel == 0) {
 		ss_processor_note_off(proc, ch, note, t);
