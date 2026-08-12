@@ -18,7 +18,7 @@
 #define FILTER_SMOOTHING_FACTOR 0.03f
 
 extern float ss_abs_cents_to_hz(int cents);
-extern float ss_centibel_attenuation_to_gain(float cb);
+extern float ss_centibel_attenuation_to_gain(double cb);
 
 /* ── Cached coefficient table ───────────────────────────────────────────────
  * Indexed as cache[resonance_cb][cutoff_cents_floor].

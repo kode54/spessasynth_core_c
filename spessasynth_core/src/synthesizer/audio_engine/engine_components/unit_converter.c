@@ -91,10 +91,17 @@ static void init_centibel_table(void) {
 	centibel_initialized = true;
 }
 
-float ss_centibel_attenuation_to_gain(float centibels) {
+/* Takes a double: the caller's centibel value is a double everywhere it is
+ * computed, and rounding it to float first moved values sitting just under an
+ * integer onto the other side of it.  The table is indexed by whole centibels,
+ * so that lands on the neighbouring entry and the gain steps a block early --
+ * audible on the grid as a note-dependent loss on an otherwise exact render.
+ *
+ * Truncation is toward zero rather than floor, matching upstream's `| 0`. */
+float ss_centibel_attenuation_to_gain(double centibels) {
 	if(!centibel_initialized) init_centibel_table();
 	if(!centibel_table) return (float)pow(10.0, -centibels / 200.0);
-	int idx = (int)floorf(centibels - MIN_CENTIBELS);
+	int idx = (int)(centibels - MIN_CENTIBELS);
 	if(idx < 0) idx = 0;
 	if(idx >= CENTIBEL_SIZE) idx = CENTIBEL_SIZE - 1;
 	return centibel_table[idx];
