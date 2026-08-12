@@ -59,17 +59,17 @@ void ss_delay_line_process(SS_DelayLine *delayLine,
 	const unsigned int delay = delayLine->time;
 	float *buffer = delayLine->buffer;
 	const unsigned int bufferLength = delayLine->bufferLength;
-	const float feedback = delayLine->feedback;
-	const float gain = delayLine->gain;
+	const double feedback = delayLine->feedback;
+	const double gain = delayLine->gain;
 
 	for(int i = 0; i < sample_count; i++) {
 		int readIndex = (signed)writeIndex - (signed)delay;
 		if(readIndex < 0) readIndex += bufferLength;
 
-		const float delayed = buffer[readIndex];
-		out[i] = delayed * gain;
+		const double delayed = buffer[readIndex];
+		out[i] = (float)(delayed * gain);
 
-		buffer[writeIndex] = in[i] + delayed * feedback;
+		buffer[writeIndex] = (float)(in[i] + delayed * feedback);
 
 		if(++writeIndex >= bufferLength) writeIndex = 0;
 	}

@@ -250,27 +250,27 @@ void ss_chorus_process(SS_Chorus *chorus,
                        int sample_count) {
 	float *bufferL = chorus->leftDelayBuffer;
 	float *bufferR = chorus->rightDelayBuffer;
-	const float rateInc = chorus->rateInc;
+	const double rateInc = chorus->rateInc;
 	const unsigned int bufferLen = chorus->maxBufferSize;
-	const float depth = chorus->depthSamples;
-	const float delay = chorus->delaySamples;
-	const float gain = chorus->gain;
-	const float reverbGain = chorus->reverbGain;
-	const float delayGain = chorus->delayGain;
-	const float feedback = chorus->feedbackGain;
+	const double depth = chorus->depthSamples;
+	const double delay = chorus->delaySamples;
+	const double gain = chorus->gain;
+	const double reverbGain = chorus->reverbGain;
+	const double delayGain = chorus->delayGain;
+	const double feedback = chorus->feedbackGain;
 
 	const bool preLPF = chorus->parameters.preLowpass > 0;
-	float phase = chorus->phase;
+	double phase = chorus->phase;
 	unsigned int write = chorus->write;
-	float z = chorus->preLPFz;
-	const float a = chorus->preLPFa;
+	double z = chorus->preLPFz;
+	const double a = chorus->preLPFa;
 
 	const bool outReverb = outputReverb && reverbGain > 0.0;
 	const bool outDelay = outputDelay && delayGain > 0.0;
 
 	int i;
 	for(i = 0; i < sample_count; i++) {
-		float inputSample = input[i];
+		double inputSample = input[i];
 		// Pre lowpass filter
 		if(preLPF) {
 			z += a * (inputSample - z);
@@ -278,45 +278,45 @@ void ss_chorus_process(SS_Chorus *chorus,
 		}
 
 		// Triangle LFO (GS uses triangle)
-		const float lfo = 2.0f * fabsf(phase - 0.5f);
+		const double lfo = 2.0 * fabs(phase - 0.5);
 
 		// Read position
-		const float dL = max(1.0f, min(delay + lfo * depth, (float)bufferLen));
-		float readPosL = (float)write - dL;
-		if(readPosL < 0.0) readPosL += (float)bufferLen;
+		const double dL = max(1.0, min(delay + lfo * depth, (double)bufferLen));
+		double readPosL = (double)write - dL;
+		if(readPosL < 0.0) readPosL += (double)bufferLen;
 
 		// Linear interpolation
 		unsigned int x0 = (unsigned int)readPosL;
 		unsigned int x1 = x0 + 1;
 		if(x1 >= bufferLen) x1 -= bufferLen;
-		float frac = readPosL - (float)x0;
-		const float outL = bufferL[x0] * (1.0f - frac) + bufferL[x1] * frac;
+		double frac = readPosL - (double)x0;
+		const double outL = bufferL[x0] * (1.0 - frac) + bufferL[x1] * frac;
 
 		// Write input sample
-		bufferL[write] = inputSample + outL * feedback;
+		bufferL[write] = (float)(inputSample + outL * feedback);
 
 		// Same for the right line (shared buffer for now for testing)
-		const float dR = max(1.0f, min(delay + (1.0f - lfo) * depth, (float)bufferLen));
-		float readPosR = (float)write - dR;
-		if(readPosR < 0.0) readPosR += (float)bufferLen;
-		readPosR = fmodf(readPosR, (float)bufferLen);
+		const double dR = max(1.0, min(delay + (1.0 - lfo) * depth, (double)bufferLen));
+		double readPosR = (double)write - dR;
+		if(readPosR < 0.0) readPosR += (double)bufferLen;
+		readPosR = fmod(readPosR, (double)bufferLen);
 
 		// Linear interpolation
 		x0 = (unsigned int)readPosR;
 		x1 = x0 + 1;
 		if(x1 >= bufferLen) x1 -= bufferLen;
-		frac = readPosR - (float)x0;
-		const float outR = bufferR[x0] * (1.0f - frac) + bufferR[x1] * frac;
+		frac = readPosR - (double)x0;
+		const double outR = bufferR[x0] * (1.0 - frac) + bufferR[x1] * frac;
 
 		// Write input sample
-		bufferR[write] = inputSample + outR * feedback;
+		bufferR[write] = (float)(inputSample + outR * feedback);
 
 		// Mix outputs
 		*outputL++ += outL * gain;
 		*outputR++ += outR * gain;
 
 		// Mono downmix for effects
-		const float mono = (outL + outR) / 2.0f;
+		const double mono = (outL + outR) / 2.0;
 
 		// Mix other effects outputs
 		if(outReverb) {

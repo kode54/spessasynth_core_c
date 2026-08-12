@@ -33,9 +33,9 @@ typedef struct SS_DelayParams {
 typedef struct SS_Delay {
 	SS_DelayParams parameters;
 
-	float preLPFfc;
-	float preLPFa;
-	float preLPFz;
+	double preLPFfc;
+	double preLPFa;
+	double preLPFz;
 
 	SS_DelayLine *delayLeft;
 	SS_DelayLine *delayRight;
@@ -47,12 +47,12 @@ typedef struct SS_Delay {
 	float *delay_center_output;
 	float *delay_pre_lpf;
 
-	float delay_center_time;
-	float delay_left_multiplier;
-	float delay_right_multiplier;
+	double delay_center_time;
+	double delay_left_multiplier;
+	double delay_right_multiplier;
 
-	float gain;
-	float reverb_gain;
+	double gain;
+	double reverb_gain;
 } SS_Delay;
 
 SS_Delay SPESSASYNTH_EXPORTS *ss_delay_create(float sample_rate, int max_buffer_size);

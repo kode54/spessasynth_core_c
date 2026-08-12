@@ -353,12 +353,12 @@ void ss_delay_process(SS_Delay *delay,
 	const float *delayIn;
 	if(delay->parameters.pre_lowpass > 0) {
 		float *preLPF = delay->delay_pre_lpf;
-		float z = delay->preLPFz;
-		const float a = delay->preLPFa;
+		double z = delay->preLPFz;
+		const double a = delay->preLPFa;
 		for(int i = 0; i < sample_count; i++) {
-			const float x = input[i];
+			const double x = input[i];
 			z += a * (x - z);
-			preLPF[i] = z;
+			preLPF[i] = (float)z;
 		}
 		delay->preLPFz = z;
 		delayIn = preLPF;
@@ -374,8 +374,8 @@ void ss_delay_process(SS_Delay *delay,
 	Also level is separate from reverb send level,
 	i.e. level = 0 and reverb send level = 127 will still send sound to reverb.
 	 */
-	const float gain = delay->gain;
-	const float reverbGain = delay->reverb_gain;
+	const double gain = delay->gain;
+	const double reverbGain = delay->reverb_gain;
 
 	/* Process center first */
 	ss_delay_line_process(delay->delayCenter, delayIn, delay->delay_center_output, sample_count);
