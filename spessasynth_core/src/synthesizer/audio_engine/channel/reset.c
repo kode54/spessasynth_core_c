@@ -85,7 +85,17 @@ static const float custom_reset_array[SS_CUSTOM_CTRL_COUNT] = {
  * https://amei.or.jp/midistandardcommittee/Recommended_Practice/e/rp15.pdf
  * Reset controllers according to RP-15 Recommended Practice.
  */
+extern void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time);
+
 void ss_channel_reset_rp15(SS_MIDIChannel *ch, double time) {
+	/* RP-15 resets the pitch bend to centre and clears channel pressure
+	 * before the controller list; upstream's resetRP15 does both first.
+	 * Without them a bend stays bent and aftertouch stays applied across a
+	 * Reset All Controllers. */
+	ss_channel_pitch_wheel(ch, 8192, -1, time);
+	ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_CHANNEL_PRESSURE] = 0;
+	ss_channel_compute_modulators(ch, time);
+
 	const uint8_t rp_15_reset_cc_nums[] = {
 		SS_MIDCON_MODULATION_WHEEL,
 		SS_MIDCON_EXPRESSION,
