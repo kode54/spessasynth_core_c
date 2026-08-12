@@ -376,12 +376,16 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		voice->modulated_generators[SS_GEN_ENDLOOP_ADDRS_COARSE_OFFSET] *
 		32768;
 
-		/* Clamp the sample offsets */
-		const signed long lastSample = (long)(audio.sample_data_len - 1);
-		voice->sample.cursor = clamp_long(cursorStartOffset, 0, lastSample);
-		voice->sample.end = clamp_long(lastSample + endOffset, 0, lastSample);
-		voice->sample.loop_start = clamp_long((long)audio.loop_start + loopStartOffset, 0, lastSample);
-		voice->sample.loop_end = clamp_long((long)audio.loop_end + loopEndOffset, 0, lastSample);
+		/* Clamp the sample offsets.
+		 *
+		 * end, loop_start and loop_end are all exclusive bounds, so they
+		 * clamp against the sample length itself; only the cursor, which
+		 * indexes real data, clamps to the last valid sample. */
+		const signed long endExclusive = (long)audio.sample_data_len;
+		voice->sample.cursor = clamp_long(cursorStartOffset, 0, endExclusive - 1);
+		voice->sample.end = clamp_long(endExclusive + endOffset, 0, endExclusive);
+		voice->sample.loop_start = clamp_long((long)audio.loop_start + loopStartOffset, 0, endExclusive);
+		voice->sample.loop_end = clamp_long((long)audio.loop_end + loopEndOffset, 0, endExclusive);
 
 		// Swap loops if needed
 		if(voice->sample.loop_end < voice->sample.loop_start) {
