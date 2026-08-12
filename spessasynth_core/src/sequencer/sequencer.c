@@ -150,6 +150,49 @@ void ss_sequencer_free(SS_Sequencer *seq) {
 
 void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick);
 
+/* ── Seek snapshot ───────────────────────────────────────────────────────── */
+
+/* Per-channel state accumulated while scanning past events during a seek,
+ * applied in one pass afterwards.  Mirrors upstream's ChannelStatus. */
+typedef struct {
+	int16_t controllers[128]; /* 14-bit, as stored on the channel */
+	int pitch_wheel; /* 14-bit, 8192 is centre */
+	int portamento_note; /* -1 when none */
+} SS_SeekChannelState;
+
+/* Controllers whose effect depends on the order they arrive in, or which
+ * select what a following data entry applies to.  A snapshot cannot express
+ * that, so these are dispatched as they are encountered instead. */
+static bool seek_cc_is_non_skippable(uint8_t cc) {
+	switch(cc) {
+		case SS_MIDCON_DATA_INCREMENT:
+		case SS_MIDCON_DATA_DECREMENT:
+		case SS_MIDCON_DATA_ENTRY_MSB:
+		case SS_MIDCON_DATA_ENTRY_LSB:
+		case SS_MIDCON_RPN_LSB:
+		case SS_MIDCON_RPN_MSB:
+		case SS_MIDCON_NRPN_LSB:
+		case SS_MIDCON_NRPN_MSB:
+		case SS_MIDCON_BANK_SELECT:
+		case SS_MIDCON_BANK_SELECT_LSB:
+		case SS_MIDCON_RESET_ALL_CONTROLLERS:
+		case SS_MIDCON_MONO_MODE_ON:
+		case SS_MIDCON_POLY_MODE_ON:
+			return true;
+		default:
+			return false;
+	}
+}
+
+/* RP-15 reset applied to the snapshot rather than to the channel. */
+static void seek_reset_all_controllers(SS_SeekChannelState *cs) {
+	cs->pitch_wheel = 8192;
+	for(size_t i = 0; i < SS_RP15_RESET_CC_COUNT; i++) {
+		const uint8_t cc = ss_rp15_reset_cc_nums[i];
+		cs->controllers[cc] = ss_default_controller_values[cc];
+	}
+}
+
 /** Arrange to start at the first note-on rather than at tick 0.
  *
  *  Driving the built-in processor, the lead-in is replayed by a seek: its
@@ -372,15 +415,37 @@ void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick) {
 	/* Reset processor */
 	dispatch_reset(seq);
 
-	/* Fast-forward: replay CC / Program / Pitch wheel / SysEx only, skipping
-	 * notes and pressure so the seek is silent.
+	/* Fast-forward to the target.
+	 *
+	 * Controller and pitch-wheel state is accumulated into a per-channel
+	 * snapshot and applied once at the end, rather than every intermediate
+	 * value being dispatched on the way past.  Replaying them live leaves the
+	 * channel walking through states it never actually occupied, and lands
+	 * RPN/NRPN parameter selection wherever the last data entry happened to
+	 * point.  This is what upstream's setTimeTo does.
+	 *
+	 * Program changes, channel pressure and non-controller SysEx are still
+	 * dispatched live: some files edit drum parameters over SysEx, and
+	 * deferring the program change past them would reset what they set.
 	 *
 	 * The landing time is accumulated from exact tick deltas rather than
 	 * converted from the target tick.  ss_midi_ticks_to_seconds rounds
 	 * through the tempo map, and half a tick of error is enough to drop the
 	 * first event after the seek into the following render block.  Stopping
 	 * on the tick rather than on a converted time avoids the same rounding
-	 * on the loop bound.  Both match upstream's setTimeTo. */
+	 * on the loop bound. */
+	const int channel_count = seq->proc ? seq->proc->channel_count : SS_CHANNEL_COUNT;
+	SS_SeekChannelState *snapshot =
+	(SS_SeekChannelState *)calloc((size_t)channel_count, sizeof(*snapshot));
+	if(snapshot) {
+		for(int i = 0; i < channel_count; i++) {
+			snapshot[i].pitch_wheel = 8192;
+			snapshot[i].portamento_note = -1;
+			memcpy(snapshot[i].controllers, ss_default_controller_values,
+			       sizeof(snapshot[i].controllers));
+		}
+	}
+
 	double played = 0.0;
 	double one_tick_sec = (midi->time_division > 0) ? (60.0 / (120.0 * (double)midi->time_division)) : (60.0 / (120.0 * 480.0));
 
@@ -400,11 +465,37 @@ void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick) {
 		}
 
 		if(sb >= 0x80 && sb < 0xF0) {
-			uint8_t type = sb & 0xF0;
-			if(type == 0x90 && e->data_length >= 2 && e->data[1] == 0)
+			const uint8_t type = sb & 0xF0;
+			const int chan = effective_channel(midi, e);
+			SS_SeekChannelState *cs =
+			(snapshot && chan >= 0 && chan < channel_count) ? &snapshot[chan] : NULL;
+
+			if(type == 0x90) {
+				/* Track the last note for portamento even while seeking.
+				 * See spessasynth_core issue #77. */
+				if(cs && e->data_length >= 1) cs->portamento_note = e->data[0];
+			} else if(type == 0xE0) {
+				if(cs && e->data_length >= 2)
+					cs->pitch_wheel = ((int)e->data[1] << 7) | e->data[0];
+			} else if(type == 0xB0) {
+				if(cs && e->data_length >= 2) {
+					const uint8_t cc = e->data[0];
+					const uint8_t value = e->data[1];
+					if(cc == SS_MIDCON_RESET_ALL_CONTROLLERS) {
+						seek_reset_all_controllers(cs);
+					} else if(seek_cc_is_non_skippable(cc)) {
+						/* Bank selects, parameter selection and data entry
+						 * carry sequencing that a snapshot cannot express. */
+						dispatch_voice_event(seq, midi, e, previous_time);
+					} else {
+						cs->controllers[cc] = (int16_t)(value << 7);
+					}
+				}
+			} else if(type == 0xC0 || type == 0xD0) {
+				/* Program change and channel pressure go through live. */
 				dispatch_voice_event(seq, midi, e, previous_time);
-			else if(type == 0x80 || type == 0xB0 || type == 0xC0 || type == 0xE0)
-				dispatch_voice_event(seq, midi, e, previous_time);
+			}
+			/* Note-off and poly pressure are simply skipped. */
 		} else if(sb == 0xF0) {
 			dispatch_sysex_event(seq, midi, e, previous_time);
 		}
@@ -417,6 +508,29 @@ void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick) {
 	}
 
 	seq->one_tick_seconds = one_tick_sec;
+
+	/* Apply the accumulated snapshot: pitch wheel, then the portamento note
+	 * (before the controllers, since portamento control may override it),
+	 * then every controller that actually changed. */
+	if(snapshot && seq->proc) {
+		for(int i = 0; i < channel_count; i++) {
+			SS_MIDIChannel *mch = seq->proc->midi_channels[i];
+			if(!mch) continue;
+			const SS_SeekChannelState *cs = &snapshot[i];
+
+			ss_channel_pitch_wheel(mch, cs->pitch_wheel, -1, previous_time);
+
+			if(cs->portamento_note >= 0) mch->last_note = cs->portamento_note;
+
+			for(int cc = 0; cc < 128; cc++) {
+				if(cs->controllers[cc] == ss_default_controller_values[cc]) continue;
+				if(seek_cc_is_non_skippable((uint8_t)cc)) continue;
+				ss_channel_controller(mch, cc, cs->controllers[cc] >> 7,
+				                      previous_time);
+			}
+		}
+	}
+	free(snapshot);
 
 	/* Land on the first event at or after the target, timed in the same
 	 * accumulated frame the dispatch loop works in — upstream likewise
