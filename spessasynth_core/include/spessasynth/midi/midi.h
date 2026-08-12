@@ -181,12 +181,13 @@ bool SPESSASYNTH_EXPORTS ss_midi_ensure_timeline(SS_MIDIFile *midi);
  *
  * SS_EMIDI_KIND_ANY   : the track has no CC 110 event; it is intended for
  *                      any receiver (the default, standard-MIDI behavior).
- * SS_EMIDI_KIND_GM    : the track carries at least one CC 110 designation
- *                      and all such designations are GM-compatible
- *                      (values 0, 1, or 127).
- * SS_EMIDI_KIND_OTHER : the track contains a CC 110 designation with a
- *                      value outside {0, 1, 127} — it is authored for a
- *                      specific non-GM target (MT-32, LAPC, etc.).
+ * SS_EMIDI_KIND_GM    : at least one of the track's CC 110 designations
+ *                      names General MIDI (0) or every card (127).  One
+ *                      match is enough — a track designated for several
+ *                      cards plays on each of them.
+ * SS_EMIDI_KIND_OTHER : the track carries CC 110 designations and none of
+ *                      them names us — it is the copy authored for some
+ *                      other card (Sound Canvas, AWE32, Adlib, …).
  */
 typedef enum {
 	SS_EMIDI_KIND_ANY = 0,
@@ -209,10 +210,11 @@ SS_EMIDIKind SPESSASYNTH_EXPORTS ss_midi_track_emidi_kind(const SS_MIDITrack *tr
  *  true here may still have no track to drop. */
 bool SPESSASYNTH_EXPORTS ss_midi_has_emidi(const SS_MIDIFile *midi);
 
-/** Drop tracks whose EMIDI CC 110 designation marks them as targeting a
- *  non-GM synthesizer.  Tracks without CC 110 or with GM-compatible
- *  designations (0/1/127) are preserved.  After calling this you should
- *  invoke ss_midi_flush to refresh derived caches (duration, loop, etc.).
+/** Drop tracks whose EMIDI CC 110 designations all name cards other than
+ *  ours.  Tracks without CC 110, and tracks naming General MIDI (0) or
+ *  every card (127) among their designations, are preserved.  After
+ *  calling this you should invoke ss_midi_flush to refresh derived caches
+ *  (duration, loop, etc.).
  *
  *  Returns the number of tracks removed. */
 size_t SPESSASYNTH_EXPORTS ss_midi_remove_emidi_non_gm(SS_MIDIFile *midi);

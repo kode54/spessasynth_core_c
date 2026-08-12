@@ -3,21 +3,32 @@
  * EMIDI (Extended MIDI) track-designation scanning and filtering.
  *
  * Tracks in EMIDI-aware files carry CC 110 ("Track Designation") events
- * that tell the sequencer which synthesizer target the track is authored
- * for:
+ * naming the sound cards the track is authored for.  Apogee's AudioLib
+ * numbers them (audiolib/_midi.h):
  *
- *   value  0       plays only on General MIDI receivers
- *   value  1       plays only on General MIDI receivers (alternate)
- *   value  127     plays on every receiver (universal / fallback)
- *   any other      targets a specific non-GM device (MT-32, LAPC, SCC-1, …)
+ *    0  General MIDI          5  Pro Audio Spectrum
+ *    1  Roland Sound Canvas   6  Sound Man 16
+ *    2  Sound Blaster AWE32   7  Adlib
+ *    3  Wave Blaster          8  Ensoniq Soundscape
+ *    4  Sound Blaster         9  Gravis Ultrasound
  *
- * A song built for multiple synths duplicates its content across tracks
- * and marks each copy with the appropriate CC 110 value.  Playing the
- * file as plain GM therefore doubles (or triples) the voices unless the
- * non-GM copies are removed.
+ *  127  every card (EMIDI_ALL_CARDS, the wildcard — 0 is *not* a wildcard)
  *
- * Port of the EMIDI "clean" behavior from midi_processing's
- * midi_container::serialize_as_stream.
+ * A song built for several cards duplicates its content across tracks and
+ * marks each copy with the designations it belongs to, so playing the file
+ * without filtering doubles (or triples) the voices.
+ *
+ * A track carrying designations plays if *any* one of them names the card
+ * we are: AudioLib's _MIDI_InitEMIDI latches EMIDI_IncludeTrack on the
+ * first match and never clears it (its `IncludeFound` guard only lets the
+ * first designation seen decide against us).  A track listing several
+ * cards including ours therefore plays — matching on all of them is not
+ * required, and demanding that drops parts that should sound.
+ *
+ * Derived from the EMIDI "clean" behavior in midi_processing's
+ * midi_container::serialize_as_stream, corrected against AudioLib: that
+ * implementation drops a track on its first designation outside
+ * {0, 1, 127} without regard to the rest.
  */
 
 #include <stdlib.h>
@@ -37,22 +48,31 @@ static bool is_track_designation(const SS_MIDIMessage *e) {
 	       e->data[0] == 110;
 }
 
+/* The card we play as.  AudioLib hardcodes type = EMIDI_GeneralMIDI, and
+ * we are a General MIDI receiver, so device 0 is ours and 127 matches
+ * everyone.  Device 1 is the Sound Canvas — a *different* card, however
+ * GM-compatible it is in practice.  Accepting it as well would keep both
+ * halves of a Sound-Canvas/General-MIDI pair, which is exactly the
+ * doubling the filter exists to prevent. */
+#define SS_EMIDI_ALL_CARDS 127
+#define SS_EMIDI_OUR_CARD 0
+
+static bool designates_our_card(uint8_t device) {
+	return device == SS_EMIDI_OUR_CARD || device == SS_EMIDI_ALL_CARDS;
+}
+
 SS_EMIDIKind ss_midi_track_emidi_kind(const SS_MIDITrack *track) {
 	if(!track) return SS_EMIDI_KIND_ANY;
-	SS_EMIDIKind kind = SS_EMIDI_KIND_ANY;
+	bool designated = false;
 	for(size_t i = 0; i < track->event_count; i++) {
 		const SS_MIDIMessage *e = &track->events[i];
 		if(!is_track_designation(e)) continue;
-		uint8_t v = e->data[1];
-		if(v == 0 || v == 1 || v == 127) {
-			if(kind == SS_EMIDI_KIND_ANY) kind = SS_EMIDI_KIND_GM;
-			/* Scan to the end — any later non-GM designation downgrades
-			 * the verdict. */
-		} else {
-			return SS_EMIDI_KIND_OTHER;
-		}
+		/* Any single match carries the whole track. */
+		if(designates_our_card(e->data[1])) return SS_EMIDI_KIND_GM;
+		designated = true;
 	}
-	return kind;
+	/* Designated, but never for us — this copy belongs to another card. */
+	return designated ? SS_EMIDI_KIND_OTHER : SS_EMIDI_KIND_ANY;
 }
 
 /* ── File-level scan ─────────────────────────────────────────────────────── */
