@@ -198,6 +198,10 @@ typedef struct SS_Voice {
 	bool is_in_release;
 	bool has_rendered; /* set to true after the first render call */
 
+	/* Which note-on on this channel's midi_note started this voice; a
+	 * note-off only releases voices carrying the matching id. */
+	uint32_t note_id;
+
 	int velocity;
 	int midi_note;
 	int pressure;
@@ -526,6 +530,21 @@ typedef struct SS_MIDIChannel {
 	size_t sustained_count;
 	size_t sustained_capacity;
 
+	/* Which notes are physically held down, regardless of what is sounding.
+	 * Mono mode reads this to decide which note to fall back to. */
+	bool playing_notes[128];
+
+	/* Monophonic mode note priority: the note currently sounding and the
+	 * velocity to restore a fallback note with.  -1 when nothing sounds. */
+	int last_mono_note;
+	int last_mono_velocity;
+
+	/* Pairs each note-off with the note-on it belongs to, so overlapping
+	 * note-ons of the same pitch are released one at a time in order
+	 * rather than all together. */
+	uint32_t note_on_id[128];
+	uint32_t note_off_id[128];
+
 	int channel_number;
 	struct SS_Processor *synth; /* non-owning back-pointer */
 } SS_MIDIChannel;
@@ -533,6 +552,14 @@ typedef struct SS_MIDIChannel {
 SS_MIDIChannel SPESSASYNTH_EXPORTS *ss_channel_new(int channel_number, struct SS_Processor *synth);
 void SPESSASYNTH_EXPORTS ss_channel_free(SS_MIDIChannel *ch);
 void SPESSASYNTH_EXPORTS ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time);
+
+/** Note-on with control over whether a new note id is consumed.  Pass true
+ *  unless retriggering a note as a consequence of a note-off, as monophonic
+ *  mode does when falling back to a still-held note. */
+void SPESSASYNTH_EXPORTS ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, bool emit);
+
+/** Cut every voice on a note almost immediately, resetting its id pairing. */
+void SPESSASYNTH_EXPORTS ss_channel_kill_note(SS_MIDIChannel *ch, int note, int release_time, double time);
 void SPESSASYNTH_EXPORTS ss_channel_note_off(SS_MIDIChannel *ch, int note, double time);
 void SPESSASYNTH_EXPORTS ss_channel_all_notes_off(SS_MIDIChannel *ch, double time);
 void SPESSASYNTH_EXPORTS ss_channel_all_sound_off(SS_MIDIChannel *ch);

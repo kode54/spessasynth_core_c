@@ -189,6 +189,14 @@ void ss_channel_reset_internal(SS_MIDIChannel *ch) {
 	ss_channel_pitch_wheel(ch, 8192, -1, 0);
 
 	reset_portamento(ch);
+
+	/* Note state: nothing is held, nothing is sounding, id pairing cleared. */
+	memset(ch->playing_notes, 0, sizeof(ch->playing_notes));
+	memset(ch->note_on_id, 0, sizeof(ch->note_on_id));
+	memset(ch->note_off_id, 0, sizeof(ch->note_off_id));
+	ch->last_mono_note = -1;
+	ch->last_mono_velocity = 0;
+
 	ss_channel_reset_drum_params(ch);
 	ss_channel_reset_parameters_to_defaults(ch);
 

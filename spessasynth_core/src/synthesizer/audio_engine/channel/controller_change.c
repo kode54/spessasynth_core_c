@@ -104,6 +104,16 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 			ss_channel_all_sound_off(ch);
 			break;
 
+		case SS_MIDCON_POLY_MODE_ON:
+			ss_channel_all_sound_off(ch);
+			ch->midi_params.poly_mode = true;
+			break;
+
+		case SS_MIDCON_MONO_MODE_ON:
+			ss_channel_all_sound_off(ch);
+			ch->midi_params.poly_mode = false;
+			break;
+
 		case SS_MIDCON_BANK_SELECT:
 			ch->bank_msb = val;
 			/* Ensure that for XG, drum channels always are 127
