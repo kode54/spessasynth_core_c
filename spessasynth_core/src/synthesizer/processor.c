@@ -577,6 +577,33 @@ void ss_processor_poly_pressure(SS_Processor *proc, int ch, int note, int pressu
 
 /* ── System reset ────────────────────────────────────────────────────────── */
 
+void ss_processor_update_active_effects(SS_Processor *proc) {
+	if(!proc) return;
+
+	if(!proc->system_params.insertion_effect_lock) {
+		bool any_efx = false;
+		for(int i = 0; i < proc->channel_count; i++) {
+			const SS_MIDIChannel *ch = proc->midi_channels[i];
+			if(ch && ch->midi_params.efx_assign) { any_efx = true; break; }
+		}
+		proc->insertion_active = any_efx;
+	}
+
+	if(!proc->system_params.delay_lock) {
+		bool active = false;
+		if(proc->midi_params.system != SS_SYSTEM_XG) {
+			active = (proc->chorus && proc->chorus->delayGain > 0.0f) ||
+			         (proc->insertion && proc->insertion->send_level_to_delay > 0.0f);
+			for(int i = 0; !active && i < proc->channel_count; i++) {
+				const SS_MIDIChannel *ch = proc->midi_channels[i];
+				if(ch && ch->midi_controllers[SS_MIDCON_VARIATION_DEPTH] > 0)
+					active = true;
+			}
+		}
+		proc->delay_active = active;
+	}
+}
+
 void ss_processor_system_reset(SS_Processor *proc) {
 	if(!proc) return;
 
@@ -615,7 +642,6 @@ void ss_processor_system_reset(SS_Processor *proc) {
 	ss_chorus_set_macro(proc->chorus, 2);
 	// Delay1 default
 	ss_delay_set_macro(proc->delay, 0);
-	if(!proc->system_params.delay_lock) proc->delay_active = false;
 
 	/* Reset insertion: free old processor, create default Thru */
 	ss_insertion_free(proc->insertion);
@@ -643,6 +669,8 @@ void ss_processor_system_reset(SS_Processor *proc) {
 		                                          ch->drum_channel);
 		if(p) ch->preset = p;
 	}
+
+	ss_processor_update_active_effects(proc);
 
 	ss_processor_event_emit(proc, SS_EVENT_STOP_ALL, -1, 0, 0);
 }
