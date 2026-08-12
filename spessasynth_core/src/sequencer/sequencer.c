@@ -149,6 +149,8 @@ void ss_sequencer_free(SS_Sequencer *seq) {
 /* ── Song management ─────────────────────────────────────────────────────── */
 
 void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick);
+static void seek_to(SS_Sequencer *seq, size_t target_tick,
+                    double target_seconds, bool by_ticks);
 
 /* ── Seek snapshot ───────────────────────────────────────────────────────── */
 
@@ -350,60 +352,14 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 	seq->loops_played = 0;
 	seq->ports_active = 0;
 
-	/* Rewind and replay non-note events up to target time */
-	song_rewind(song);
-	seq->base_time += seq->current_time - seconds;
-	double target_event_time = seq->current_time;
-	seq->current_time = seconds;
-	seq->current_tick = ss_seconds_to_midi_tick(midi, seconds);
-	seq->pending_tick_samples = 0;
-	seq->cursor_tick = seq->current_tick;
-	seq->cursor_time = seconds;
-
-	/* Reset processor */
-	dispatch_reset(seq);
-
-	/* Fast-forward: process all events whose absolute time <= seconds without audio */
-	/* We use the tempo map to convert ticks → seconds. */
-	/* Replay just CC/program/pitch wheel/sysex events; skip notes. */
-	bool done = false;
-	double one_tick_sec = (midi->time_division > 0) ? (60.0 / (120.0 * (double)midi->time_division)) : (60.0 / (120.0 * 480.0));
-
-	while(!done) {
-		size_t ei = song->event_index;
-		SS_MIDIMessage *e = &midi->timeline[ei];
-		double ev_time = ss_midi_ticks_to_seconds(midi, e->ticks);
-
-		if(ev_time >= seconds) break;
-
-		song->event_index++;
-
-		uint8_t sb = e->status_byte;
-
-		/* Update tempo (so subsequent ticks-to-seconds conversions are right) */
-		if(sb == SS_META_SET_TEMPO && e->data_length >= 3) {
-			double bpm = read_tempo_bpm(e->data);
-			if(midi->time_division > 0)
-				one_tick_sec = 60.0 / (bpm * (double)midi->time_division);
-		}
-
-		/* Replay CC / Program / Pitch wheel / SysEx only; skip notes
-		 * and pressure so the seek is silent. */
-		if(sb >= 0x80 && sb < 0xF0) {
-			uint8_t type = sb & 0xF0;
-			if(type == 0x90 && e->data_length >= 2 && e->data[1] == 0)
-				dispatch_voice_event(seq, midi, e, target_event_time);
-			else if(type == 0x80 || type == 0xB0 || type == 0xC0 || type == 0xE0)
-				dispatch_voice_event(seq, midi, e, target_event_time);
-		} else if(sb == 0xF0) {
-			dispatch_sysex_event(seq, midi, e, target_event_time);
-		}
-	}
-
-	seq->one_tick_seconds = one_tick_sec;
+	seek_to(seq, 0, seconds, false);
 }
 
-void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick) {
+/* Shared seek.  by_ticks selects the stop condition: the target tick, or the
+ * accumulated time reaching target_seconds.  Upstream's setTimeTo is likewise
+ * one function with those two bounds. */
+static void seek_to(SS_Sequencer *seq, size_t target_tick,
+                    double target_seconds, bool by_ticks) {
 	SS_SequencerSong *song = current_song(seq);
 	if(!song) return;
 	SS_MIDIFile *midi = song->midi;
@@ -451,7 +407,11 @@ void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick) {
 
 	while(song->event_index < midi->timeline_count) {
 		SS_MIDIMessage *e = &midi->timeline[song->event_index];
-		if(e->ticks >= target_tick) break;
+		if(by_ticks) {
+			if(e->ticks >= target_tick) break;
+		} else if(played >= target_seconds) {
+			break;
+		}
 
 		song->event_index++;
 
@@ -538,12 +498,17 @@ void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick) {
 	 * requested position. */
 	seq->base_time += previous_time - played;
 	seq->current_time = played;
-	seq->current_tick = target_tick;
+	seq->current_tick = by_ticks ? target_tick
+	                             : ss_seconds_to_midi_tick(midi, played);
 	seq->pending_tick_samples = 0;
 	seq->cursor_time = played;
 	seq->cursor_tick = (song->event_index < midi->timeline_count)
 	                       ? midi->timeline[song->event_index].ticks
-	                       : target_tick;
+	                       : seq->current_tick;
+}
+
+void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick) {
+	seek_to(seq, target_tick, 0.0, true);
 }
 
 bool ss_sequencer_is_finished(const SS_Sequencer *seq) {
