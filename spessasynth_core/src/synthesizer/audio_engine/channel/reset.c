@@ -51,7 +51,7 @@ void ss_channel_reset_parameters_to_defaults(SS_MIDIChannel *ch) {
 }
 
 /* Values come from Falcosoft MidiPlayer 6 */
-static const int16_t default_controller_values[128] = {
+const int16_t ss_default_controller_values[128] = {
 	[SS_MIDCON_MAIN_VOLUME] = 100 << 7,
 	[SS_MIDCON_BALANCE] = 64 << 7,
 	[SS_MIDCON_EXPRESSION] = 127 << 7,
@@ -87,6 +87,17 @@ static const float custom_reset_array[SS_CUSTOM_CTRL_COUNT] = {
  */
 extern void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time);
 
+const uint8_t ss_rp15_reset_cc_nums[SS_RP15_RESET_CC_COUNT] = {
+	SS_MIDCON_MODULATION_WHEEL,
+	SS_MIDCON_EXPRESSION,
+	SS_MIDCON_SUSTAIN_PEDAL,
+	SS_MIDCON_PORTAMENTO_ON_OFF,
+	SS_MIDCON_SOSTENUTO_PEDAL,
+	SS_MIDCON_SOFT_PEDAL,
+	SS_MIDCON_RPN_MSB,
+	SS_MIDCON_RPN_LSB
+};
+
 void ss_channel_reset_rp15(SS_MIDIChannel *ch, double time) {
 	/* RP-15 resets the pitch bend to centre and clears channel pressure
 	 * before the controller list; upstream's resetRP15 does both first.
@@ -96,19 +107,9 @@ void ss_channel_reset_rp15(SS_MIDIChannel *ch, double time) {
 	ch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_CHANNEL_PRESSURE] = 0;
 	ss_channel_compute_modulators(ch, time);
 
-	const uint8_t rp_15_reset_cc_nums[] = {
-		SS_MIDCON_MODULATION_WHEEL,
-		SS_MIDCON_EXPRESSION,
-		SS_MIDCON_SUSTAIN_PEDAL,
-		SS_MIDCON_PORTAMENTO_ON_OFF,
-		SS_MIDCON_SOSTENUTO_PEDAL,
-		SS_MIDCON_SOFT_PEDAL,
-		SS_MIDCON_RPN_MSB,
-		SS_MIDCON_RPN_LSB
-	};
-	for(size_t i = 0, j = sizeof(rp_15_reset_cc_nums) / sizeof(rp_15_reset_cc_nums[0]); i < j; i++) {
-		const uint8_t reset_cc = rp_15_reset_cc_nums[i];
-		const int16_t reset_value = default_controller_values[reset_cc];
+	for(size_t i = 0; i < SS_RP15_RESET_CC_COUNT; i++) {
+		const uint8_t reset_cc = ss_rp15_reset_cc_nums[i];
+		const int16_t reset_value = ss_default_controller_values[reset_cc];
 		if(reset_value != ch->midi_controllers[reset_cc]) {
 			ss_channel_controller(ch, reset_cc, reset_value >> 7, time);
 		}
@@ -156,7 +157,7 @@ static void reset_portamento(SS_MIDIChannel *ch) {
 void ss_channel_reset_internal(SS_MIDIChannel *ch) {
 	/* Reset MIDI controllers */
 	for(int cc = 0; cc < 128; cc++) {
-		const int16_t reset_value = default_controller_values[cc];
+		const int16_t reset_value = ss_default_controller_values[cc];
 		if(ch->midi_controllers[cc] != reset_value &&
 		   cc != SS_MIDCON_PORTAMENTO_CONTROL &&
 		   cc != SS_MIDCON_DATA_ENTRY_MSB &&

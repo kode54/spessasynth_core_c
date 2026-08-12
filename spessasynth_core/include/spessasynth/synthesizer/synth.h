@@ -557,6 +557,13 @@ typedef struct SS_MIDIChannel {
 
 SS_MIDIChannel SPESSASYNTH_EXPORTS *ss_channel_new(int channel_number, struct SS_Processor *synth);
 void SPESSASYNTH_EXPORTS ss_channel_free(SS_MIDIChannel *ch);
+/** Default value of every MIDI controller, 14-bit (i.e. already << 7). */
+extern const int16_t SPESSASYNTH_EXPORTS ss_default_controller_values[128];
+
+/** The controllers RP-15 resets, shared with the sequencer's seek. */
+#define SS_RP15_RESET_CC_COUNT 8
+extern const uint8_t SPESSASYNTH_EXPORTS ss_rp15_reset_cc_nums[SS_RP15_RESET_CC_COUNT];
+
 void SPESSASYNTH_EXPORTS ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time);
 
 /** Note-on with control over whether a new note id is consumed.  Pass true
