@@ -104,6 +104,10 @@ void ss_sysex_yamaha(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 			case 0x05: /* Poly/mono mode */
 				mch->midi_params.poly_mode = (data == 1);
 				break;
+			case 0x06: /* Same note number key on assign (assign mode) */
+				ss_channel_set_midi_parameter(mch, SS_CHANNEL_MIDI_ASSIGN_MODE,
+				                              (double)data);
+				break;
 			case 0x07: /* Part mode (0=normal, else=drum) */
 				mch->drum_channel = (data != 0);
 				ss_processor_event_emit(proc, SS_EVENT_DRUM_CHANGE, channel_idx, (int)mch->drum_channel, 0);
