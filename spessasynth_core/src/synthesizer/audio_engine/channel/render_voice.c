@@ -278,6 +278,20 @@ bool ss_voice_render(SS_Voice *v,
 	const float gain_left = pan_left * output_gain;
 	const float gain_right = pan_right * output_gain;
 
+	for(int i = 0; i < sample_count; i++) {
+		float s = buf[i];
+		out_left[i] += s * gain_left;
+		out_right[i] += s * gain_right;
+	}
+
+	/* Dry output is unconditional; the sends are not.  Upstream returns here
+	 * when effects are disabled, so a voice feeds nothing into the buses and
+	 * they stay silent for the block. */
+	if(ch->synth && !ch->synth->system_params.effects_enabled) {
+		if(owned_buf) free(buf);
+		return v->is_active;
+	}
+
 	if(ch->synth && ch->synth->delay_active && delay) {
 		const int delaySend = (int)(ch->midi_controllers[SS_MIDCON_VARIATION_DEPTH] * v->delay_send);
 		if(delaySend > 0) {
@@ -290,12 +304,6 @@ bool ss_voice_render(SS_Voice *v,
 				delay[i] += s;
 			}
 		}
-	}
-
-	for(int i = 0; i < sample_count; i++) {
-		float s = buf[i];
-		out_left[i] += s * gain_left;
-		out_right[i] += s * gain_right;
 	}
 
 	if(reverb && reverb_amt > 0) {
