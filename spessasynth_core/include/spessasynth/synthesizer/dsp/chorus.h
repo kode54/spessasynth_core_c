@@ -43,8 +43,10 @@ typedef struct {
 	float gain;
 	float reverbGain;
 	float delayGain;
-	unsigned int depthSamples;
-	unsigned int delaySamples;
+	/* Fractional sample counts: the read position is interpolated, so
+	 * rounding these to whole samples quantizes the modulation itself. */
+	float depthSamples;
+	float delaySamples;
 	float rateInc;
 	float feedbackGain;
 } SS_Chorus;
