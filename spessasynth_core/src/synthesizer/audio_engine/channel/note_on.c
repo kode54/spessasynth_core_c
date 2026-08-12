@@ -346,7 +346,7 @@ void ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, b
 
 		/* Playback step */
 		uint32_t sr = proc ? proc->sample_rate : 44100;
-		audio.playback_step = (float)samp->sample_rate / (float)sr * powf(2.0f, (float)samp->pitch_correction / 1200.0f);
+		audio.playback_step = (double)samp->sample_rate / (double)sr * pow(2.0, (double)samp->pitch_correction / 1200.0);
 
 		/* Velocity override */
 		int voice_vel = real_vel;
