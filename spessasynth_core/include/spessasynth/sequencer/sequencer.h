@@ -106,6 +106,13 @@ typedef struct {
 	bool preload; /* true once initial events have been sent */
 	bool finished;
 
+	/* Start playback at the first note-on rather than at tick 0, skipping
+	 * any setup-only lead-in (SysEx, program changes, markers).  Seeking to
+	 * a point before the first note lands there too.  Matches upstream's
+	 * skipToFirstNoteOn, which also defaults to true.  Disable it with
+	 * ss_sequencer_set_skip_to_first_note_on for exact file timing. */
+	bool skip_to_first_note_on;
+
 	/* Exact position of the last dispatched event.
 	 *
 	 * current_tick/current_time track the rendered position and are rounded
@@ -170,6 +177,12 @@ void SPESSASYNTH_EXPORTS ss_sequencer_set_time(SS_Sequencer *seq, double seconds
  *   the fade immediately.
  *  Default: 1. */
 void SPESSASYNTH_EXPORTS ss_sequencer_set_loop_count(SS_Sequencer *seq, int count);
+
+/** Start playback at the first note-on instead of tick 0, skipping a
+ *  setup-only lead-in.  Default: true, matching upstream.  Pass false to
+ *  play files with their exact original timing.  Takes effect on the next
+ *  load or seek. */
+void SPESSASYNTH_EXPORTS ss_sequencer_set_skip_to_first_note_on(SS_Sequencer *seq, bool skip);
 
 /** Configure the post-loop fade duration in seconds.  Only used when
  *  loop_count is finite and the MIDI has loop markers.  Default: 7.0. */

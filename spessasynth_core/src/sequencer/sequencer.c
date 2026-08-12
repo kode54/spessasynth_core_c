@@ -118,6 +118,7 @@ SS_Sequencer *ss_sequencer_create(SS_Processor *proc) {
 	seq->fade_seconds = 7.0;
 	seq->loops_played = 0;
 	seq->saved_master_volume = 1.0f;
+	seq->skip_to_first_note_on = true;
 	seq->current_song_index = ~0UL;
 	return seq;
 }
@@ -133,6 +134,7 @@ SS_Sequencer *ss_sequencer_create_callbacks(const SS_SequencerCallbacks *cb) {
 	seq->fade_seconds = 7.0;
 	seq->loops_played = 0;
 	seq->saved_master_volume = 1.0f;
+	seq->skip_to_first_note_on = true;
 	seq->current_song_index = ~0UL;
 	return seq;
 }
@@ -145,6 +147,21 @@ void ss_sequencer_free(SS_Sequencer *seq) {
 }
 
 /* ── Song management ─────────────────────────────────────────────────────── */
+
+void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick);
+
+/** Move the playhead to just before the first note-on, so the setup-only
+ *  lead-in is replayed without being waited through.  One tick early so the
+ *  note itself still dispatches normally.  No-op when the song starts on a
+ *  note, or has no notes at all. */
+static void skip_lead_in(SS_Sequencer *seq) {
+	if(!seq->skip_to_first_note_on) return;
+	SS_SequencerSong *song = current_song(seq);
+	if(!song || !song->midi) return;
+	size_t first = song->midi->first_note_on;
+	if(first == 0) return;
+	ss_sequencer_set_tick(seq, first - 1);
+}
 
 bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 	if(!midi) return false;
@@ -179,6 +196,7 @@ bool ss_sequencer_load_midi(SS_Sequencer *seq, SS_MIDIFile *midi) {
 		seq->fading = false;
 		/* This song is now current — attach its embedded bank, if any. */
 		load_embedded_bank(seq, midi);
+		skip_lead_in(seq);
 	}
 
 	return true;
@@ -248,6 +266,15 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 	SS_SequencerSong *song = current_song(seq);
 	if(!song) return;
 	SS_MIDIFile *midi = song->midi;
+
+	/* Upstream routes a seek to anywhere before the first note — including
+	 * an out-of-range one — to the first note instead. */
+	if(seq->skip_to_first_note_on && midi->first_note_on > 0 &&
+	   (seconds < 0.0 || seconds > midi->duration ||
+	    seconds < ss_midi_ticks_to_seconds(midi, midi->first_note_on))) {
+		ss_sequencer_set_tick(seq, midi->first_note_on - 1);
+		return;
+	}
 
 	/* Manual seek cancels any active fade and restarts the loop counter. */
 	end_fade(seq);
@@ -556,6 +583,7 @@ static bool ss_sequencer_next_song(SS_Sequencer *seq) {
 		seq->ports_active = 0;
 		/* Attach the new current song's embedded bank, if any. */
 		load_embedded_bank(seq, seq->songs[seq->current_song_index].midi);
+		skip_lead_in(seq);
 		return true;
 	}
 	return false;
@@ -580,6 +608,10 @@ void ss_sequencer_set_loop_count(SS_Sequencer *seq, int count) {
 	 * mid-loop, without waiting for the next loop-end marker. */
 	if(count >= 1 && seq->loops_played > count && !seq->fading)
 		begin_fade(seq);
+}
+
+void ss_sequencer_set_skip_to_first_note_on(SS_Sequencer *seq, bool skip) {
+	seq->skip_to_first_note_on = skip;
 }
 
 void ss_sequencer_set_fade_seconds(SS_Sequencer *seq, double seconds) {
