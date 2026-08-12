@@ -45,4 +45,11 @@ esac
     "$HERE/render_c.c" \
     "$LIB" "${RPATH[@]}" "${EXTRA_LIBS[@]}"
 
+"$CC" -O2 -g -std=c11 -Wall -Wextra \
+    -I"$CORE_SRC/include" \
+    -o "$BUILD_DIR/callback_lead_in_test" \
+    "$HERE/tools/callback_lead_in_test.c" \
+    "$LIB" "${RPATH[@]}" "${EXTRA_LIBS[@]}"
+
 echo "Built $BUILD_DIR/ss_render_c against $LIB"
+echo "Built $BUILD_DIR/callback_lead_in_test"

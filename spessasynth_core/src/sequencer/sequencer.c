@@ -150,16 +150,32 @@ void ss_sequencer_free(SS_Sequencer *seq) {
 
 void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick);
 
-/** Move the playhead to just before the first note-on, so the setup-only
- *  lead-in is replayed without being waited through.  One tick early so the
- *  note itself still dispatches normally.  No-op when the song starts on a
- *  note, or has no notes at all. */
+/** Arrange to start at the first note-on rather than at tick 0.
+ *
+ *  Driving the built-in processor, the lead-in is replayed by a seek: its
+ *  state can be set instantaneously, so there is nothing to be gained by
+ *  waiting through it, and this is what upstream does.
+ *
+ *  Driving an external synthesizer through the callback table, a seek would
+ *  deliver the whole lead-in as a burst of messages sharing one timestamp.
+ *  A hardware or otherwise stateful synth needs those spread over real time
+ *  to act on them, so the lead-in is played at normal speed instead and the
+ *  caller is told to discard what it renders until the first note sounds —
+ *  see ss_sequencer_is_lead_in.
+ *
+ *  No-op when the song starts on a note, or has no notes at all. */
 static void skip_lead_in(SS_Sequencer *seq) {
+	seq->lead_in_active = false;
 	if(!seq->skip_to_first_note_on) return;
 	SS_SequencerSong *song = current_song(seq);
 	if(!song || !song->midi) return;
 	size_t first = song->midi->first_note_on;
 	if(first == 0) return;
+
+	if(seq->callbacks.midi_command) {
+		seq->lead_in_active = true;
+		return;
+	}
 	ss_sequencer_set_tick(seq, first - 1);
 }
 
@@ -268,12 +284,19 @@ void ss_sequencer_set_time(SS_Sequencer *seq, double seconds) {
 	SS_MIDIFile *midi = song->midi;
 
 	/* Upstream routes a seek to anywhere before the first note — including
-	 * an out-of-range one — to the first note instead. */
+	 * an out-of-range one — to the first note instead.  In callback mode the
+	 * lead-in is played rather than skipped, so the seek lands where it was
+	 * asked to and the lead-in flag is re-armed instead. */
 	if(seq->skip_to_first_note_on && midi->first_note_on > 0 &&
 	   (seconds < 0.0 || seconds > midi->duration ||
 	    seconds < ss_midi_ticks_to_seconds(midi, midi->first_note_on))) {
-		ss_sequencer_set_tick(seq, midi->first_note_on - 1);
-		return;
+		if(seq->callbacks.midi_command) {
+			seq->lead_in_active = true;
+			if(seconds < 0.0 || seconds > midi->duration) seconds = 0.0;
+		} else {
+			ss_sequencer_set_tick(seq, midi->first_note_on - 1);
+			return;
+		}
 	}
 
 	/* Manual seek cancels any active fade and restarts the loop counter. */
@@ -612,6 +635,11 @@ void ss_sequencer_set_loop_count(SS_Sequencer *seq, int count) {
 
 void ss_sequencer_set_skip_to_first_note_on(SS_Sequencer *seq, bool skip) {
 	seq->skip_to_first_note_on = skip;
+	if(!skip) seq->lead_in_active = false;
+}
+
+bool ss_sequencer_is_lead_in(const SS_Sequencer *seq) {
+	return seq->lead_in_active;
 }
 
 void ss_sequencer_set_fade_seconds(SS_Sequencer *seq, double seconds) {
@@ -813,6 +841,10 @@ try_again:
 
 		seq->cursor_time = ev_time;
 		seq->cursor_tick = e->ticks;
+		/* The lead-in ends the moment the first note is dispatched, so the
+		 * block about to be rendered is the first one worth keeping. */
+		if(seq->lead_in_active && e->ticks >= midi->first_note_on)
+			seq->lead_in_active = false;
 		current_time = ev_time;
 		seq->current_tick = e->ticks;
 

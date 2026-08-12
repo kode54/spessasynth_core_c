@@ -113,6 +113,10 @@ typedef struct {
 	 * ss_sequencer_set_skip_to_first_note_on for exact file timing. */
 	bool skip_to_first_note_on;
 
+	/* True while the pre-first-note lead-in is being played out in real
+	 * time.  Only ever set in callback mode; see ss_sequencer_is_lead_in. */
+	bool lead_in_active;
+
 	/* Exact position of the last dispatched event.
 	 *
 	 * current_tick/current_time track the rendered position and are rounded
@@ -181,8 +185,31 @@ void SPESSASYNTH_EXPORTS ss_sequencer_set_loop_count(SS_Sequencer *seq, int coun
 /** Start playback at the first note-on instead of tick 0, skipping a
  *  setup-only lead-in.  Default: true, matching upstream.  Pass false to
  *  play files with their exact original timing.  Takes effect on the next
- *  load or seek. */
+ *  load or seek.
+ *
+ *  Driving the built-in processor, the lead-in is replayed instantly by a
+ *  seek.  Driving an external synthesizer through the callback table, the
+ *  lead-in is instead played out at normal speed — a stateful synth needs
+ *  those setup messages spread over real time rather than delivered as one
+ *  burst — and ss_sequencer_is_lead_in reports which rendered audio to
+ *  throw away. */
 void SPESSASYNTH_EXPORTS ss_sequencer_set_skip_to_first_note_on(SS_Sequencer *seq, bool skip);
+
+/** True while the lead-in is still playing and nothing has sounded yet.
+ *
+ *  Callback mode only; always false when driving the built-in processor,
+ *  which skips the lead-in by seeking instead.  Check it after each
+ *  ss_sequencer_tick: while it reads true, the quantum about to be rendered
+ *  still precedes the first note and should be discarded.  It clears in the
+ *  same tick that dispatches the first note, so the quantum carrying the
+ *  note's onset is kept.
+ *
+ *      ss_sequencer_tick(seq, n);
+ *      bool discard = ss_sequencer_is_lead_in(seq);
+ *      render(n);
+ *      if(!discard) write_output(n);
+ */
+bool SPESSASYNTH_EXPORTS ss_sequencer_is_lead_in(const SS_Sequencer *seq);
 
 /** Configure the post-loop fade duration in seconds.  Only used when
  *  loop_count is finite and the MIDI has loop markers.  Default: 7.0. */
