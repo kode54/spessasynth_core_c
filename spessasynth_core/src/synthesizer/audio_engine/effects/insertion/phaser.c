@@ -33,22 +33,22 @@ void ss_phaser_process(SS_InsertionProcessor *self,
                            float *oRev, float *oCho, float *oDel,
                            int start, int n) {
 	SS_PhaserFX *p = (SS_PhaserFX *)self;
-	float rev = self->send_level_to_reverb;
-	float cho = self->send_level_to_chorus;
-	float del = self->send_level_to_delay;
-	float rate_inc = p->rate / (float)p->sample_rate;
-	float fb = p->reso * 0.9f;
-	float phase = p->phase;
-	float prevL = p->prev_l, prevR = p->prev_r;
+	const double rev = self->send_level_to_reverb;
+	const double cho = self->send_level_to_chorus;
+	const double del = self->send_level_to_delay;
+	const double rate_inc = p->rate / p->sample_rate;
+	const double fb = p->reso * 0.9;
+	double phase = p->phase;
+	double prevL = p->prev_l, prevR = p->prev_r;
 	for(int i = 0; i < n; i++) {
 		double sL = ss_apply_shelves(iL[i], &p->ls_c, &p->ls_l, &p->hs_c, &p->hs_l);
 		double sR = ss_apply_shelves(iR[i], &p->ls_c, &p->ls_r, &p->hs_c, &p->hs_r);
 
 		/* Triangle LFO (TS: 2*|phase-0.5|, lfoMul = 1 - depth*lfo) */
-		float lfo = 2.0f * fabsf(phase - 0.5f);
-		if((phase += rate_inc) >= 1.0f) phase -= 1.0f;
-		float lfoMul = 1.0f - p->depth * lfo;
-		float fc = p->manual_offset + p->manual * lfoMul;
+		const double lfo = 2.0 * fabs(phase - 0.5);
+		if((phase += rate_inc) >= 1.0) phase -= 1.0;
+		const double lfoMul = 1.0 - p->depth * lfo;
+		const double fc = p->manual_offset + p->manual * lfoMul;
 
 		double tanT = tan(M_PI * fc / p->sample_rate);
 		double a = (1.0 - tanT) / (1.0 + tanT);
@@ -67,14 +67,14 @@ void ss_phaser_process(SS_InsertionProcessor *self,
 			p->prev_out_r[s] = (float)outR;
 			apR = outR;
 		}
-		prevL = (float)apL;
-		prevR = (float)apR;
+		prevL = apL;
+		prevR = apR;
 
-		float outL = ((float)sL + (float)apL * p->mix) * p->level;
-		float outR = ((float)sR + (float)apR * p->mix) * p->level;
+		const double outL = (sL + apL * p->mix) * p->level;
+		const double outR = (sR + apR * p->mix) * p->level;
 		oL[start + i] += outL;
 		oR[start + i] += outR;
-		float mono = (outL + outR) * 0.5f;
+		const double mono = (outL + outR) * 0.5;
 		if(oRev) oRev[i] += mono * rev;
 		if(oCho) oCho[i] += mono * cho;
 		if(oDel) oDel[i] += mono * del;

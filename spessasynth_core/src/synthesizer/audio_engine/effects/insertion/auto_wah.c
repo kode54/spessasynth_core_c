@@ -11,23 +11,23 @@
  * 6.  AutoWah (0x0121)
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-#define AW_SENS_COEFF 27.0f
-#define AW_PEAK_DB 28.0f
-#define AW_HPF_Q_DB -28.0f
-#define AW_HPF_FC 400.0f
-#define AW_MANUAL_SCALE 0.62f
-#define AW_FC_SMOOTH 0.005f
-#define AW_DEPTH_MUL 5.0f
-#define AW_LFO_SMOOTH (AW_DEPTH_MUL * 0.5f)
+#define AW_SENS_COEFF 27.0
+#define AW_PEAK_DB 28.0
+#define AW_HPF_Q_DB -28.0
+#define AW_HPF_FC 400.0
+#define AW_MANUAL_SCALE 0.62
+#define AW_FC_SMOOTH 0.005
+#define AW_DEPTH_MUL 5.0
+#define AW_LFO_SMOOTH (AW_DEPTH_MUL * 0.5)
 
 
 static void aw_set_manual(SS_AutoWahFX *e, int value) {
-	float target = value * AW_MANUAL_SCALE;
+	double target = value * AW_MANUAL_SCALE;
 	int fl = (int)target, cl = fl + 1;
 	if(fl < 0) fl = 0;
 	if(fl > 127) fl = 127;
 	if(cl > 127) cl = 127;
-	float frac = target - fl;
+	double frac = target - fl;
 	e->manual = ss_ivc_manual(fl) + (ss_ivc_manual(cl) - ss_ivc_manual(fl)) * frac;
 }
 
@@ -42,31 +42,31 @@ void ss_auto_wah_process(SS_InsertionProcessor *self,
                        float *oRev, float *oCho, float *oDel,
                        int start, int n) {
 	SS_AutoWahFX *e = (SS_AutoWahFX *)self;
-	float rev = self->send_level_to_reverb;
-	float cho = self->send_level_to_chorus;
-	float del = self->send_level_to_delay;
+	double rev = self->send_level_to_reverb;
+	double cho = self->send_level_to_chorus;
+	double del = self->send_level_to_delay;
 
-	float rate_inc = e->rate / (float)e->sample_rate;
-	float peak = powf(10.0f, (e->peak / 127.0f * AW_PEAK_DB) / 20.0f);
-	float hpf_peak = powf(10.0f, (e->peak / 127.0f * AW_HPF_Q_DB) / 20.0f);
-	float pol = (e->polarity == 0) ? -1.0f : AW_DEPTH_MUL;
-	float depth = (e->depth / 127.0f) * pol;
-	float sens = e->sens / 127.0f;
+	double rate_inc = e->rate / (float)e->sample_rate;
+	double peak = pow(10.0, (e->peak / 127.0 * AW_PEAK_DB) / 20.0);
+	double hpf_peak = pow(10.0, (e->peak / 127.0 * AW_HPF_Q_DB) / 20.0);
+	double pol = (e->polarity == 0) ? -1.0 : AW_DEPTH_MUL;
+	double depth = (e->depth / 127.0) * pol;
+	double sens = e->sens / 127.0;
 
 	int pan_idx = (int)(e->pan + 64);
 	if(pan_idx < 0) pan_idx = 0;
 	if(pan_idx > 127) pan_idx = 127;
-	float gainL = ss_pan_table_left[pan_idx];
-	float gainR = ss_pan_table_right[pan_idx];
+	double gainL = ss_pan_table_left[pan_idx];
+	double gainR = ss_pan_table_right[pan_idx];
 
-	float phase = e->phase;
-	float last_fc = e->last_fc;
+	double phase = e->phase;
+	double last_fc = e->last_fc;
 	double env = e->envelope;
 	double atk = e->attack_coeff, rel = e->release_coeff;
 
 	for(int i = 0; i < n; i++) {
 		/* Mono: average L+R */
-		double s = ss_apply_shelves((iL[i] + iR[i]) * 0.5f,
+		double s = ss_apply_shelves((iL[i] + iR[i]) * 0.5,
 		                         &e->ls_c, &e->ls_s,
 		                         &e->hs_c, &e->hs_s);
 
@@ -76,19 +76,19 @@ void ss_auto_wah_process(SS_InsertionProcessor *self,
 		else
 			env = rel * env + (1.0 - rel) * rect;
 
-		float lfo = 2.0f * fabsf(phase - 0.5f) * depth;
-		if((phase += rate_inc) >= 1.0f) phase -= 1.0f;
+		double lfo = 2.0 * fabs(phase - 0.5) * depth;
+		if((phase += rate_inc) >= 1.0) phase -= 1.0;
 
 		float lfo_mul;
 		if(lfo >= AW_LFO_SMOOTH || pol < 0)
-			lfo_mul = 1.0f;
+			lfo_mul = 1.0;
 		else
-			lfo_mul = sinf(lfo * (float)M_PI / (2.0f * AW_LFO_SMOOTH));
+			lfo_mul = sin(lfo * (float)M_PI / (2.0 * AW_LFO_SMOOTH));
 
-		float base = e->manual * (1.0f + sens * (float)env * AW_SENS_COEFF);
-		float fc = base * (1.0f + lfo_mul * lfo);
-		if(fc < 20.0f) fc = 20.0f;
-		float target = fc < 10.0f ? 10.0f : fc;
+		double base = e->manual * (1.0 + sens * (float)env * AW_SENS_COEFF);
+		double fc = base * (1.0 + lfo_mul * lfo);
+		if(fc < 20.0) fc = 20.0;
+		double target = fc < 10.0 ? 10.0 : fc;
 		last_fc += (target - last_fc) * AW_FC_SMOOTH;
 
 		ss_compute_lpf(&e->coeffs, last_fc, peak, e->sample_rate);
@@ -98,7 +98,7 @@ void ss_auto_wah_process(SS_InsertionProcessor *self,
 			ss_compute_hpf(&e->hp_coeffs, AW_HPF_FC, hpf_peak, e->sample_rate);
 			proc = ss_biquad_process(&e->hp_coeffs, &e->hp_state, proc);
 		}
-		float mono = (float)ss_biquad_process(&e->coeffs, &e->state, proc) * e->level;
+		double mono = (float)ss_biquad_process(&e->coeffs, &e->state, proc) * e->level;
 
 		oL[start + i] += mono * gainL;
 		oR[start + i] += mono * gainR;
@@ -145,7 +145,7 @@ void ss_auto_wah_set_param(SS_InsertionProcessor *self, int p, int v) {
 			e->pan = (float)(v - 64);
 			break;
 		case 0x16:
-			e->level = (float)v / 127.0f;
+			e->level = (float)v / 127.0;
 			break;
 		default:
 			break;
@@ -157,14 +157,14 @@ static void aw_reset_impl(SS_AutoWahFX *e) {
 	e->fil_type = 1;
 	e->sens = 0;
 	e->peak = 62;
-	e->rate = 2.05f;
+	e->rate = 2.05;
 	e->depth = 72;
 	e->polarity = 1;
 	e->low_gain = 0;
 	e->hi_gain = 0;
 	e->pan = 0;
-	e->level = 96.0f / 127.0f;
-	e->phase = 0.2f;
+	e->level = 96.0 / 127.0;
+	e->phase = 0.2;
 	aw_set_manual(e, 68);
 	e->last_fc = e->manual;
 	/* Upstream's reset zeroes the filter states but leaves the envelope
@@ -188,7 +188,7 @@ static void aw_free(SS_InsertionProcessor *self) {
 
 void ss_auto_wah_init(SS_AutoWahFX *e, uint32_t type, uint32_t sample_rate, bool owned) {
 	e->base.type = type;
-	e->base.send_level_to_reverb = owned ? 40.0f / 127.0f : 0.0f;
+	e->base.send_level_to_reverb = owned ? 40.0 / 127.0 : 0.0;
 	e->base.send_level_to_chorus = 0;
 	e->base.send_level_to_delay = 0;
 	e->base.process = ss_auto_wah_process;

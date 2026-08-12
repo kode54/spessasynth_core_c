@@ -14,18 +14,18 @@
 typedef struct {
 	SS_InsertionProcessor base;
 	double sample_rate;
-	float level;
-	float low_freq, low_gain;
-	float hi_freq, hi_gain;
-	float m1_freq, m1_gain;
+	double level;
+	double low_freq, low_gain;
+	double hi_freq, hi_gain;
+	double m1_freq, m1_gain;
 	int m1_q_idx;
-	float m2_freq, m2_gain;
+	double m2_freq, m2_gain;
 	int m2_q_idx;
 	SS_Biquad low_c, m1_c, m2_c, hi_c;
 	SS_BiquadState low_l, low_r, m1_l, m1_r, m2_l, m2_r, hi_l, hi_r;
 } SS_StereoEQFX;
 
-static const float EQ_Q_TABLE[5] = { 0.5f, 1.0f, 2.0f, 4.0f, 9.0f };
+static const float EQ_Q_TABLE[5] = { 0.5, 1.0, 2.0, 4.0, 9.0 };
 
 static void seq_update(SS_StereoEQFX *e) {
 	double fs = e->sample_rate;
@@ -41,10 +41,10 @@ static void seq_process(SS_InsertionProcessor *self,
                         float *oRev, float *oCho, float *oDel,
                         int start, int n) {
 	SS_StereoEQFX *e = (SS_StereoEQFX *)self;
-	float rev = self->send_level_to_reverb;
-	float cho = self->send_level_to_chorus;
-	float del = self->send_level_to_delay;
-	float level = e->level;
+	double rev = self->send_level_to_reverb;
+	double cho = self->send_level_to_chorus;
+	double del = self->send_level_to_delay;
+	double level = e->level;
 	for(int i = 0; i < n; i++) {
 		double sL = iL[i], sR = iR[i];
 		sL = ss_biquad_process(&e->low_c, &e->low_l, sL);
@@ -55,9 +55,9 @@ static void seq_process(SS_InsertionProcessor *self,
 		sR = ss_biquad_process(&e->m2_c, &e->m2_r, sR);
 		sL = ss_biquad_process(&e->hi_c, &e->hi_l, sL);
 		sR = ss_biquad_process(&e->hi_c, &e->hi_r, sR);
-		oL[start + i] += (float)sL * level;
-		oR[start + i] += (float)sR * level;
-		float mono = 0.5f * ((float)sL + (float)sR);
+		oL[start + i] += sL * level;
+		oR[start + i] += sR * level;
+		double mono = 0.5 * (sL + sR);
 		if(oRev) oRev[i] += mono * rev;
 		if(oCho) oCho[i] += mono * cho;
 		if(oDel) oDel[i] += mono * del;
@@ -68,13 +68,13 @@ static void seq_set_param(SS_InsertionProcessor *self, int p, int v) {
 	SS_StereoEQFX *e = (SS_StereoEQFX *)self;
 	switch(p) {
 		case 0x03:
-			e->low_freq = v == 1 ? 400.0f : 200.0f;
+			e->low_freq = v == 1 ? 400.0 : 200.0;
 			break;
 		case 0x04:
 			e->low_gain = (float)(v - 64);
 			break;
 		case 0x05:
-			e->hi_freq = v == 1 ? 8000.0f : 4000.0f;
+			e->hi_freq = v == 1 ? 8000.0 : 4000.0;
 			break;
 		case 0x06:
 			e->hi_gain = (float)(v - 64);
@@ -98,7 +98,7 @@ static void seq_set_param(SS_InsertionProcessor *self, int p, int v) {
 			e->m2_gain = (float)(v - 64);
 			break;
 		case 0x16:
-			e->level = (float)v / 127.0f;
+			e->level = (float)v / 127.0;
 			break;
 		default:
 			break;
@@ -108,16 +108,16 @@ static void seq_set_param(SS_InsertionProcessor *self, int p, int v) {
 
 static void seq_reset(SS_InsertionProcessor *self) {
 	SS_StereoEQFX *e = (SS_StereoEQFX *)self;
-	e->level = 1.0f;
-	e->low_freq = 400.0f;
-	e->low_gain = 5.0f;
-	e->hi_freq = 8000.0f;
-	e->hi_gain = -12.0f;
-	e->m1_freq = 1600.0f;
-	e->m1_gain = 8.0f;
+	e->level = 1.0;
+	e->low_freq = 400.0;
+	e->low_gain = 5.0;
+	e->hi_freq = 8000.0;
+	e->hi_gain = -12.0;
+	e->m1_freq = 1600.0;
+	e->m1_gain = 8.0;
 	e->m1_q_idx = 0;
-	e->m2_freq = 1000.0f;
-	e->m2_gain = -8.0f;
+	e->m2_freq = 1000.0;
+	e->m2_gain = -8.0;
 	e->m2_q_idx = 0;
 	ss_biquad_zero(&e->low_l);
 	ss_biquad_zero(&e->low_r);
