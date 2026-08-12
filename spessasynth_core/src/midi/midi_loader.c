@@ -603,14 +603,26 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 				(void)channel;
 
 				if(type == 0x90 && e->data_length >= 2) {
-					/* Note-on */
+					/* Note-on.  The earliest one in the file, across every
+					 * track, not the first one this scan happens to reach:
+					 * tracks are walked in file order, so latching on the
+					 * first track that carries a note would pick that track's
+					 * entry rather than the song's.  A file whose first track
+					 * rests until the second section then starts there, which
+					 * for a looping arrangement means skipping the whole intro
+					 * and landing on the loop.  Upstream takes the minimum over
+					 * each track's first note-on for the same reason.
+					 *
+					 * Velocity is deliberately not checked, matching upstream,
+					 * which tests the status byte alone and so counts a
+					 * velocity-zero note-off as marking the start. */
 					uint8_t note = e->data[0];
 					uint8_t vel = e->data[1];
+					if(!first_note_set || e->ticks < m->first_note_on) {
+						m->first_note_on = e->ticks;
+						first_note_set = true;
+					}
 					if(vel > 0) {
-						if(!first_note_set) {
-							m->first_note_on = e->ticks;
-							first_note_set = true;
-						}
 						if(note < m->key_range.min) m->key_range.min = note;
 						if(note > m->key_range.max) m->key_range.max = note;
 					}
