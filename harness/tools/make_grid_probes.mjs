@@ -252,6 +252,17 @@ for (const notes of [1, 2, 4, 8, 16]) {
     }));
 }
 
+/* The same note counts without the random pan, so the two axes read against
+ * each other: what randompan alone shows is a random pan that disagrees, and
+ * what both show is retriggering the same note. Without this control, a walk
+ * down randompan indicts the random generator for whatever repeated notes do. */
+for (const notes of [1, 2, 4, 8, 16]) {
+    files.set(`grid_notecount-${String(notes).padStart(3, "0")}`, cell({
+        setup: [[CC_REVERB, 0], [CC_CHORUS, 0], [CC_DELAY, 0]],
+        noteCount: notes
+    }));
+}
+
 const outDir = path.resolve(
     process.argv[2] ??
         path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "grid")
