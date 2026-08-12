@@ -283,7 +283,11 @@ void ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, b
 	                                  ? (mono_retrig != 0)
 	                                  : (ch->synth && ch->synth->system_params.monophonic_retrigger);
 	if(monophonic_retrigger || ch->midi_params.assign_mode == 0) {
-		ss_channel_exclusive_release(ch, note, time);
+		/* killNote, not an exclusive release: it cuts the note with a -12000
+		 * timecent release and clears the note's on/off id pairing, so the
+		 * note-on that follows starts a fresh pair.  An exclusive release
+		 * leaves both the longer tail and the old ids behind. */
+		ss_channel_kill_note(ch, note, KILL_NOTE_RELEASE_TIME, time);
 	}
 
 	/* Get synthesis data for this (note, velocity) */
