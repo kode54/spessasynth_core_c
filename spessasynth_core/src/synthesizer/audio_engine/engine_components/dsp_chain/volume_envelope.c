@@ -18,7 +18,7 @@
 
 /* Forward declarations of unit converter functions */
 extern float ss_timecents_to_seconds(int tc);
-extern float ss_centibel_attenuation_to_gain(float db);
+extern float ss_centibel_attenuation_to_gain(double db);
 
 #define CB_SILENCE 960.0f
 #define PERCEIVED_CB_SILENCE 900.0f
@@ -229,7 +229,7 @@ bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
 
 		/* Linearly ramp down decibels */
 		env->attenuation_cb = ((double)elapsed_release / (double)release_duration) * cb_difference + release_start_cb;
-		env->output_gain = ss_centibel_attenuation_to_gain((float)env->attenuation_cb) * gain_target;
+		env->output_gain = ss_centibel_attenuation_to_gain(env->attenuation_cb) * gain_target;
 		return env->attenuation_cb < PERCEIVED_CB_SILENCE;
 	}
 
@@ -276,7 +276,7 @@ bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
 				if(sample_time < decay_end) {
 					/* Linear centibel ramp down to sustain */
 					env->attenuation_cb = (1.0 - (double)(decay_end - sample_time) / (double)decay_duration) * sustain_cb;
-					env->output_gain = gain_target * ss_centibel_attenuation_to_gain((float)env->attenuation_cb);
+					env->output_gain = gain_target * ss_centibel_attenuation_to_gain(env->attenuation_cb);
 					return true;
 				}
 				env->state++;
@@ -294,7 +294,7 @@ bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
 
 				/* Sustain phase: stay at sustain */
 				env->attenuation_cb = sustain_cb;
-				env->output_gain = gain_target * ss_centibel_attenuation_to_gain((float)sustain_cb);
+				env->output_gain = gain_target * ss_centibel_attenuation_to_gain(sustain_cb);
 				return true;
 			}
 		}

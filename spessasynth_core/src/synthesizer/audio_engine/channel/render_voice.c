@@ -46,7 +46,7 @@ extern void ss_modulation_envelope_start_release(SS_ModulationEnvelope *env,
 extern float ss_modulation_envelope_get_value(const SS_ModulationEnvelope *env,
                                               double current_time);
 extern float ss_abs_cents_to_hz(int cents);
-extern float ss_centibel_attenuation_to_gain(float db);
+extern float ss_centibel_attenuation_to_gain(double db);
 
 bool ss_voice_render(SS_Voice *v,
                      const SS_MIDIChannel *ch,
