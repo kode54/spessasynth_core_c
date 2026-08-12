@@ -59,7 +59,16 @@ set(SS_SOURCES
     src/synthesizer/audio_engine/effects/delay_line.c
     src/synthesizer/audio_engine/effects/reverb/reverb.c
     src/synthesizer/audio_engine/effects/reverb/dattorro.c
-    src/synthesizer/audio_engine/effects/insertion/insertion.c
+    src/synthesizer/audio_engine/effects/insertion_list.c
+    src/synthesizer/audio_engine/effects/insertion/convert.c
+    src/synthesizer/audio_engine/effects/insertion/utils.c
+    src/synthesizer/audio_engine/effects/insertion/thru.c
+    src/synthesizer/audio_engine/effects/insertion/stereo_eq.c
+    src/synthesizer/audio_engine/effects/insertion/phaser.c
+    src/synthesizer/audio_engine/effects/insertion/auto_pan.c
+    src/synthesizer/audio_engine/effects/insertion/auto_wah.c
+    src/synthesizer/audio_engine/effects/insertion/ph_auto_wah.c
+    src/synthesizer/audio_engine/effects/insertion/tremolo.c
     src/synthesizer/audio_engine/effects/chorus/chorus.c
     src/synthesizer/audio_engine/effects/delay/delay.c
     src/synthesizer/processor.c
