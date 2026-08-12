@@ -1,0 +1,10 @@
+{
+    "name": "spessasynth-render-harness",
+    "private": true,
+    "type": "module",
+    "description": "Renders MIDI files with both spessasynth_core (TypeScript) and spessasynth_core_c, then reports how the audio differs.",
+    "scripts": {
+        "build": "./build.sh",
+        "compare": "node run.mjs"
+    }
+}
