@@ -197,9 +197,16 @@ typedef enum {
 /** Classify a single track by its EMIDI CC 110 designations. */
 SS_EMIDIKind SPESSASYNTH_EXPORTS ss_midi_track_emidi_kind(const SS_MIDITrack *track);
 
-/** Returns true when any track in the file contains at least one EMIDI
- *  track-designation event (CC 110), regardless of whether its target is
- *  GM or not.  Useful to decide whether to run EMIDI filtering at all. */
+/** Returns true when anything in the file marks it as EMIDI: a track
+ *  designation (CC 110), or any of CC 112..119, the rest of the block
+ *  Apogee's Extended MIDI claims.  CC 111 is excluded on purpose — RPG
+ *  Maker writes it as a loop start and LeapFrog as a loop end, so on its
+ *  own it indicates nothing.
+ *
+ *  Useful to decide whether to run EMIDI filtering at all, and to tell
+ *  whether a CC 111 in the file can be trusted as a loop point.  Note
+ *  that filtering itself keys on CC 110 alone, so a file that answers
+ *  true here may still have no track to drop. */
 bool SPESSASYNTH_EXPORTS ss_midi_has_emidi(const SS_MIDIFile *midi);
 
 /** Drop tracks whose EMIDI CC 110 designation marks them as targeting a

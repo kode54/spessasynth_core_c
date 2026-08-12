@@ -243,19 +243,10 @@ static void scan_loops(SS_MIDIFile *m) {
 	size_t loop_end = LOOP_UNSET;
 	SS_MIDILoopType loop_type = SS_LOOP_TYPE_HARD;
 
-	/* Pre-pass: does any track carry EMIDI (CC 110) designations?  If
-	 * so, RPG Maker CC 111 markers are not trustworthy loops. */
-	bool any_emidi = false;
-	for(size_t ti = 0; ti < m->track_count && !any_emidi; ti++) {
-		const SS_MIDITrack *t = &m->tracks[ti];
-		for(size_t ei = 0; ei < t->event_count; ei++) {
-			const SS_MIDIMessage *e = &t->events[ei];
-			if(is_cc(e) && e->data[0] == 110) {
-				any_emidi = true;
-				break;
-			}
-		}
-	}
+	/* Pre-pass: does anything in the file mark it as EMIDI?  If so, its
+	 * CC 111 events are EMIDI commands rather than RPG Maker loop
+	 * markers, so scan 2 below must not read them as loops. */
+	const bool any_emidi = ss_midi_has_emidi(m);
 
 	/* Scan 1 — Touhou (format 0 only): CC 2 = start, CC 4 = end.  A
 	 * non-zero value on either voids the entire Touhou result. */

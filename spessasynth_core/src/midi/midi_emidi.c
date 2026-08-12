@@ -57,12 +57,25 @@ SS_EMIDIKind ss_midi_track_emidi_kind(const SS_MIDITrack *track) {
 
 /* ── File-level scan ─────────────────────────────────────────────────────── */
 
+/* Controllers whose presence marks a file as EMIDI.
+ *
+ * CC 110 is the track designation; 112 through 119 are the rest of the
+ * block Apogee's Extended MIDI claims.  CC 111 is deliberately not in the
+ * set: RPG Maker writes it as a loop start and LeapFrog as a loop end, so
+ * on its own it indicates nothing — it is the ambiguous controller that
+ * the others are used to disambiguate.  libmidi tests the same set. */
+static bool is_emidi_indication(const SS_MIDIMessage *e) {
+	if((e->status_byte & 0xF0) != 0xB0 || e->data_length < 2) return false;
+	const uint8_t cc = e->data[0];
+	return cc == 110 || (cc >= 112 && cc <= 119);
+}
+
 bool ss_midi_has_emidi(const SS_MIDIFile *midi) {
 	if(!midi) return false;
 	for(size_t ti = 0; ti < midi->track_count; ti++) {
 		const SS_MIDITrack *t = &midi->tracks[ti];
 		for(size_t ei = 0; ei < t->event_count; ei++) {
-			if(is_track_designation(&t->events[ei])) return true;
+			if(is_emidi_indication(&t->events[ei])) return true;
 		}
 	}
 	return false;
