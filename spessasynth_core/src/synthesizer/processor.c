@@ -29,7 +29,11 @@ extern void ss_sinc_table_init(void);
 #define FILTER_SMOOTHING_44K 0.03f
 
 extern void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time);
+extern void ss_channel_compute_modulators_for(SS_MIDIChannel *ch, double time,
+                                              int source_uses_cc, int source_index);
 extern void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch, double time);
+extern void ss_voice_compute_modulators_for(SS_Voice *v, const SS_MIDIChannel *ch,
+                                            double time, int source_uses_cc, int source_index);
 extern void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
 extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
 extern void ss_processor_init_parameters(SS_Processor *proc);
@@ -716,7 +720,8 @@ void ss_processor_channel_pressure(SS_Processor *proc, int ch, int pressure, dou
 	 * 14-bit value at NON_CC_INDEX_OFFSET + SS_MODSRC_CHANNEL_PRESSURE. */
 	SS_MIDIChannel *mch = proc->midi_channels[ch];
 	mch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_CHANNEL_PRESSURE] = (int16_t)(pressure << 7);
-	ss_channel_compute_modulators(mch, proc->current_time);
+	ss_channel_compute_modulators_for(mch, proc->current_time, 0,
+	                                  SS_MODSRC_CHANNEL_PRESSURE);
 }
 
 void ss_processor_poly_pressure(SS_Processor *proc, int ch, int note, int pressure, double t) {
@@ -728,7 +733,8 @@ void ss_processor_poly_pressure(SS_Processor *proc, int ch, int note, int pressu
 	for(size_t i = 0; i < mch->voice_count; i++) {
 		if(mch->voices[i]->midi_note == note) {
 			mch->voices[i]->pressure = pressure;
-			ss_voice_compute_modulators(mch->voices[i], mch, proc->current_time);
+			ss_voice_compute_modulators_for(mch->voices[i], mch, proc->current_time,
+			                                0, SS_MODSRC_POLY_PRESSURE);
 		}
 	}
 }
