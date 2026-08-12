@@ -114,6 +114,12 @@ void ss_sysex_yamaha(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 			case 0x0b: /* Volume (CC7) */
 				ss_channel_controller(mch, SS_MIDCON_MAIN_VOLUME, (int)data, t);
 				break;
+			case 0x0c: /* Velocity Sense Depth */
+				mch->midi_params.velocity_sense_depth = (uint8_t)data;
+				break;
+			case 0x0d: /* Velocity Sense Offset */
+				mch->midi_params.velocity_sense_offset = (uint8_t)data;
+				break;
 			case 0x0e: /* Pan (0=random) */
 				if(data == 0) {
 					mch->midi_params.random_pan = true;

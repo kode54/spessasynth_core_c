@@ -404,6 +404,10 @@ typedef struct {
 	uint8_t cc1; /* CC1 for the GS controller matrix (default 0x10) */
 	uint8_t cc2; /* CC2 for the GS controller matrix (default 0x11) */
 	uint8_t drum_map; /* GS drum map for SysEx tracking */
+	/* GS/XG velocity sense: incoming velocity is scaled by depth/64 and
+	 * shifted by (offset - 64) * 2.  Both default to 64, which is unity. */
+	uint8_t velocity_sense_depth;
+	uint8_t velocity_sense_offset;
 } SS_ChannelMIDIParameter;
 
 /* Selector enums for the parameter setter functions. */
@@ -462,7 +466,9 @@ typedef enum {
 	SS_CHANNEL_MIDI_EFX_ASSIGN,
 	SS_CHANNEL_MIDI_CC1,
 	SS_CHANNEL_MIDI_CC2,
-	SS_CHANNEL_MIDI_DRUM_MAP
+	SS_CHANNEL_MIDI_DRUM_MAP,
+	SS_CHANNEL_MIDI_VELOCITY_SENSE_DEPTH,
+	SS_CHANNEL_MIDI_VELOCITY_SENSE_OFFSET
 } SS_ChannelMIDIParameterType;
 
 typedef struct SS_MIDIChannel {

@@ -357,6 +357,16 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 									ss_channel_controller(mch, SS_MIDCON_MAIN_VOLUME, data, t);
 									break;
 
+								case 0x1a:
+									/* Velocity Sense Depth */
+									mch->midi_params.velocity_sense_depth = data;
+									break;
+
+								case 0x1b:
+									/* Velocity Sense Offset */
+									mch->midi_params.velocity_sense_offset = data;
+									break;
+
 								/* Pan position */
 								case 0x1c: {
 									/* 0 is random */

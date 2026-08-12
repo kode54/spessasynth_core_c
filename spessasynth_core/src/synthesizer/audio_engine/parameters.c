@@ -97,6 +97,8 @@ void ss_channel_reset_midi_parameters(SS_MIDIChannel *ch) {
 	ch->midi_params.cc1 = 0x10;
 	ch->midi_params.cc2 = 0x11;
 	ch->midi_params.drum_map = 0;
+	ch->midi_params.velocity_sense_depth = 64;
+	ch->midi_params.velocity_sense_offset = 64;
 }
 
 /* ── Channel parameter setters ───────────────────────────────────────────── */
@@ -181,6 +183,12 @@ void ss_channel_set_midi_parameter(SS_MIDIChannel *ch,
 			break;
 		case SS_CHANNEL_MIDI_DRUM_MAP:
 			mp->drum_map = (uint8_t)value;
+			break;
+		case SS_CHANNEL_MIDI_VELOCITY_SENSE_DEPTH:
+			mp->velocity_sense_depth = (uint8_t)value;
+			break;
+		case SS_CHANNEL_MIDI_VELOCITY_SENSE_OFFSET:
+			mp->velocity_sense_offset = (uint8_t)value;
 			break;
 	}
 	ss_channel_update_internal_params(ch);

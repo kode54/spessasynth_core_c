@@ -140,6 +140,16 @@ void ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, b
 	if(!ch->preset) return;
 	if(ch->system_params.is_muted) return;
 
+	/* Apply Velocity Sense and clamp.  The incoming velocity is scaled by
+	 * depth/64 and shifted by (offset - 64) * 2; both default to 64, which
+	 * leaves the velocity untouched.  The raw velocity is still what mono
+	 * mode remembers, matching upstream. */
+	int real_vel = (int)floor((double)vel *
+	                              ((double)ch->midi_params.velocity_sense_depth / 64.0) +
+	                          ((double)ch->midi_params.velocity_sense_offset - 64.0) * 2.0);
+	if(real_vel < 0) real_vel = 0;
+	if(real_vel > 127) real_vel = 127;
+
 	/* current_key_shift folds in the global system/MIDI and channel
 	 * system/MIDI key shifts (see ss_channel_update_internal_params). The
 	 * GS/XG SysEx key shift is the channel MIDI key shift parameter. */
@@ -263,7 +273,7 @@ void ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, b
 
 	/* Get synthesis data for this (note, velocity) */
 	SS_SynthesisData *synth_data = NULL;
-	size_t sd_count = ss_preset_get_synthesis_data(ch->preset, sound_bank_note, vel, &synth_data);
+	size_t sd_count = ss_preset_get_synthesis_data(ch->preset, sound_bank_note, real_vel, &synth_data);
 
 	SS_Processor *proc = ch->synth;
 
@@ -320,7 +330,7 @@ void ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, b
 		audio.playback_step = (float)samp->sample_rate / (float)sr * powf(2.0f, (float)samp->pitch_correction / 1200.0f);
 
 		/* Velocity override */
-		int voice_vel = vel;
+		int voice_vel = real_vel;
 		if(generators[SS_GEN_VELOCITY] > -1)
 			voice_vel = generators[SS_GEN_VELOCITY];
 
