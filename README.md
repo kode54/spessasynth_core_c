@@ -13,9 +13,9 @@ It allows you to:
 - Read DLS files to a SF2 compatible structure!
 - [and more!](#current-features)
 
-### v4.2.0 The Effects Update is here!
+### Synced with upstream's 4.3.0 update
 
-Featuring Reverb, Chorus, Delay, Insertion effects and more!
+We've put through a huge corpus of tests to ensure feature parity with upstream, down to 99% of differences being float32 rounding errors. The C API has not changed significantly, you'll only need rebuilds.
 
 **[Project site (consider giving it a star!)](https://github.com/kode54/spessasynth_core_c)**
 
