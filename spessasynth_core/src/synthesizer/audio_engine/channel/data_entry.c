@@ -20,9 +20,9 @@
 extern void ss_channel_set_generator_offset(SS_MIDIChannel *ch, SS_GeneratorType gen, int val, double time);
 
 extern void ss_channel_reset_parameters_to_defaults(SS_MIDIChannel *ch);
-extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
-extern void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
-extern void ss_channel_set_modulation_depth(SS_MIDIChannel *ch, float cents);
+extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, double val);
+extern void ss_channel_set_tuning(SS_MIDIChannel *ch, double cents);
+extern void ss_channel_set_modulation_depth(SS_MIDIChannel *ch, double cents);
 extern void ss_channel_set_pitch_wheel_range(SS_MIDIChannel *ch, int value);
 extern void ss_channel_nrpn_awe32(SS_MIDIChannel *ch, int param_lsb, int data_value, double time);
 
@@ -53,14 +53,14 @@ void ss_channel_data_entry(SS_MIDIChannel *ch, double time) {
 				/* Fine-tuning */
 				const int final_tuning = data_value - 8192;
 				/* Resolution is 100/8192 cents */
-				ss_channel_set_tuning(ch, (float)final_tuning / 81.92f);
+				ss_channel_set_tuning(ch, (double)final_tuning / 81.92);
 				break;
 			}
 
 				/* Modulation depth */
 			case SS_RPN_MODULATION_DEPTH:
 				/* Cents, so data / 128 * 100 is data / 1.28 */
-				ss_channel_set_modulation_depth(ch, (float)data_value / 1.28f);
+				ss_channel_set_modulation_depth(ch, (double)data_value / 1.28);
 				break;
 
 			case SS_RPN_RESET_PARAMETERS:

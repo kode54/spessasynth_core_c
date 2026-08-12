@@ -20,7 +20,7 @@
 /* 1 / cos(pi/4)^2 = 2.0: corrects insertion send levels from 0-1 to 0-2 range */
 #define EFX_SENDS_GAIN_CORRECTION 2.0f
 
-extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
+extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, double val);
 extern void ss_channel_reset_midi_parameters(SS_MIDIChannel *ch);
 
 static void reset_generator_overrides(SS_MIDIChannel *ch) {

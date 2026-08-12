@@ -37,8 +37,8 @@ extern size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
 extern void ss_synthesis_data_free_array(SS_SynthesisData *data, size_t count);
 extern bool ss_sample_decode(SS_BasicSample *s);
 
-void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
-void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
+void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, double val);
+void ss_channel_set_tuning(SS_MIDIChannel *ch, double cents);
 extern void ss_channel_reset_system_parameters(SS_MIDIChannel *ch);
 extern void ss_channel_reset_midi_parameters(SS_MIDIChannel *ch);
 extern void ss_channel_exclusive_release(SS_MIDIChannel *ch, int note, double time);

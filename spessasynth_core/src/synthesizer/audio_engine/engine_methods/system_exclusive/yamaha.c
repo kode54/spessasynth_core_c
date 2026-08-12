@@ -19,7 +19,7 @@
 /* ── System Exclusive: Yamaha XG ─────────────────────────────────────────── */
 
 extern void ss_processor_set_midi_volume(SS_Processor *proc, float volume);
-extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
+extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, double val);
 extern void ss_processor_event_emit(SS_Processor *proc, SS_SynthEventType type,
                                     int channel, int v1, int v2);
 extern void ss_channel_set_pitch_wheel_range(SS_MIDIChannel *ch, int value);

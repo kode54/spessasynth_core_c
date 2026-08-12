@@ -24,8 +24,8 @@
 /* GS: maps part index (0-15) to MIDI channel. Part 0 → ch 9 (drums), parts 1-9 → ch 0-8, parts 10-15 → ch 10-15 */
 static const uint8_t GS_PART_TO_CHANNEL[16] = { 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15 };
 
-extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, float val);
-extern void ss_channel_set_tuning(SS_MIDIChannel *ch, float cents);
+extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, double val);
+extern void ss_channel_set_tuning(SS_MIDIChannel *ch, double cents);
 extern void ss_processor_set_midi_volume(SS_Processor *proc, float volume);
 extern void ss_channel_set_pitch_wheel_range(SS_MIDIChannel *ch, int value);
 

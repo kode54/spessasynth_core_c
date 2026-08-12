@@ -46,22 +46,20 @@ void ss_channel_update_internal_params(SS_MIDIChannel *ch) {
 	const float gm_tune = p ? p->midi_params.fine_tune : 0.0f;
 
 	/* Tuning in cents — global layers are ignored for drum channels. */
-	ch->current_tuning =
-	(drum ? 0.0f : gs_tune) +
-	(drum ? 0.0f : gm_tune) +
-	cs->fine_tune +
-	cm->fine_tune;
+	/* A drum channel takes the channel *system* layer alone -- not the channel
+	 * MIDI layer with it, which the port had been adding. */
+	ch->current_tuning = drum ? cs->fine_tune
+	                          : (gs_tune + gm_tune + cs->fine_tune + cm->fine_tune);
 
 	/* Panning — normalized [-1;1] layers scaled into the -500..500 range. */
 	ch->current_pan = (gs_pan + gm_pan + cs->pan) * 500.0f;
 	/* Per-channel MIDI pan is the CC#10 controller, applied via modulators. */
 
 	/* Key shift in semitones — global layers are ignored for drum channels. */
-	ch->current_key_shift = (int)floorf(
-	(drum ? 0.0f : gs_key) +
-	(drum ? 0.0f : gm_key) +
-	cs->key_shift +
-	cm->key_shift);
+	/* Truncated toward zero, as upstream's Math.trunc is -- floor would send a
+	 * fractional negative key shift a semitone further down. */
+	ch->current_key_shift = (int)(drum ? cs->key_shift
+	                                   : (gs_key + gm_key + cs->key_shift + cm->key_shift));
 
 	/* Output gain — multiplicative across every layer. */
 	ch->current_gain = SS_GAIN_FACTOR * gs_gain * gm_gain * cs->gain;
