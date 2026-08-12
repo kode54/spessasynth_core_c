@@ -237,7 +237,12 @@ float ss_modcurve_get_value(int transform_type, SS_ModulatorCurveType curve_type
 
 /* ── Pan tables ─────────────────────────────────────────────────────────── */
 
-static const float HALF_PI = (float)(M_PI / 2.0f);
+/* Double, and the cosine taken in double: the table itself is float32, as
+ * upstream's Float32Array is, but upstream computes each entry with Math.cos
+ * and only rounds on the store.  Computing it with cosf instead rounds the
+ * constant, the division and the cosine, and the result is a per-voice gain
+ * error on every note. */
+static const double HALF_PI = M_PI / 2.0;
 
 enum { MIN_PAN = -500 };
 enum { MAX_PAN = 500 };
@@ -252,10 +257,10 @@ void ss_init_pan_table(void) {
 	if(pan_table_initialized) return;
 	for(int pan = MIN_PAN; pan <= MAX_PAN; pan++) {
 		/* Clamp to 0-1 */
-		const float realPan = (float)(pan - MIN_PAN) / (float)PAN_RESOLUTION;
+		const double realPan = (double)(pan - MIN_PAN) / (double)PAN_RESOLUTION;
 		const int tableIndex = pan - MIN_PAN;
-		ss_panTableLeft[tableIndex] = cosf(HALF_PI * realPan);
-		ss_panTableRight[tableIndex] = sinf(HALF_PI * realPan);
+		ss_panTableLeft[tableIndex] = (float)cos(HALF_PI * realPan);
+		ss_panTableRight[tableIndex] = (float)sin(HALF_PI * realPan);
 	}
 	pan_table_initialized = true;
 }

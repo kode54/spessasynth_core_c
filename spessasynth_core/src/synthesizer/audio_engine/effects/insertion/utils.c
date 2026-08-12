@@ -125,10 +125,11 @@ static int pan_tables_initialized = 0;
 void ss_init_insertion_pan_tables(void) {
 	if(pan_tables_initialized) return;
 	for(int pan = -64; pan <= 63; pan++) {
-		float real_pan = (float)(pan + 64) / 127.0f;
+		/* Computed in double and rounded on the store, as upstream does. */
+		double real_pan = (double)(pan + 64) / 127.0;
 		int idx = pan + 64;
-		ss_pan_table_left[idx] = cosf((float)(M_PI * 0.5) * real_pan);
-		ss_pan_table_right[idx] = sinf((float)(M_PI * 0.5) * real_pan);
+		ss_pan_table_left[idx] = (float)cos((M_PI / 2.0) * real_pan);
+		ss_pan_table_right[idx] = (float)sin((M_PI / 2.0) * real_pan);
 	}
 	pan_tables_initialized = 1;
 }
