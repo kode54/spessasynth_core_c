@@ -64,6 +64,15 @@ typedef struct {
 	bool is_looping;
 } SS_AudioSample;
 
+/* ── Timing constants ────────────────────────────────────────────────────── */
+
+/* Shortest a note may sound before its release begins, and the same for a
+ * voice cut short by an exclusive class.  Upstream keeps both in
+ * synth_constants.ts; they live here rather than in one .c file so a caller in
+ * another translation unit cannot quietly substitute its own number. */
+#define SS_MIN_NOTE_LENGTH 0.03
+#define SS_MIN_EXCLUSIVE_LENGTH 0.07
+
 /* ── Lowpass filter ──────────────────────────────────────────────────────── */
 
 typedef struct {

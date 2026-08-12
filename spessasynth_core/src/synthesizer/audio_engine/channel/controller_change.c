@@ -202,7 +202,7 @@ void ss_channel_controller(SS_MIDIChannel *ch, int cc, int val, double time) {
 				for(size_t i = 0; i < ch->sustained_count; i++) {
 					SS_Voice *v = ch->sustained_voices[i];
 					if(v->is_active && !v->is_in_release)
-						ss_voice_release(v, time, 0.05);
+						ss_voice_release(v, time, SS_MIN_NOTE_LENGTH);
 				}
 				ch->sustained_count = 0;
 			}

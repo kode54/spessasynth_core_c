@@ -15,8 +15,6 @@
 #include "spessasynth/synthesizer/synth.h"
 #endif
 
-#define MIN_NOTE_LENGTH 0.05
-#define MIN_EXCLUSIVE_LENGTH 0.01
 #define EXCLUSIVE_CUTOFF_TIME (-2320)
 #define EXCLUSIVE_MOD_CUTOFF_TIME (-1130)
 
@@ -59,7 +57,7 @@ void ss_voice_release(SS_Voice *v, double current_time, double min_note_length) 
 void ss_voice_exclusive_release(SS_Voice *v, double current_time) {
 	v->override_release_vol_env = EXCLUSIVE_CUTOFF_TIME; /* Make the release nearly instant */
 	v->is_in_release = false;
-	ss_voice_release(v, current_time, MIN_EXCLUSIVE_LENGTH);
+	ss_voice_release(v, current_time, SS_MIN_EXCLUSIVE_LENGTH);
 }
 
 /* ── Note off ────────────────────────────────────────────────────────────── */
@@ -84,7 +82,7 @@ void ss_channel_kill_note(SS_MIDIChannel *ch, int note, int release_time, double
 		if(!v->is_active || v->midi_note != note) continue;
 		v->override_release_vol_env = release_time; /* very short release */
 		v->is_in_release = false; /* force release again */
-		ss_voice_release(v, time, MIN_NOTE_LENGTH);
+		ss_voice_release(v, time, SS_MIN_NOTE_LENGTH);
 	}
 }
 
@@ -131,7 +129,7 @@ void ss_channel_note_off(SS_MIDIChannel *ch, int note, double time) {
 			if(ch->sustained_count < ch->sustained_capacity)
 				ch->sustained_voices[ch->sustained_count++] = v;
 		} else {
-			ss_voice_release(v, time, 0.05);
+			ss_voice_release(v, time, SS_MIN_NOTE_LENGTH);
 		}
 	}
 
@@ -171,7 +169,7 @@ void ss_channel_all_notes_off(SS_MIDIChannel *ch, double time) {
 	for(size_t i = 0; i < ch->voice_count; i++) {
 		SS_Voice *v = ch->voices[i];
 		if(v->is_active && !v->is_in_release)
-			ss_voice_release(v, time, 0.05);
+			ss_voice_release(v, time, SS_MIN_NOTE_LENGTH);
 	}
 	ch->sustained_count = 0;
 }
