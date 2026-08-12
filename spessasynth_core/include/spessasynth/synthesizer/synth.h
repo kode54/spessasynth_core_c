@@ -699,6 +699,11 @@ typedef struct SS_Processor {
 
 	int voice_count;
 	double current_time; /* seconds */
+	/* 1 / sample_rate, precomputed.  Upstream advances its clock by
+	 * sampleCount * sampleTime rather than dividing, and the two round
+	 * differently in the last bits -- enough to put an event landing exactly
+	 * on a block boundary in a different block. */
+	double sample_time;
 
 	SS_VoicePool voice_pool; /* recycled voice structures */
 

@@ -846,7 +846,7 @@ try_again:
 	else if(seq->callbacks.sample_rate > 0)
 		sr = seq->callbacks.sample_rate;
 	if(sr == 0) sr = 44100;
-	double dt = (double)sample_count / (double)sr;
+	double dt = (double)sample_count * (1.0 / (double)sr);
 	dt *= seq->playback_rate;
 	double target_time = seq->current_time + dt;
 	double current_time = seq->current_time;
@@ -902,7 +902,10 @@ try_again:
 		double delta_time = (double)delta_ticks * seq->one_tick_seconds;
 		double ev_time = delta_time + seq->cursor_time;
 
-		if(ev_time > target_time) break;
+		/* Strictly before the clock, as upstream's `playedTime < currentTime`
+		 * is: an event landing exactly on the boundary belongs to the next
+		 * block, not this one. */
+		if(ev_time >= target_time) break;
 
 		seq->cursor_time = ev_time;
 		seq->cursor_tick = e->ticks;

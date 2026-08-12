@@ -138,6 +138,7 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 	proc->pan_left = proc->pan_right = cosf(M_PI / 4.0f); /* Center */
 
 	/* Smoothing factors — scale relative to 44 100 Hz reference */
+	proc->sample_time = 1.0 / (double)sample_rate;
 	float sr_scale = 44100.0f / (float)sample_rate;
 	proc->volume_envelope_smoothing_factor = VOLENV_SMOOTHING_44K * sr_scale;
 	proc->filter_smoothing_factor = FILTER_SMOOTHING_44K * sr_scale;
@@ -459,7 +460,7 @@ static void ss_processor_render_internal(SS_Processor *proc,
 	}
 
 	/* Advance time */
-	proc->current_time += (double)sample_count / (double)proc->sample_rate;
+	proc->current_time += (double)sample_count * proc->sample_time;
 }
 
 void ss_processor_render(SS_Processor *proc,
