@@ -518,6 +518,19 @@ void ss_processor_render_interleaved(SS_Processor *proc,
 
 /* ── MIDI event dispatch ─────────────────────────────────────────────────── */
 
+/* Upstream treats a message's timestamp purely as a scheduling key: it decides
+ * whether a message waits for a later block, and every voice it then touches is
+ * stamped with synthCore.currentTime.  The event's own time never dates a voice.
+ *
+ * Threading the caller's timestamp down here instead put voice clocks on the
+ * sequencer's song timeline, which the block-deferred tick leaves one quantum
+ * behind the block being rendered.  Anything comparing a voice time against the
+ * render clock then fired a block early -- the LFO delay gates most visibly,
+ * since a sub-block delay had always elapsed by the voice's first render, so
+ * vibrato ran a step ahead of upstream for the life of the note.
+ *
+ * These entry points therefore ignore their timestamp for voice timing; the
+ * engine clock is the only voice clock. */
 void ss_processor_note_on(SS_Processor *proc, int ch, int note, int vel, double t) {
 	if(vel == 0) {
 		ss_processor_note_off(proc, ch, note, t);
@@ -525,21 +538,23 @@ void ss_processor_note_on(SS_Processor *proc, int ch, int note, int vel, double 
 	}
 	ch += proc->port_select_channel_offset;
 	if(ch < 0 || ch >= proc->channel_count) return;
-	ss_channel_note_on(proc->midi_channels[ch], note, vel, t);
+	ss_channel_note_on(proc->midi_channels[ch], note, vel, proc->current_time);
 	ss_processor_event_emit(proc, SS_EVENT_NOTE_ON, ch, note, vel);
 }
 
 void ss_processor_note_off(SS_Processor *proc, int ch, int note, double t) {
+	(void)t;
 	ch += proc->port_select_channel_offset;
 	if(ch < 0 || ch >= proc->channel_count) return;
-	ss_channel_note_off(proc->midi_channels[ch], note, t);
+	ss_channel_note_off(proc->midi_channels[ch], note, proc->current_time);
 	ss_processor_event_emit(proc, SS_EVENT_NOTE_OFF, ch, note, 0);
 }
 
 void ss_processor_control_change(SS_Processor *proc, int ch, int cc, int val, double t) {
+	(void)t;
 	ch += proc->port_select_channel_offset;
 	if(ch < 0 || ch >= proc->channel_count) return;
-	ss_channel_controller(proc->midi_channels[ch], cc, val, t);
+	ss_channel_controller(proc->midi_channels[ch], cc, val, proc->current_time);
 	ss_processor_event_emit(proc, SS_EVENT_CONTROLLER_CHANGE, ch, cc, val);
 }
 
@@ -555,7 +570,7 @@ void ss_processor_pitch_wheel(SS_Processor *proc, int ch, int value, int midi_no
 	(void)t;
 	ch += proc->port_select_channel_offset;
 	if(ch < 0 || ch >= proc->channel_count) return;
-	ss_channel_pitch_wheel(proc->midi_channels[ch], value, midi_note, t);
+	ss_channel_pitch_wheel(proc->midi_channels[ch], value, midi_note, proc->current_time);
 	ss_processor_event_emit(proc, SS_EVENT_PITCH_WHEEL, ch, value, midi_note);
 }
 
@@ -567,7 +582,7 @@ void ss_processor_channel_pressure(SS_Processor *proc, int ch, int pressure, dou
 	 * 14-bit value at NON_CC_INDEX_OFFSET + SS_MODSRC_CHANNEL_PRESSURE. */
 	SS_MIDIChannel *mch = proc->midi_channels[ch];
 	mch->midi_controllers[NON_CC_INDEX_OFFSET + SS_MODSRC_CHANNEL_PRESSURE] = (int16_t)(pressure << 7);
-	ss_channel_compute_modulators(mch, t);
+	ss_channel_compute_modulators(mch, proc->current_time);
 }
 
 void ss_processor_poly_pressure(SS_Processor *proc, int ch, int note, int pressure, double t) {
@@ -579,7 +594,7 @@ void ss_processor_poly_pressure(SS_Processor *proc, int ch, int note, int pressu
 	for(size_t i = 0; i < mch->voice_count; i++) {
 		if(mch->voices[i]->midi_note == note) {
 			mch->voices[i]->pressure = pressure;
-			ss_voice_compute_modulators(mch->voices[i], mch, t);
+			ss_voice_compute_modulators(mch->voices[i], mch, proc->current_time);
 		}
 	}
 }
