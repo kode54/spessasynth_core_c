@@ -32,23 +32,23 @@ typedef struct {
 typedef struct {
 	SS_ChorusParams parameters;
 	unsigned int maxBufferSize;
-	float preLPFfc;
-	float preLPFa;
-	float preLPFz;
+	double preLPFfc;
+	double preLPFa;
+	double preLPFz;
 	float *leftDelayBuffer;
 	float *rightDelayBuffer;
 	float sampleRate;
-	float phase;
+	double phase;
 	unsigned int write;
-	float gain;
-	float reverbGain;
-	float delayGain;
+	double gain;
+	double reverbGain;
+	double delayGain;
 	/* Fractional sample counts: the read position is interpolated, so
 	 * rounding these to whole samples quantizes the modulation itself. */
-	float depthSamples;
-	float delaySamples;
-	float rateInc;
-	float feedbackGain;
+	double depthSamples;
+	double delaySamples;
+	double rateInc;
+	double feedbackGain;
 } SS_Chorus;
 
 SS_Chorus SPESSASYNTH_EXPORTS *ss_chorus_create(float sampleRate, int maxBufferSize);

@@ -14,8 +14,8 @@ extern "C" {
 /* ── Delay line type ─────────────────────────────────────────────────────── */
 
 typedef struct {
-	float feedback;
-	float gain;
+	double feedback;
+	double gain;
 	float *buffer;
 	unsigned int bufferLength;
 	unsigned int writeIndex;
