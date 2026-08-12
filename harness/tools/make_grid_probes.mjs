@@ -57,7 +57,8 @@ function cell({
     note = NOTE,
     vel = VEL,
     sysex = [],
-    pre = []
+    pre = [],
+    noteCount = 1
 }) {
     const events = [tempo(120), program(0, CH, prog)];
     for (const [controller, value] of setup) {
@@ -69,9 +70,16 @@ function cell({
     for (const e of pre) {
         events.push(e);
     }
-    events.push(noteOn(TPQ / 4, CH, note, vel));
-    events.push(noteOff(TPQ / 4 + HOLD, CH, note));
-    events.push(cc(TPQ / 4 + HOLD + TAIL, CH, CC_EXPRESSION, 127)); // pad the tail
+    /* Successive notes are short and spaced so each is separable in the
+     * render; a single-note cell keeps the original full-length hold. */
+    const step = noteCount > 1 ? HOLD / 2 : HOLD;
+    let at = TPQ / 4;
+    for (let i = 0; i < noteCount; i++) {
+        events.push(noteOn(at, CH, note, vel));
+        events.push(noteOff(at + step - TPQ / 8, CH, note));
+        at += step;
+    }
+    events.push(cc(at + TAIL, CH, CC_EXPRESSION, 127)); // pad the tail
     return buildFile(events);
 }
 
@@ -224,6 +232,23 @@ for (const [label, value] of [
     files.set(`grid_pitchwheel-${label}`, cell({
         setup: [[CC_PAN, 64], [CC_REVERB, 0], [CC_CHORUS, 0], [CC_DELAY, 0]],
         pre: [pitchBend(0, CH, value)]
+    }));
+}
+
+/* ── Axis: random panning ────────────────────────────────────────────────
+ * A GS part pan of 0 selects random panning, so every note-on draws from
+ * the synthesizer's generator. Sweeping the note count checks the two
+ * engines stay in lockstep across successive draws rather than merely
+ * agreeing on the first: a generator that matches for one note but drifts
+ * afterwards shows up as a deficit that grows down this column.
+ *
+ * Both engines seed from the same constant, so with a deterministic
+ * generator every cell here should be flat. */
+for (const notes of [1, 2, 4, 8, 16]) {
+    files.set(`grid_randompan-${String(notes).padStart(3, "0")}`, cell({
+        setup: [[CC_REVERB, 0], [CC_CHORUS, 0], [CC_DELAY, 0]],
+        sysex: [gs(0, 0x40, 0x11, 0x1c, [0])], // part 1 pan = 0 = random
+        noteCount: notes
     }));
 }
 
