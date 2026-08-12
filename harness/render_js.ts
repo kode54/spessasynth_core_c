@@ -32,6 +32,7 @@ interface Options {
     autoAllocate: boolean;
     effects: boolean;
     loopCount: number;
+    emidiFilter: boolean;
     verbose: boolean;
     noSkip: boolean;
     bankPath: string;
@@ -50,6 +51,7 @@ function usage(): never {
   --auto-allocate     uncapped voice allocation (default off)
   --no-effects        disable reverb/chorus/delay
   --loop-count N      sequencer loop count (default 0, i.e. no loop)
+  --emidi-filter      drop EMIDI tracks designated for non-GM devices
   --verbose           enable info-level logging from the core`
     );
     process.exit(2);
@@ -64,6 +66,7 @@ function parseArgs(argv: string[]): Options {
         autoAllocate: false,
         effects: true,
         loopCount: 0,
+        emidiFilter: false,
         verbose: false,
         noSkip: false,
         bankPath: "",
@@ -97,6 +100,9 @@ function parseArgs(argv: string[]): Options {
                 break;
             case "--loop-count":
                 o.loopCount = Number(value());
+                break;
+            case "--emidi-filter":
+                o.emidiFilter = true;
                 break;
             case "--auto-allocate":
                 o.autoAllocate = true;
@@ -167,6 +173,9 @@ const midi = BasicMIDI.fromArrayBuffer(
         midiBin.byteOffset + midiBin.byteLength
     ) as ArrayBuffer
 );
+if (o.emidiFilter) {
+    midi.removeEMIDINonGMTracks();
+}
 
 const synth = new SpessaSynthProcessor(o.rate, {
     eventsEnabled: false,
