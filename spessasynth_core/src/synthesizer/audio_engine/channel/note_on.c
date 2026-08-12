@@ -34,6 +34,10 @@ extern void ss_modulation_envelope_recalculate(SS_ModulationEnvelope *env,
                                                double release_start_time,
                                                double start_time);
 extern void ss_voice_exclusive_release(SS_Voice *v, double current_time);
+extern void ss_channel_kill_note(SS_MIDIChannel *ch, int note, int release_time, double time);
+
+/* Upstream's killNote default: -12000 timecents, a near-instant release. */
+#define KILL_NOTE_RELEASE_TIME (-12000)
 extern float ss_timecents_to_seconds(int tc);
 
 static long clamp_long(long val, long min, long max) {
@@ -120,6 +124,13 @@ static void enforce_voice_cap(SS_Processor *proc, double time,
 /* ── Note on ─────────────────────────────────────────────────────────────── */
 
 void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
+	ss_channel_note_on_ex(ch, note, vel, time, true);
+}
+
+/* emit is false for the mono-mode fallback retrigger: that note-on is a
+ * consequence of a note-off, not a new one, so it must not consume a new
+ * note id — the note-off still pending for it has to keep matching. */
+void ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, bool emit) {
 	if(vel < 1) {
 		ss_channel_note_off(ch, note, time);
 		return;
@@ -167,9 +178,21 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 	 */
 	ch->last_note = note;
 
+	if(note >= 0 && note < 128) ch->playing_notes[note] = true;
+
+	/* Mono mode: cut only the note that was sounding, and remember this one
+	 * so a later note-off knows whether to fall back to a held note. */
 	if(!ch->midi_params.poly_mode) {
-		ss_channel_exclusive_release(ch, -1, time);
+		if(ch->last_mono_note >= 0 && ch->last_mono_note != note) {
+			ss_channel_kill_note(ch, ch->last_mono_note, KILL_NOTE_RELEASE_TIME, time);
+		}
+		ch->last_mono_note = note;
+		ch->last_mono_velocity = vel;
 	}
+
+	const uint32_t note_id = (note >= 0 && note < 128)
+	                             ? (emit ? ch->note_on_id[note]++ : ch->note_on_id[note])
+	                             : 0;
 
 	/* Drum parameter checks */
 	int drum_filter_cutoff = -1;
@@ -403,6 +426,8 @@ void ss_channel_note_on(SS_MIDIChannel *ch, int note, int vel, double time) {
 		}
 		voice->sample.is_looping = (voice->sample.looping_mode == SS_LOOP_LOOP ||
 		                            voice->sample.looping_mode == SS_LOOP_LOOP_RELEASE);
+
+		voice->note_id = note_id;
 
 		/* Apply portamento */
 		voice->portamento_duration = porta_time;

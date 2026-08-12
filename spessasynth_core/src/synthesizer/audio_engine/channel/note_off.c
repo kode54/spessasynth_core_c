@@ -73,6 +73,21 @@ void ss_channel_exclusive_release(SS_MIDIChannel *ch, int note, double time) {
 	}
 }
 
+/* Upstream's killNote: cut every voice on this note almost instantly and
+ * drop the note's on/off id pairing, so a later note-on starts clean. */
+void ss_channel_kill_note(SS_MIDIChannel *ch, int note, int release_time, double time) {
+	if(note < 0 || note >= 128) return;
+	ch->note_off_id[note] = 0;
+	ch->note_on_id[note] = 0;
+	for(size_t i = 0; i < ch->voice_count; i++) {
+		SS_Voice *v = ch->voices[i];
+		if(!v->is_active || v->midi_note != note) continue;
+		v->override_release_vol_env = release_time; /* very short release */
+		v->is_in_release = false; /* force release again */
+		ss_voice_release(v, time, MIN_NOTE_LENGTH);
+	}
+}
+
 void ss_channel_note_off(SS_MIDIChannel *ch, int note, double time) {
 	/* Drum rx_note_off: if enabled, do a fast exclusive release */
 	if(ch->drum_channel && note >= 0 && note < 128) {
@@ -82,11 +97,26 @@ void ss_channel_note_off(SS_MIDIChannel *ch, int note, double time) {
 		}
 	}
 
-	bool sustained = ch->midi_controllers[64] >= 64 << 7; /* CC64 sustain pedal */
+	if(note >= 0 && note < 128) ch->playing_notes[note] = false;
+
+	const bool mono = !ch->midi_params.poly_mode;
+	/* Mono mode overrides sustain */
+	bool sustained = ch->midi_controllers[64] >= 64 << 7 && !mono; /* CC64 sustain pedal */
+
+	/* Release only the voices belonging to the matching note-on.  Repeated
+	 * note-ons of the same pitch each get an id, and each note-off consumes
+	 * one, so overlapping notes release in order instead of all at once.
+	 * Testcase: overlapping_notes_test (multiple note off) */
+	const uint32_t note_id = (note >= 0 && note < 128) ? ch->note_off_id[note] : 0;
+	if(note >= 0 && note < 128 && note_id < ch->note_on_id[note]) {
+		ch->note_off_id[note]++;
+	}
+
 	for(size_t i = 0; i < ch->voice_count; i++) {
 		SS_Voice *v = ch->voices[i];
 		if(!v->is_active || v->is_in_release) continue;
 		if(v->midi_note != note) continue;
+		if(v->note_id != note_id) continue;
 		if(sustained) {
 			/* Add to sustained list */
 			if(ch->sustained_count >= ch->sustained_capacity) {
@@ -104,9 +134,40 @@ void ss_channel_note_off(SS_MIDIChannel *ch, int note, double time) {
 			ss_voice_release(v, time, 0.05);
 		}
 	}
+
+	/* Mono mode: fall back to the highest note still held down. */
+	if(mono) {
+		int highest = -1;
+		for(int i = 127; i >= 0; i--) {
+			if(ch->playing_notes[i]) {
+				highest = i;
+				break;
+			}
+		}
+		if(highest < 0) {
+			/* No note is playing */
+			ch->last_mono_note = -1;
+		} else if(ch->last_mono_note == note) {
+			/* Only retrigger when the note released was the sounding one.
+			 * Notes might go On 50, 60, 70; Off 50 jumps to 70; Off 60 must
+			 * not jump to 70 a second time. */
+			ss_channel_note_on_ex(ch, highest, ch->last_mono_velocity, time, false);
+		}
+	}
+}
+
+/* Upstream's stopAllNotes clears the note bookkeeping whether or not the
+ * stop is forced, so a channel never resumes with stale ids or a phantom
+ * held note. */
+static void channel_clear_note_state(SS_MIDIChannel *ch) {
+	memset(ch->note_on_id, 0, sizeof(ch->note_on_id));
+	memset(ch->note_off_id, 0, sizeof(ch->note_off_id));
+	memset(ch->playing_notes, 0, sizeof(ch->playing_notes));
+	ch->last_mono_note = -1;
 }
 
 void ss_channel_all_notes_off(SS_MIDIChannel *ch, double time) {
+	channel_clear_note_state(ch);
 	for(size_t i = 0; i < ch->voice_count; i++) {
 		SS_Voice *v = ch->voices[i];
 		if(v->is_active && !v->is_in_release)
@@ -116,6 +177,7 @@ void ss_channel_all_notes_off(SS_MIDIChannel *ch, double time) {
 }
 
 void ss_channel_all_sound_off(SS_MIDIChannel *ch) {
+	channel_clear_note_state(ch);
 	for(size_t i = 0; i < ch->voice_count; i++)
 		ch->voices[i]->is_active = false;
 	ss_channel_remove_finished_voices(ch);
