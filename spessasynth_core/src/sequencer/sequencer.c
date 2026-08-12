@@ -975,8 +975,11 @@ try_again:
 					loop_rewind_to_tick(seq, midi->loop.start, loop_end_time);
 				else
 					ss_sequencer_set_tick(seq, midi->loop.start);
-				seq->absolute_start_time += (loop_end_time - loop_start_time) /
-				                            (seq->playback_rate > 0.0 ? seq->playback_rate : 1.0);
+				/* No origin adjustment here: both branches above land through
+				 * a seek, and a seek already rebases absolute_start_time onto
+				 * the position it lands on.  Shifting it again moved the
+				 * derived clock a whole loop further on, so the rest of the
+				 * song was consumed in one tick and the file fell silent. */
 				target_time -= loop_end_time - loop_start_time;
 				continue;
 			}
