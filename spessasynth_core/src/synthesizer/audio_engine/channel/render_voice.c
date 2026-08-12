@@ -113,7 +113,6 @@ bool ss_voice_render(SS_Voice *v,
 	/* ── LFOs ─────────────────────────────────────────────────────────── */
 	float lowpass_excursion = 0.0f;
 	float volume_excursion_cb = 0.0f;
-	float mod_mult = ch->custom_controllers[SS_CUSTOM_CTRL_MODULATION_MULTIPLIER];
 
 	/* voice_gain: amplitude generator + LFO amplitude depths (matches TS voiceGain) */
 	float voice_gain = v->gain * (1.0f + (float)v->modulated_generators[SS_GEN_AMPLITUDE] / 1000.0f);
@@ -139,7 +138,12 @@ bool ss_voice_render(SS_Voice *v,
 			phase += rate_inc;
 			if(phase >= 1.0f) phase -= 1.0f;
 			v->vib_lfo_phase = phase;
-			cents += lfo_val * ((float)vib_pitch * mod_mult);
+			/* The modulation multiplier is already folded into
+			 * vib_pitch by compute_modulator, which scales the mod-wheel
+			 * modulator's output by modulationDepth/50.  Applying it here
+			 * as well squares it, so an RPN modulation depth other than
+			 * the default 50 cents came out wrong. */
+			cents += lfo_val * (float)vib_pitch;
 			lowpass_excursion += lfo_val * (float)vib_filter_depth;
 			voice_gain *= 1.0f - ((lfo_val + 1.0f) / 2.0f) * ((float)vib_amplitude_depth / 1000.0f);
 		}
@@ -162,7 +166,7 @@ bool ss_voice_render(SS_Voice *v,
 			phase += rate_inc;
 			if(phase >= 1.0f) phase -= 1.0f;
 			v->mod_lfo_phase = phase;
-			cents += lfo_val * ((float)mod_pitch * mod_mult);
+			cents += lfo_val * (float)mod_pitch;
 			volume_excursion_cb += -lfo_val * (float)mod_vol;
 			lowpass_excursion += lfo_val * (float)mod_filter;
 			voice_gain *= 1.0f - ((lfo_val + 1.0f) / 2.0f) * ((float)mod_amplitude_depth / 1000.0f);
