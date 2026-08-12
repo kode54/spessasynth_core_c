@@ -145,7 +145,9 @@ void ss_channel_data_entry(SS_MIDIChannel *ch, double time) {
 			 * also if SC-55 preset is explicitly requested (MAP1 - LSB 1), it's 100 cents as well!
 			 */
 			const bool is_xg = ch->synth && ch->synth->midi_params.system == SS_SYSTEM_XG;
-			const bool is_100cent = is_xg && ch->bank_lsb == 1;
+			/* Either condition gives 100 cents, not both: XG always, and GS
+			 * when the SC-55 map is explicitly selected via bank LSB 1. */
+			const bool is_100cent = is_xg || ch->bank_lsb == 1;
 			const float range = is_100cent ? 100.0f : 50.0f;
 			ch->drum_params[param_fine].pitch = (((float)data_coarse) - 64.0f) * range;
 			break;
@@ -158,7 +160,8 @@ void ss_channel_data_entry(SS_MIDIChannel *ch, double time) {
 		}
 
 		case SS_NRPN_GS_MSB_DRUM_TVA_LEVEL:
-			ch->drum_params[param_fine].gain = ((float)data_coarse) / 127.0f;
+			/* 120, not 127: upstream lets a drum level above 120 push past unity. */
+			ch->drum_params[param_fine].gain = ((double)data_coarse) / 120.0;
 			break;
 
 		case SS_NRPN_GS_MSB_DRUM_PANPOT:
