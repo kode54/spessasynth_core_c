@@ -189,10 +189,11 @@ void SPESSASYNTH_EXPORTS ss_sequencer_set_loop_count(SS_Sequencer *seq, int coun
  *
  *  Driving the built-in processor, the lead-in is replayed instantly by a
  *  seek.  Driving an external synthesizer through the callback table, the
- *  lead-in is instead played out at normal speed — a stateful synth needs
- *  those setup messages spread over real time rather than delivered as one
- *  burst — and ss_sequencer_is_lead_in reports which rendered audio to
- *  throw away. */
+ *  lead-in is instead played out at normal speed: such a synth typically
+ *  queues messages into a processing buffer that only drains as it renders,
+ *  so it needs a render quantum between them rather than the whole lead-in
+ *  as one burst.  ss_sequencer_is_lead_in then reports which rendered audio
+ *  to throw away. */
 void SPESSASYNTH_EXPORTS ss_sequencer_set_skip_to_first_note_on(SS_Sequencer *seq, bool skip);
 
 /** True while the lead-in is still playing and nothing has sounded yet.

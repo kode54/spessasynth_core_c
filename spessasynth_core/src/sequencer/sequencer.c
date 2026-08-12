@@ -158,10 +158,13 @@ void ss_sequencer_set_tick(SS_Sequencer *seq, size_t target_tick);
  *
  *  Driving an external synthesizer through the callback table, a seek would
  *  deliver the whole lead-in as a burst of messages sharing one timestamp.
- *  A hardware or otherwise stateful synth needs those spread over real time
- *  to act on them, so the lead-in is played at normal speed instead and the
- *  caller is told to discard what it renders until the first note sounds —
- *  see ss_sequencer_is_lead_in.
+ *  Such a synth typically queues incoming messages into a processing buffer
+ *  that only drains as it renders, so a burst delivered without any
+ *  intervening render either backs up or is applied all at once.  The
+ *  lead-in is played at normal speed instead, giving the synth a render
+ *  quantum between messages to consume them, and the caller is told to
+ *  discard what it renders until the first note sounds — see
+ *  ss_sequencer_is_lead_in.
  *
  *  No-op when the song starts on a note, or has no notes at all. */
 static void skip_lead_in(SS_Sequencer *seq) {
