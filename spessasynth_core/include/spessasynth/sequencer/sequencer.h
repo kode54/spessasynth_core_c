@@ -28,6 +28,27 @@ typedef struct {
 } SS_SequencerSong;
 
 /**
+ * What the sequencer does once a finite loop_count is used up.
+ *
+ * SS_LOOP_END_FADE
+ *     Keep jumping at the loop marker while fading the master volume out
+ *     over fade_seconds, so the music keeps sounding rather than trailing
+ *     into silence.  This is the default, and is what a music player
+ *     usually wants.  Upstream has no equivalent.
+ *
+ * SS_LOOP_END_PLAY_OUT
+ *     Stop jumping and let the song play through to its end, which is what
+ *     upstream's sequencer does when its loopCount countdown reaches zero.
+ *     No fade is ever started in this mode.  Use it when comparing renders
+ *     against upstream, where the fade would otherwise make the last
+ *     seconds of a looping file incomparable.
+ */
+typedef enum {
+	SS_LOOP_END_FADE = 0,
+	SS_LOOP_END_PLAY_OUT = 1
+} SS_LoopEndBehavior;
+
+/**
  * Callback interface for driving an external synthesizer from the
  * sequencer instead of the built-in SS_Processor.  Every callback is
  * optional; a NULL entry silently disables that hook.
@@ -98,6 +119,9 @@ typedef struct {
 	 * Infinite looping without loop markers rewinds the whole file. */
 	int loop_count;
 	double fade_seconds;
+	/* What happens when a finite loop_count runs out: fade and keep
+	 * looping, or stop looping and play the song out as upstream does. */
+	SS_LoopEndBehavior loop_end_behavior;
 
 	/* Runtime loop/fade state.  loops_played counts upward starting at 1
 	 * (the initial playthrough) and increments each time the sequencer
@@ -224,8 +248,15 @@ void SPESSASYNTH_EXPORTS ss_sequencer_set_skip_to_first_note_on(SS_Sequencer *se
 bool SPESSASYNTH_EXPORTS ss_sequencer_is_lead_in(const SS_Sequencer *seq);
 
 /** Configure the post-loop fade duration in seconds.  Only used when
- *  loop_count is finite and the MIDI has loop markers.  Default: 7.0. */
+ *  loop_count is finite, the MIDI has loop markers and the loop-end
+ *  behavior is SS_LOOP_END_FADE.  Default: 7.0. */
 void SPESSASYNTH_EXPORTS ss_sequencer_set_fade_seconds(SS_Sequencer *seq, double seconds);
+
+/** Choose what happens once a finite loop count is used up.  See
+ *  SS_LoopEndBehavior.  Switching to SS_LOOP_END_PLAY_OUT cancels any
+ *  fade already in progress.  Default: SS_LOOP_END_FADE. */
+void SPESSASYNTH_EXPORTS ss_sequencer_set_loop_end_behavior(SS_Sequencer *seq,
+                                                            SS_LoopEndBehavior behavior);
 
 /** Manually advance to the next song, cancelling any pending loops or
  *  fade on the current one.  No-op at the end of the song list (the

@@ -5,6 +5,7 @@
  */
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -699,8 +700,17 @@ void ss_sequencer_set_loop_count(SS_Sequencer *seq, int count) {
 	/* Finite target.  If the user requested a loop count at or below the
 	 * playthrough we're already on, start the fade immediately — even
 	 * mid-loop, without waiting for the next loop-end marker. */
-	if(count >= 1 && seq->loops_played > count && !seq->fading)
+	if(seq->loop_end_behavior == SS_LOOP_END_FADE && count >= 1 &&
+	   seq->loops_played > count && !seq->fading)
 		begin_fade(seq);
+}
+
+void ss_sequencer_set_loop_end_behavior(SS_Sequencer *seq,
+                                        SS_LoopEndBehavior behavior) {
+	if(!seq) return;
+	seq->loop_end_behavior = behavior;
+	/* Playing the song out never fades, so drop one already running. */
+	if(behavior == SS_LOOP_END_PLAY_OUT) end_fade(seq);
 }
 
 void ss_sequencer_set_skip_to_first_note_on(SS_Sequencer *seq, bool skip) {
@@ -955,13 +965,23 @@ try_again:
 				 * trailing into silence after the final loop body. */
 				do_jump = true;
 			} else if(seq->loop_count >= 1) {
-				/* Finite target.  Incrementing loops_played brings it to
-				 * the count of the playthrough we're about to begin;
-				 * when that hits loop_count we are starting the final
-				 * iteration, which is also the fade iteration. */
-				if(seq->loops_played >= seq->loop_count)
-					begin_fade(seq);
-				do_jump = true;
+				if(seq->loop_end_behavior == SS_LOOP_END_PLAY_OUT) {
+					/* Upstream counts its loopCount down on every jump
+					 * and simply stops jumping once it reaches zero,
+					 * letting the song run to its own end.  loops_played
+					 * is the number of jumps already taken, so the jump
+					 * that would take it past loop_count is the one that
+					 * must not happen. */
+					do_jump = seq->loops_played < seq->loop_count;
+				} else {
+					/* Finite target.  Incrementing loops_played brings it
+					 * to the count of the playthrough we're about to
+					 * begin; when that hits loop_count we are starting the
+					 * final iteration, which is also the fade iteration. */
+					if(seq->loops_played >= seq->loop_count)
+						begin_fade(seq);
+					do_jump = true;
+				}
 			}
 			/* loop_count in {0, 1}: looping disabled; fall through and
 			 * let the song play out. */
