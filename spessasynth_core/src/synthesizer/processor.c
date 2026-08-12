@@ -806,24 +806,38 @@ void ss_processor_system_reset(SS_Processor *proc) {
 	 * Upstream's reset() re-applies the three macros and resets the
 	 * insertion processor, but never touches the send buffers -- and a
 	 * hard loop jump routes through a seek, which resets.  Clearing them
-	 * cuts the whole wet tail off at the loop point. */
+	 * cuts the whole wet tail off at the loop point.
+	 *
+	 * Re-applying the reverb macro does clear that effect's two pre-delay
+	 * lines, because its character setter always does; upstream clears the
+	 * same two the same way.  The Dattorro tank, the chorus and the delay
+	 * keep running.
+	 *
+	 * Each macro is skipped when its effect is locked, as upstream's
+	 * setReverbMacro, setChorusMacro, setDelayMacro and resetInsertion all
+	 * return early on their lock. */
 
 	// Hall2 default
-	ss_reverb_set_macro(proc->reverb, 4);
+	if(!proc->system_params.reverb_lock)
+		ss_reverb_set_macro(proc->reverb, 4);
 	// Chorus3 default
-	ss_chorus_set_macro(proc->chorus, 2);
+	if(!proc->system_params.chorus_lock)
+		ss_chorus_set_macro(proc->chorus, 2);
 	// Delay1 default
-	ss_delay_set_macro(proc->delay, 0);
+	if(!proc->system_params.delay_lock)
+		ss_delay_set_macro(proc->delay, 0);
 
 	/* Reset insertion: free old processor, create default Thru */
-	ss_insertion_free(proc->insertion);
-	proc->insertion = ss_insertion_create(0x0000, proc->sample_rate, SS_MAX_SOUND_CHUNK);
-	if(proc->insertion) {
-		proc->insertion->send_level_to_reverb = (40.0f / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
-		proc->insertion->send_level_to_chorus = 0.0f;
-		proc->insertion->send_level_to_delay = 0.0f;
+	if(!proc->system_params.insertion_effect_lock) {
+		ss_insertion_free(proc->insertion);
+		proc->insertion = ss_insertion_create(0x0000, proc->sample_rate, SS_MAX_SOUND_CHUNK);
+		if(proc->insertion) {
+			proc->insertion->send_level_to_reverb = (40.0f / 127.0f) * EFX_SENDS_GAIN_CORRECTION;
+			proc->insertion->send_level_to_chorus = 0.0f;
+			proc->insertion->send_level_to_delay = 0.0f;
+		}
+		proc->insertion_active = false;
 	}
-	proc->insertion_active = false;
 
 	for(int i = 0; i < proc->channel_count; i++) {
 		SS_MIDIChannel *ch = proc->midi_channels[i];
