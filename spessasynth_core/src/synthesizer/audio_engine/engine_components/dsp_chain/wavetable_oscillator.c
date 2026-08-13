@@ -166,7 +166,12 @@ enum { SINC_RADIUS = 4 };
 enum { SINC_MAX_RADIUS = 32 };
 /* Entries per source sample in the kernel table. */
 enum { SINC_RESOLUTION = 1024 };
-enum { SINC_TABLE_COUNT = (2 * SINC_RADIUS * SINC_RESOLUTION) + 1 };
+/* Both factors of the kernel are even in d — sinc is odd over odd, and the
+ * window's cosines are invariant under the t -> 1-t that d -> -d induces — so
+ * only |d| in [0, SINC_RADIUS] is stored and sinc_weight folds the sign away.
+ * The last entry holds kernel(SINC_RADIUS) = 0 and exists so the interpolation
+ * may still read i+1 from the final real entry. */
+enum { SINC_TABLE_COUNT = (SINC_RADIUS * SINC_RESOLUTION) + 1 };
 
 /* Cutoff in cycles per sample, and the window's shoulder.  Fitted, not chosen. */
 #define SINC_CUTOFF 0.29
@@ -184,8 +189,8 @@ static bool sinc_table_ready = false;
 void ss_sinc_table_init(void) {
 	if(sinc_table_ready) return;
 	for(int i = 0; i < SINC_TABLE_COUNT; i++) {
-		const double d = ((double)i / (double)SINC_RESOLUTION) - (double)SINC_RADIUS;
-		if(fabs(d) >= (double)SINC_RADIUS) {
+		const double d = (double)i / (double)SINC_RESOLUTION;
+		if(d >= (double)SINC_RADIUS) {
 			sinc_table[i] = 0.0;
 			continue;
 		}
@@ -201,10 +206,21 @@ void ss_sinc_table_init(void) {
 	sinc_table_ready = true;
 }
 
-/* kernel(d), linearly interpolated between table entries. */
+/* kernel(|d|), linearly interpolated between table entries.  Folding the sign
+ * rather than storing both halves is what the inner loop wants: it may read 64
+ * weights per output sample, striding the table rather than walking it, and one
+ * half is 32K where both were 64K — the difference between fitting a typical L1
+ * and missing to L2 on most of those reads.
+ *
+ * Folding also removes an absorption the two-sided form suffered.  That version
+ * indexed on (d + SINC_RADIUS) * SINC_RESOLUTION, so a d near zero lost up to
+ * ten bits of itself to the addition before the scale could recover them; |d| *
+ * SINC_RESOLUTION keeps them.  The mirrored halves likewise agreed only to
+ * about 1.5 ulp, since their windows evaluated cos at t and at 1-t rather than
+ * at one argument, and now there is one value where there were two. */
 static inline double sinc_weight(double d) {
-	const double at = (d + (double)SINC_RADIUS) * (double)SINC_RESOLUTION;
-	if(at <= 0.0 || at >= (double)(SINC_TABLE_COUNT - 1)) return 0.0;
+	const double at = fabs(d) * (double)SINC_RESOLUTION;
+	if(at >= (double)(SINC_TABLE_COUNT - 1)) return 0.0;
 	const int i = (int)at;
 	const double f = at - (double)i;
 	return (sinc_table[i] * (1.0 - f)) + (sinc_table[i + 1] * f);
