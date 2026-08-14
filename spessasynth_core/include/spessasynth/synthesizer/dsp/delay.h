@@ -41,7 +41,7 @@ typedef struct SS_Delay {
 	SS_DelayLine *delayRight;
 	SS_DelayLine *delayCenter;
 
-	float sample_rate;
+	double sample_rate;
 	int max_buffer_size;
 
 	float *delay_center_output;
@@ -55,7 +55,7 @@ typedef struct SS_Delay {
 	double reverb_gain;
 } SS_Delay;
 
-SS_Delay SPESSASYNTH_EXPORTS *ss_delay_create(float sample_rate, int max_buffer_size);
+SS_Delay SPESSASYNTH_EXPORTS *ss_delay_create(double sample_rate, int max_buffer_size);
 void SPESSASYNTH_EXPORTS ss_delay_clear(SS_Delay *delay);
 void SPESSASYNTH_EXPORTS ss_delay_free(SS_Delay *delay);
 

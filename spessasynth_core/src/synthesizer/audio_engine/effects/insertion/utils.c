@@ -27,12 +27,12 @@ void ss_biquad_identity(SS_Biquad *c) {
 
 /* Robert Bristow-Johnson shelf (S=1) */
 void ss_compute_shelf(SS_Biquad *c, double db_gain, double f0, double fs, int is_low) {
-	double A = pow(10.0, db_gain / 40.0);
-	double w0 = 2.0 * M_PI * f0 / fs;
-	double cw = cos(w0), sw = sin(w0);
-	double alpha = (sw / 2.0) * sqrt((A + 1.0 / A) * (1.0 / 1.0 - 1) + 2.0);
+	const double A = pow(10.0, db_gain / 40.0);
+	const double w0 = 2.0 * M_PI * f0 / fs;
+	const double cw = cos(w0), sw = sin(w0);
+	const double alpha = (sw / 2.0) * sqrt((A + 1.0 / A) * (1.0 / 1.0 - 1) + 2.0);
 	double b0, b1, b2, a0, a1, a2;
-	double sA = sqrt(A);
+	const double sA = sqrt(A);
 	if(is_low) {
 		b0 = A * (A + 1 - (A - 1) * cw + 2 * sA * alpha);
 		b1 = 2 * A * (A - 1 - (A + 1) * cw);
@@ -57,16 +57,16 @@ void ss_compute_shelf(SS_Biquad *c, double db_gain, double f0, double fs, int is
 
 /* Peaking EQ (used by StereoEQ mid bands) */
 void ss_compute_peaking_eq(SS_Biquad *c, double freq, double gain_db, double Q, double fs) {
-	double A = pow(10.0, gain_db / 40.0);
-	double w0 = 2.0 * M_PI * freq / fs;
-	double cw = cos(w0), sw = sin(w0);
-	double alpha = sw / (2.0 * Q);
-	double b0 = 1 + alpha * A;
-	double b1 = -2 * cw;
-	double b2 = 1 - alpha * A;
-	double a0 = 1 + alpha / A;
-	double a1 = -2 * cw;
-	double a2 = 1 - alpha / A;
+	const double A = pow(10.0, gain_db / 40.0);
+	const double w0 = 2.0 * M_PI * freq / fs;
+	const double cw = cos(w0), sw = sin(w0);
+	const double alpha = sw / (2.0 * Q);
+	const double b0 = 1 + alpha * A;
+	const double b1 = -2 * cw;
+	const double b2 = 1 - alpha * A;
+	const double a0 = 1 + alpha / A;
+	const double a1 = -2 * cw;
+	const double a2 = 1 - alpha / A;
 	c->b0 = b0 / a0;
 	c->b1 = b1 / a0;
 	c->b2 = b2 / a0;
@@ -85,14 +85,14 @@ void ss_compute_high_shelf(SS_Biquad *c, double freq, double gain_db, double fs)
 
 /* Standard 2nd-order lowpass */
 void ss_compute_lpf(SS_Biquad *c, double freq, double Q, double fs) {
-	double w0 = 2.0 * M_PI * freq / fs;
-	double cw = cos(w0), sw = sin(w0);
-	double alpha = sw / (2.0 * Q);
-	double b1v = 1.0 - cw;
-	double b0v = b1v * 0.5;
-	double a0 = 1.0 + alpha;
-	double a1 = -2.0 * cw;
-	double a2 = 1.0 - alpha;
+	const double w0 = 2.0 * M_PI * freq / fs;
+	const double cw = cos(w0), sw = sin(w0);
+	const double alpha = sw / (2.0 * Q);
+	const double b1v = 1.0 - cw;
+	const double b0v = b1v * 0.5;
+	const double a0 = 1.0 + alpha;
+	const double a1 = -2.0 * cw;
+	const double a2 = 1.0 - alpha;
 	c->b0 = b0v / a0;
 	c->b1 = b1v / a0;
 	c->b2 = b0v / a0;
@@ -102,14 +102,14 @@ void ss_compute_lpf(SS_Biquad *c, double freq, double Q, double fs) {
 
 /* Standard 2nd-order highpass */
 void ss_compute_hpf(SS_Biquad *c, double freq, double Q, double fs) {
-	double w0 = 2.0 * M_PI * freq / fs;
-	double cw = cos(w0), sw = sin(w0);
-	double alpha = sw / (2.0 * Q);
-	double b0v = (1.0 + cw) * 0.5;
-	double b1v = -(1.0 + cw);
-	double a0 = 1.0 + alpha;
-	double a1 = -2.0 * cw;
-	double a2 = 1.0 - alpha;
+	const double w0 = 2.0 * M_PI * freq / fs;
+	const double cw = cos(w0), sw = sin(w0);
+	const double alpha = sw / (2.0 * Q);
+	const double b0v = (1.0 + cw) * 0.5;
+	const double b1v = -(1.0 + cw);
+	const double a0 = 1.0 + alpha;
+	const double a1 = -2.0 * cw;
+	const double a2 = 1.0 - alpha;
 	c->b0 = b0v / a0;
 	c->b1 = b1v / a0;
 	c->b2 = b0v / a0;
@@ -135,23 +135,23 @@ void ss_init_insertion_pan_tables(void) {
 }
 
 /* LFO helpers (matching TS waveforms) */
-static inline float lfo_triangle(float phase) {
-	return 1.0f - 4.0f * fabsf(phase - 0.5f);
+static inline double lfo_triangle(double phase) {
+	return 1.0 - 4.0 * fabs(phase - 0.5);
 }
-static inline float lfo_square(float phase) {
-	return phase > 0.5f ? -1.0f : -(float)cos((phase - 0.75f) * 2.0 * M_PI);
+static inline double lfo_square(double phase) {
+	return phase > 0.5 ? -1.0 : -(double)cos((phase - 0.75) * 2.0 * M_PI);
 }
-static inline float lfo_sine(float phase) {
-	return sinf(2.0f * (float)M_PI * phase);
+static inline double lfo_sine(double phase) {
+	return sin(2.0 * M_PI * phase);
 }
-static inline float lfo_saw1(float phase) {
-	return 1.0f - 2.0f * phase;
+static inline double lfo_saw1(double phase) {
+	return 1.0 - 2.0 * phase;
 }
-static inline float lfo_saw2(float phase) {
-	return 2.0f * phase - 1.0f;
+static inline double lfo_saw2(double phase) {
+	return 2.0 * phase - 1.0;
 }
 
-float ss_compute_lfo(int wave, float phase) {
+double ss_compute_lfo(int wave, double phase) {
 	switch(wave) {
 		default:
 			return lfo_triangle(phase);

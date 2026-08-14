@@ -20,7 +20,7 @@
  * upstream SPESSASYNTH_GAIN_FACTOR. This attenuates the mix by ~4.4 dB to
  * leave room for the effect buses before the output clips.
  */
-#define SS_GAIN_FACTOR 0.6f
+#define SS_GAIN_FACTOR 0.6
 
 /* From the channel files. */
 void ss_channel_all_sound_off(SS_MIDIChannel *ch);
@@ -36,14 +36,14 @@ void ss_channel_update_internal_params(SS_MIDIChannel *ch) {
 	const SS_ChannelMIDIParameter *cm = &ch->midi_params;
 
 	/* Global layers fall back to neutral values when the channel is detached. */
-	const float gs_gain = p ? p->system_params.gain : 1.0f;
-	const float gm_gain = p ? p->midi_params.gain : 1.0f;
-	const float gs_pan = p ? p->system_params.pan : 0.0f;
-	const float gm_pan = p ? p->midi_params.pan : 0.0f;
-	const float gs_key = p ? p->system_params.key_shift : 0.0f;
-	const float gm_key = p ? p->midi_params.key_shift : 0.0f;
-	const float gs_tune = p ? p->system_params.fine_tune : 0.0f;
-	const float gm_tune = p ? p->midi_params.fine_tune : 0.0f;
+	const double gs_gain = p ? p->system_params.gain : 1.0;
+	const double gm_gain = p ? p->midi_params.gain : 1.0;
+	const double gs_pan = p ? p->system_params.pan : 0.0;
+	const double gm_pan = p ? p->midi_params.pan : 0.0;
+	const double gs_key = p ? p->system_params.key_shift : 0.0;
+	const double gm_key = p ? p->midi_params.key_shift : 0.0;
+	const double gs_tune = p ? p->system_params.fine_tune : 0.0;
+	const double gm_tune = p ? p->midi_params.fine_tune : 0.0;
 
 	/* Tuning in cents — global layers are ignored for drum channels. */
 	/* A drum channel takes the channel *system* layer alone -- not the channel
@@ -76,10 +76,10 @@ void ss_channel_update_internal_params(SS_MIDIChannel *ch) {
 void ss_channel_reset_system_parameters(SS_MIDIChannel *ch) {
 	ch->system_params.preset_lock = false;
 	ch->system_params.is_muted = false;
-	ch->system_params.gain = 1.0f;
-	ch->system_params.pan = 0.0f;
-	ch->system_params.key_shift = 0.0f;
-	ch->system_params.fine_tune = 0.0f;
+	ch->system_params.gain = 1.0;
+	ch->system_params.pan = 0.0;
+	ch->system_params.key_shift = 0.0;
+	ch->system_params.fine_tune = 0.0;
 	ch->system_params.interpolation_type = SS_PARAM_UNSET;
 	ch->system_params.nrpn_param_lock = SS_PARAM_UNSET;
 	ch->system_params.monophonic_retrigger = SS_PARAM_UNSET;
@@ -89,8 +89,8 @@ void ss_channel_reset_system_parameters(SS_MIDIChannel *ch) {
 void ss_channel_reset_midi_parameters(SS_MIDIChannel *ch) {
 	ch->midi_params.rx_channel = ch->channel_number;
 	ch->midi_params.poly_mode = true;
-	ch->midi_params.fine_tune = 0.0f;
-	ch->midi_params.key_shift = 0.0f;
+	ch->midi_params.fine_tune = 0.0;
+	ch->midi_params.key_shift = 0.0;
 	ch->midi_params.random_pan = false;
 	ch->midi_params.assign_mode = 2;
 	ch->midi_params.efx_assign = false;
@@ -203,29 +203,29 @@ void ss_processor_init_parameters(SS_Processor *proc) {
 	sp->events_enabled = true;
 	sp->voice_cap = (int)proc->options.voice_cap;
 	sp->auto_allocate_voices = false;
-	sp->reverb_gain = 1.0f;
+	sp->reverb_gain = 1.0;
 	sp->reverb_lock = false;
-	sp->chorus_gain = 1.0f;
+	sp->chorus_gain = 1.0;
 	sp->chorus_lock = false;
-	sp->delay_gain = 1.0f;
+	sp->delay_gain = 1.0;
 	sp->delay_lock = false;
 	sp->insertion_effect_lock = false;
 	sp->drum_lock = false;
 	sp->black_midi_mode = false;
 	sp->device_id = -1;
-	sp->gain = 1.0f;
-	sp->pan = 0.0f;
-	sp->key_shift = 0.0f;
-	sp->fine_tune = 0.0f;
+	sp->gain = 1.0;
+	sp->pan = 0.0;
+	sp->key_shift = 0.0;
+	sp->fine_tune = 0.0;
 	sp->interpolation_type = proc->options.interpolation;
 	sp->nrpn_param_lock = false;
 	sp->monophonic_retrigger = false;
 
 	proc->midi_params.system = SS_SYSTEM_GS;
-	proc->midi_params.key_shift = 0.0f;
-	proc->midi_params.fine_tune = 0.0f;
-	proc->midi_params.gain = 1.0f;
-	proc->midi_params.pan = 0.0f;
+	proc->midi_params.key_shift = 0.0;
+	proc->midi_params.fine_tune = 0.0;
+	proc->midi_params.gain = 1.0;
+	proc->midi_params.pan = 0.0;
 }
 
 /* ── Global parameter setters ────────────────────────────────────────────── */

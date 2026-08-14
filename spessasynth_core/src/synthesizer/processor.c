@@ -22,12 +22,12 @@
 /* 1 / cos(pi/4)^2 = 2.0: corrects insertion send levels from 0-1 to 0-2 range */
 extern void ss_sinc_table_init(void);
 
-#define EFX_SENDS_GAIN_CORRECTION 2.0f
+#define EFX_SENDS_GAIN_CORRECTION 2.0
 
 /* Smoothing factors tuned at 44 100 Hz, scaled linearly to target rate */
-#define VOLENV_SMOOTHING_44K 0.01f
-#define PAN_SMOOTHING_44K 0.05f
-#define FILTER_SMOOTHING_44K 0.03f
+#define VOLENV_SMOOTHING_44K 0.01
+#define PAN_SMOOTHING_44K 0.05
+#define FILTER_SMOOTHING_44K 0.03
 
 extern void ss_channel_compute_modulators(SS_MIDIChannel *ch, double time);
 extern void ss_channel_compute_modulators_for(SS_MIDIChannel *ch, double time,
@@ -39,7 +39,7 @@ extern void ss_channel_set_tuning(SS_MIDIChannel *ch, double cents);
 extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, double val);
 extern void ss_processor_init_parameters(SS_Processor *proc);
 
-void ss_processor_set_midi_volume(SS_Processor *proc, float volume);
+void ss_processor_set_midi_volume(SS_Processor *proc, double volume);
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
@@ -136,11 +136,11 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 
 	/* MIDI volume */
 	ss_processor_set_midi_volume(proc, 1.0);
-	proc->pan_left = proc->pan_right = cosf(M_PI / 4.0f); /* Center */
+	proc->pan_left = proc->pan_right = cos(M_PI / 4.0); /* Center */
 
 	/* Smoothing factors — scale relative to 44 100 Hz reference */
 	proc->sample_time = 1.0 / (double)sample_rate;
-	float sr_scale = 44100.0f / (float)sample_rate;
+	const double sr_scale = 44100.0 / (double)sample_rate;
 	proc->volume_envelope_smoothing_factor = VOLENV_SMOOTHING_44K * sr_scale;
 	proc->filter_smoothing_factor = FILTER_SMOOTHING_44K * sr_scale;
 	proc->pan_smoothing_factor = PAN_SMOOTHING_44K * sr_scale;
@@ -156,9 +156,9 @@ SS_Processor *ss_processor_create(uint32_t sample_rate,
 		proc->channel_count++;
 	}
 
-	proc->reverb = ss_reverb_create((float)sample_rate, SS_MAX_SOUND_CHUNK);
-	proc->chorus = ss_chorus_create((float)sample_rate, SS_MAX_SOUND_CHUNK);
-	proc->delay = ss_delay_create((float)sample_rate, SS_MAX_SOUND_CHUNK);
+	proc->reverb = ss_reverb_create((double)sample_rate, SS_MAX_SOUND_CHUNK);
+	proc->chorus = ss_chorus_create((double)sample_rate, SS_MAX_SOUND_CHUNK);
+	proc->delay = ss_delay_create((double)sample_rate, SS_MAX_SOUND_CHUNK);
 	if(!proc->reverb || !proc->chorus || !proc->delay) {
 		ss_processor_free(proc);
 		return NULL;
@@ -869,11 +869,11 @@ void ss_processor_system_reset(SS_Processor *proc) {
 	ss_processor_event_emit(proc, SS_EVENT_STOP_ALL, -1, 0, 0);
 }
 
-void ss_processor_set_midi_volume(SS_Processor *proc, float volume) {
+void ss_processor_set_midi_volume(SS_Processor *proc, double volume) {
 	/* GM2 specification, section 4.1: volume is squared.
 	 * Though, according to my own testing, Math.E seems like a better choice.
 	 * The curved value is stored as the global MIDI gain parameter.
 	 */
 	ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_GAIN,
-	                                powf(volume, (float)M_E));
+	                                pow(volume, M_E));
 }

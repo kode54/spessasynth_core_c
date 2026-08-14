@@ -18,7 +18,7 @@
 
 /* ── System Exclusive: Yamaha XG ─────────────────────────────────────────── */
 
-extern void ss_processor_set_midi_volume(SS_Processor *proc, float volume);
+extern void ss_processor_set_midi_volume(SS_Processor *proc, double volume);
 extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, double val);
 extern void ss_processor_event_emit(SS_Processor *proc, SS_SynthEventType type,
                                     int channel, int v1, int v2);
@@ -58,14 +58,14 @@ void ss_sysex_yamaha(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 				}
 				break;
 			case 0x04: /* Master volume */
-				ss_processor_set_midi_volume(proc, (float)data / 127.0f);
+				ss_processor_set_midi_volume(proc, (double)data / 127.0);
 				break;
 			case 0x05: /* Master attenuation */
-				ss_processor_set_midi_volume(proc, (float)(127 - data) / 127.0f);
+				ss_processor_set_midi_volume(proc, (double)(127 - data) / 127.0);
 				break;
 			case 0x06: /* Master transpose (semitones) */
 				ss_processor_set_midi_parameter(proc, SS_GLOBAL_MIDI_KEY_SHIFT,
-				                                (float)((int)data - 64));
+				                                (double)((int)data - 64));
 				break;
 			case 0x7e: /* XG Reset */
 			case 0x7f: /* XG System On */

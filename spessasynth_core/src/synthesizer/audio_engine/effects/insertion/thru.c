@@ -20,17 +20,17 @@ static void thru_process(SS_InsertionProcessor *self,
                          float *oL, float *oR,
                          float *oRev, float *oCho, float *oDel,
                          int start, int n) {
-	float rev = self->send_level_to_reverb;
-	float cho = self->send_level_to_chorus;
-	float del = self->send_level_to_delay;
+	double rev = self->send_level_to_reverb;
+	double cho = self->send_level_to_chorus;
+	double del = self->send_level_to_delay;
 	for(int i = 0; i < n; i++) {
-		float sL = iL[i], sR = iR[i];
-		oL[start + i] += sL;
-		oR[start + i] += sR;
-		float mono = (sL + sR) * 0.5f;
-		if(oRev) oRev[i] += mono * rev;
-		if(oCho) oCho[i] += mono * cho;
-		if(oDel) oDel[i] += mono * del;
+		double sL = iL[i], sR = iR[i];
+		oL[start + i] = (float)((double)oL[start + i] + sL);
+		oR[start + i] = (float)((double)oR[start + i] + sR);
+		double mono = (sL + sR) * 0.5;
+		if(oRev) oRev[i] = (float)((double)oRev[i] + mono * rev);
+		if(oCho) oCho[i] = (float)((double)oCho[i] + mono * cho);
+		if(oDel) oDel[i] = (float)((double)oDel[i] + mono * del);
 	}
 }
 static void thru_set_param(SS_InsertionProcessor *self, int p, int v) {

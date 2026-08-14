@@ -152,8 +152,8 @@ void ss_channel_data_entry(SS_MIDIChannel *ch, double time) {
 			/* Either condition gives 100 cents, not both: XG always, and GS
 			 * when the SC-55 map is explicitly selected via bank LSB 1. */
 			const bool is_100cent = is_xg || ch->bank_lsb == 1;
-			const float range = is_100cent ? 100.0f : 50.0f;
-			ch->drum_params[param_fine].pitch = (((float)data_coarse) - 64.0f) * range;
+			const double range = is_100cent ? 100.0 : 50.0;
+			ch->drum_params[param_fine].pitch = (((double)data_coarse) - 64.0) * range;
 			break;
 		}
 
@@ -173,15 +173,15 @@ void ss_channel_data_entry(SS_MIDIChannel *ch, double time) {
 			break;
 
 		case SS_NRPN_GS_MSB_DRUM_REVERB_SEND:
-			ch->drum_params[param_fine].reverb_gain = ((float)data_coarse) / 127.0f;
+			ch->drum_params[param_fine].reverb_gain = ((double)data_coarse) / 127.0;
 			break;
 
 		case SS_NRPN_GS_MSB_DRUM_CHORUS_SEND:
-			ch->drum_params[param_fine].chorus_gain = ((float)data_coarse) / 127.0f;
+			ch->drum_params[param_fine].chorus_gain = ((double)data_coarse) / 127.0;
 			break;
 
 		case SS_NRPN_GS_MSB_DRUM_DELAY_SEND:
-			ch->drum_params[param_fine].delay_gain = ((float)data_coarse) / 127.0f;
+			ch->drum_params[param_fine].delay_gain = ((double)data_coarse) / 127.0;
 			if(ch->synth) ch->synth->delay_active = true;
 			break;
 

@@ -55,12 +55,12 @@ static void seq_process(SS_InsertionProcessor *self,
 		sR = ss_biquad_process(&e->m2_c, &e->m2_r, sR);
 		sL = ss_biquad_process(&e->hi_c, &e->hi_l, sL);
 		sR = ss_biquad_process(&e->hi_c, &e->hi_r, sR);
-		oL[start + i] += sL * level;
-		oR[start + i] += sR * level;
+		oL[start + i] = (float)((double)oL[start + i] + sL * level);
+		oR[start + i] = (float)((double)oR[start + i] + sR * level);
 		double mono = 0.5 * (sL + sR);
-		if(oRev) oRev[i] += mono * rev;
-		if(oCho) oCho[i] += mono * cho;
-		if(oDel) oDel[i] += mono * del;
+		if(oRev) oRev[i] = (float)((double)oRev[i] + mono * rev);
+		if(oCho) oCho[i] = (float)((double)oCho[i] + mono * cho);
+		if(oDel) oDel[i] = (float)((double)oDel[i] + mono * del);
 	}
 }
 
@@ -71,13 +71,13 @@ static void seq_set_param(SS_InsertionProcessor *self, int p, int v) {
 			e->low_freq = v == 1 ? 400.0 : 200.0;
 			break;
 		case 0x04:
-			e->low_gain = (float)(v - 64);
+			e->low_gain = (double)(v - 64);
 			break;
 		case 0x05:
 			e->hi_freq = v == 1 ? 8000.0 : 4000.0;
 			break;
 		case 0x06:
-			e->hi_gain = (float)(v - 64);
+			e->hi_gain = (double)(v - 64);
 			break;
 		case 0x07:
 			e->m1_freq = ss_ivc_eq_freq(v);
@@ -86,7 +86,7 @@ static void seq_set_param(SS_InsertionProcessor *self, int p, int v) {
 			e->m1_q_idx = (v < 5 ? v : 1);
 			break;
 		case 0x09:
-			e->m1_gain = (float)(v - 64);
+			e->m1_gain = (double)(v - 64);
 			break;
 		case 0x0a:
 			e->m2_freq = ss_ivc_eq_freq(v);
@@ -95,10 +95,10 @@ static void seq_set_param(SS_InsertionProcessor *self, int p, int v) {
 			e->m2_q_idx = (v < 5 ? v : 1);
 			break;
 		case 0x0c:
-			e->m2_gain = (float)(v - 64);
+			e->m2_gain = (double)(v - 64);
 			break;
 		case 0x16:
-			e->level = (float)v / 127.0;
+			e->level = (double)v / 127.0;
 			break;
 		default:
 			break;

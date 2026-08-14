@@ -29,8 +29,8 @@ extern bool ss_voice_render(SS_Voice *v, const SS_MIDIChannel *ch,
                             float *delay,
                             int sample_count,
                             SS_InterpolationType interp,
-                            float vol_smoothing, float filter_smoothing, float pan_smoothing);
-extern float ss_abs_cents_to_hz(int cents);
+                            double vol_smoothing, double filter_smoothing, double pan_smoothing);
+extern double ss_abs_cents_to_hz(int cents);
 extern size_t ss_preset_get_synthesis_data(const SS_BasicPreset *preset,
                                            int midi_note, int velocity,
                                            SS_SynthesisData **out);

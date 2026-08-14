@@ -62,12 +62,12 @@ static void phaw_process(SS_InsertionProcessor *self,
 		double out_aw = e->buf_aw[i] * 0.5 * e->level;
 		double outL = out_ph * phL + out_aw * awL;
 		double outR = out_ph * phR + out_aw * awR;
-		oL[start + i] += outL;
-		oR[start + i] += outR;
+		oL[start + i] = (float)((double)oL[start + i] + outL);
+		oR[start + i] = (float)((double)oR[start + i] + outR);
 		double mono = (outL + outR) * 0.5;
-		if(oRev) oRev[i] += mono * rev;
-		if(oCho) oCho[i] += mono * cho;
-		if(oDel) oDel[i] += mono * del;
+		if(oRev) oRev[i] = (float)((double)oRev[i] + mono * rev);
+		if(oCho) oCho[i] = (float)((double)oCho[i] + mono * cho);
+		if(oDel) oDel[i] = (float)((double)oDel[i] + mono * del);
 	}
 }
 
@@ -83,19 +83,19 @@ static void phaw_set_param(SS_InsertionProcessor *self, int p, int v) {
 	}
 	switch(p) {
 		case 0x12:
-			e->ph_pan = (float)v;
+			e->ph_pan = (double)v;
 			break;
 		case 0x13:
 			ss_phaser_set_param(&e->phaser.base, 0x16, v);
 			break;
 		case 0x14:
-			e->aw_pan = (float)v;
+			e->aw_pan = (double)v;
 			break;
 		case 0x15:
 			ss_auto_wah_set_param(&e->auto_wah.base, 0x16, v);
 			break;
 		case 0x16:
-			e->level = (float)v / 127.0;
+			e->level = (double)v / 127.0;
 			break;
 		default:
 			break;

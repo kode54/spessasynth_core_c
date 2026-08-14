@@ -26,7 +26,7 @@ static const uint8_t GS_PART_TO_CHANNEL[16] = { 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 10
 
 extern void ss_channel_set_custom_controller(SS_MIDIChannel *ch, SS_CustomController type, double val);
 extern void ss_channel_set_tuning(SS_MIDIChannel *ch, double cents);
-extern void ss_processor_set_midi_volume(SS_Processor *proc, float volume);
+extern void ss_processor_set_midi_volume(SS_Processor *proc, double volume);
 extern void ss_channel_set_pitch_wheel_range(SS_MIDIChannel *ch, int value);
 
 /*
@@ -476,7 +476,7 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 
 								case 0x40: {
 									/* Scale tuning: up to 12 bytes */
-									long tuning_bytes = len - 8; /* Data starts at 7, minus checksum */
+									long tuning_bytes = (long)(len - 8); /* Data starts at 7, minus checksum */
 									if(tuning_bytes < 0)
 										tuning_bytes = 0;
 									else if(tuning_bytes > 12)
@@ -731,7 +731,7 @@ void ss_sysex_roland(SS_Processor *proc, const uint8_t *syx, size_t len, double 
 			case 0x16: {
 				if(syx[4] == 0x10) {
 					/* This is a Roland master volume message */
-					ss_processor_set_midi_volume(proc, (float)syx[7] / 100.0f);
+					ss_processor_set_midi_volume(proc, (double)syx[7] / 100.0);
 					return;
 				} else {
 					/* Unrecognized sysex */

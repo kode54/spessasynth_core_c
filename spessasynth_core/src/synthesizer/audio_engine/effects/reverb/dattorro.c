@@ -254,8 +254,10 @@ void ss_dattorro_reverb_process(SS_DattorroReverb *reverb, const float *input, f
 		delayReadAt(10, taps[12]) -
 		delayReadAt(11, taps[13]);
 
-		*outputLeft++ += leftSample * gain;
-		*outputRight++ += rightSample * gain;
+		*outputLeft = (float)((double)*outputLeft + leftSample * gain);
+		*outputRight = (float)((double)*outputRight + rightSample * gain);
+		outputLeft++;
+		outputRight++;
 
 #undef delayWrite
 #undef delayRead

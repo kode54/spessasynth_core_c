@@ -33,12 +33,12 @@ static void init_timecent_table(void) {
 	timecent_initialized = true;
 }
 
-float ss_timecents_to_seconds(int timecents) {
+double ss_timecents_to_seconds(int timecents) {
 	if(!timecent_initialized) init_timecent_table();
-	if(timecents <= -32767) return 0.0f;
+	if(timecents <= -32767) return 0.0;
 	if(timecents < TIMECENT_MIN) timecents = TIMECENT_MIN;
 	if(timecents > TIMECENT_MAX) timecents = TIMECENT_MAX;
-	return timecent_table[timecents - TIMECENT_MIN];
+	return (double)timecent_table[timecents - TIMECENT_MIN];
 }
 
 /* ── Absolute cents -> Hz lookup table ────────────────────────────────────
@@ -61,11 +61,11 @@ static void init_abscent_table(void) {
 	abscent_initialized = true;
 }
 
-float ss_abs_cents_to_hz(int cents) {
+double ss_abs_cents_to_hz(int cents) {
 	if(!abscent_initialized) init_abscent_table();
 	if(cents < ABSCENT_MIN || cents > ABSCENT_MAX)
-		return (float)(440.0 * pow(2.0, (cents - 6900) / 1200.0));
-	return abscent_table[cents - ABSCENT_MIN];
+		return 440.0 * pow(2.0, (cents - 6900) / 1200.0);
+	return (double)abscent_table[cents - ABSCENT_MIN];
 }
 
 /* ── Centibel attenuation -> gain lookup table ──────────────────────────────
@@ -98,13 +98,13 @@ static void init_centibel_table(void) {
  * audible on the grid as a note-dependent loss on an otherwise exact render.
  *
  * Truncation is toward zero rather than floor, matching upstream's `| 0`. */
-float ss_centibel_attenuation_to_gain(double centibels) {
+double ss_centibel_attenuation_to_gain(double centibels) {
 	if(!centibel_initialized) init_centibel_table();
-	if(!centibel_table) return (float)pow(10.0, -centibels / 200.0);
+	if(!centibel_table) return pow(10.0, -centibels / 200.0);
 	int idx = (int)(centibels - MIN_CENTIBELS);
 	if(idx < 0) idx = 0;
 	if(idx >= CENTIBEL_SIZE) idx = CENTIBEL_SIZE - 1;
-	return centibel_table[idx];
+	return (double)centibel_table[idx];
 }
 
 /* ── Modulator curve ─────────────────────────────────────────────────────── */
@@ -131,11 +131,11 @@ static void init_convex_table(void) {
 	convex_initialized = true;
 }
 
-float ss_convex_attack(int index_0_to_999) {
+double ss_convex_attack(int index_0_to_999) {
 	if(!convex_initialized) init_convex_table();
-	if(index_0_to_999 < 0) return 0.0f;
-	if(index_0_to_999 >= 999) return 1.0f;
-	return convex_attack_table[index_0_to_999];
+	if(index_0_to_999 < 0) return 0.0;
+	if(index_0_to_999 >= 999) return 1.0;
+	return (double)convex_attack_table[index_0_to_999];
 }
 
 /* ── Modulator curves ───────────────────────────────────────────────────── */

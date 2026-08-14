@@ -31,7 +31,7 @@ extern void ss_channel_remove_finished_voices(SS_MIDIChannel *ch);
 extern bool ss_wavetable_get_sample(SS_Voice *v, float *out, int count,
                                     SS_InterpolationType interp);
 extern bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
-                                       int count, float gain_target);
+                                       int count, double gain_target);
 extern void ss_volume_envelope_start_release(SS_Voice *v,
                                              SS_VolumeEnvelope *env,
                                              const int16_t *mod_gens,
@@ -43,10 +43,10 @@ extern void ss_modulation_envelope_start_release(SS_ModulationEnvelope *env,
                                                  int midi_note,
                                                  double release_start_time,
                                                  double start_time);
-extern float ss_modulation_envelope_get_value(const SS_ModulationEnvelope *env,
-                                              double current_time);
-extern float ss_abs_cents_to_hz(int cents);
-extern float ss_centibel_attenuation_to_gain(double db);
+extern double ss_modulation_envelope_get_value(const SS_ModulationEnvelope *env,
+                                               double current_time);
+extern double ss_abs_cents_to_hz(int cents);
+extern double ss_centibel_attenuation_to_gain(double db);
 
 bool ss_voice_render(SS_Voice *v,
                      const SS_MIDIChannel *ch,
@@ -57,9 +57,9 @@ bool ss_voice_render(SS_Voice *v,
                      float *delay,
                      int sample_count,
                      SS_InterpolationType interp,
-                     float vol_smoothing,
-                     float filter_smoothing,
-                     float pan_smoothing) {
+                     double vol_smoothing,
+                     double filter_smoothing,
+                     double pan_smoothing) {
 	/* Trigger release if needed */
 	if(!v->is_in_release && time_now >= v->release_start_time) {
 		v->is_in_release = true;
@@ -101,18 +101,18 @@ bool ss_voice_render(SS_Voice *v,
 
 	/* Portamento */
 	if(v->portamento_from_key > -1) {
-		float elapsed = (float)((time_now - v->start_time) / v->portamento_duration);
-		if(elapsed > 1.0f) elapsed = 1.0f;
-		float diff = (float)(target_key - v->portamento_from_key);
-		semitones -= diff * (1.0f - elapsed);
+		double elapsed = (double)((time_now - v->start_time) / v->portamento_duration);
+		if(elapsed > 1.0) elapsed = 1.0;
+		double diff = (double)(target_key - v->portamento_from_key);
+		semitones -= diff * (1.0 - elapsed);
 	}
 
 	/* Scale tuning */
-	cents += (float)(target_key - v->sample.root_key) * (float)v->modulated_generators[SS_GEN_SCALE_TUNING];
+	cents += (double)(target_key - v->sample.root_key) * (double)v->modulated_generators[SS_GEN_SCALE_TUNING];
 
 	/* ── LFOs ─────────────────────────────────────────────────────────── */
-	float lowpass_excursion = 0.0f;
-	float volume_excursion_cb = 0.0f;
+	double lowpass_excursion = 0.0;
+	double volume_excursion_cb = 0.0;
 
 	/* voice_gain: amplitude generator + LFO amplitude depths (matches TS voiceGain) */
 	double voice_gain = v->gain * (1.0 + (double)v->modulated_generators[SS_GEN_AMPLITUDE] / 1000.0);
@@ -125,27 +125,27 @@ bool ss_voice_render(SS_Voice *v,
 	 */
 	const double vib_start = v->vib_lfo_start_time;
 	if(time_now >= vib_start) {
-		int vib_pitch = v->modulated_generators[SS_GEN_VIB_LFO_TO_PITCH];
-		int vib_filter_depth = v->modulated_generators[SS_GEN_VIB_LFO_TO_FILTER_FC];
-		int vib_amplitude_depth = v->modulated_generators[SS_GEN_VIB_LFO_AMPLITUDE_DEPTH];
+		const int vib_pitch = v->modulated_generators[SS_GEN_VIB_LFO_TO_PITCH];
+		const int vib_filter_depth = v->modulated_generators[SS_GEN_VIB_LFO_TO_FILTER_FC];
+		const int vib_amplitude_depth = v->modulated_generators[SS_GEN_VIB_LFO_AMPLITUDE_DEPTH];
 		if(vib_pitch || vib_filter_depth || vib_amplitude_depth) {
-			float vib_rate = (float)v->modulated_generators[SS_GEN_VIB_LFO_RATE] / 100.0f;
-			float vib_freq = ss_abs_cents_to_hz(v->modulated_generators[SS_GEN_FREQ_VIB_LFO]) + vib_rate;
-			if(vib_freq < 0.0f) vib_freq = 0.0f;
-			float rate_inc = (vib_freq * (float)sample_count) / (float)ch->synth->sample_rate;
-			float phase = v->vib_lfo_phase;
-			float lfo_val = 1.0f - 4.0f * fabsf(phase - 0.5f);
+			const double vib_rate = (double)v->modulated_generators[SS_GEN_VIB_LFO_RATE] / 100.0;
+			double vib_freq = ss_abs_cents_to_hz(v->modulated_generators[SS_GEN_FREQ_VIB_LFO]) + vib_rate;
+			if(vib_freq < 0.0) vib_freq = 0.0;
+			const double rate_inc = (vib_freq * (double)sample_count) / (double)ch->synth->sample_rate;
+			double phase = v->vib_lfo_phase;
+			const double lfo_val = 1.0 - 4.0 * fabs(phase - 0.5);
 			phase += rate_inc;
-			if(phase >= 1.0f) phase -= 1.0f;
+			if(phase >= 1.0) phase -= 1.0;
 			v->vib_lfo_phase = phase;
 			/* The modulation multiplier is already folded into
 			 * vib_pitch by compute_modulator, which scales the mod-wheel
 			 * modulator's output by modulationDepth/50.  Applying it here
 			 * as well squares it, so an RPN modulation depth other than
 			 * the default 50 cents came out wrong. */
-			cents += lfo_val * (float)vib_pitch;
-			lowpass_excursion += lfo_val * (float)vib_filter_depth;
-			voice_gain *= 1.0f - ((lfo_val + 1.0f) / 2.0f) * ((float)vib_amplitude_depth / 1000.0f);
+			cents += lfo_val * (double)vib_pitch;
+			lowpass_excursion += lfo_val * (double)vib_filter_depth;
+			voice_gain *= 1.0 - ((lfo_val + 1.0) / 2.0) * ((double)vib_amplitude_depth / 1000.0);
 		}
 	}
 
@@ -157,19 +157,19 @@ bool ss_voice_render(SS_Voice *v,
 		int mod_filter = v->modulated_generators[SS_GEN_MOD_LFO_TO_FILTER_FC];
 		int mod_amplitude_depth = v->modulated_generators[SS_GEN_MOD_LFO_AMPLITUDE_DEPTH];
 		if(mod_pitch || mod_vol || mod_filter || mod_amplitude_depth) {
-			float mod_rate = (float)v->modulated_generators[SS_GEN_MOD_LFO_RATE] / 100.0f;
-			float mod_freq = ss_abs_cents_to_hz(v->modulated_generators[SS_GEN_FREQ_MOD_LFO]) + mod_rate;
-			if(mod_freq < 0.0f) mod_freq = 0.0f;
-			float rate_inc = (mod_freq * (float)sample_count) / (float)ch->synth->sample_rate;
-			float phase = v->mod_lfo_phase;
-			float lfo_val = 1.0f - 4.0f * fabsf(phase - 0.5f);
+			const double mod_rate = (double)v->modulated_generators[SS_GEN_MOD_LFO_RATE] / 100.0;
+			double mod_freq = ss_abs_cents_to_hz(v->modulated_generators[SS_GEN_FREQ_MOD_LFO]) + mod_rate;
+			if(mod_freq < 0.0) mod_freq = 0.0;
+			const double rate_inc = (mod_freq * (double)sample_count) / (double)ch->synth->sample_rate;
+			double phase = v->mod_lfo_phase;
+			const double lfo_val = 1.0 - 4.0 * fabs(phase - 0.5);
 			phase += rate_inc;
-			if(phase >= 1.0f) phase -= 1.0f;
+			if(phase >= 1.0) phase -= 1.0;
 			v->mod_lfo_phase = phase;
-			cents += lfo_val * (float)mod_pitch;
-			volume_excursion_cb += -lfo_val * (float)mod_vol;
-			lowpass_excursion += lfo_val * (float)mod_filter;
-			voice_gain *= 1.0f - ((lfo_val + 1.0f) / 2.0f) * ((float)mod_amplitude_depth / 1000.0f);
+			cents += lfo_val * (double)mod_pitch;
+			volume_excursion_cb += -lfo_val * (double)mod_vol;
+			lowpass_excursion += lfo_val * (double)mod_filter;
+			voice_gain *= 1.0 - ((lfo_val + 1.0) / 2.0) * ((double)mod_amplitude_depth / 1000.0);
 		}
 	}
 
@@ -179,9 +179,9 @@ bool ss_voice_render(SS_Voice *v,
 	int mod_env_pitch = v->modulated_generators[SS_GEN_MOD_ENV_TO_PITCH];
 	int mod_env_filter = v->modulated_generators[SS_GEN_MOD_ENV_TO_FILTER_FC];
 	if(mod_env_pitch || mod_env_filter) {
-		float mod_env = ss_modulation_envelope_get_value(&v->modulation_env, time_now);
-		lowpass_excursion += mod_env * (float)mod_env_filter;
-		cents += mod_env * (float)mod_env_pitch;
+		const double mod_env = ss_modulation_envelope_get_value(&v->modulation_env, time_now);
+		lowpass_excursion += mod_env * (double)mod_env_filter;
+		cents += mod_env * (double)mod_env_pitch;
 	}
 
 	/* Default resonant modulator: it does not affect the filter gain (neither XG nor GS did that) */
@@ -199,14 +199,14 @@ bool ss_voice_render(SS_Voice *v,
 	}
 
 	/* ── Gain ────────────────────────────────────────────────────────── */
-	const float gain_target = ss_centibel_attenuation_to_gain(v->modulated_generators[SS_GEN_INITIAL_ATTENUATION]) *
-	                          ss_centibel_attenuation_to_gain(volume_excursion_cb);
+	const double gain_target = ss_centibel_attenuation_to_gain(v->modulated_generators[SS_GEN_INITIAL_ATTENUATION]) *
+	                           ss_centibel_attenuation_to_gain(volume_excursion_cb);
 
 	/* ── SYNTHESIS ───────────────────────────────────────────────────── */
 	bool owned_buf;
 	float *buf;
 
-	if(ch->synth) {
+	if(ch && ch->synth) {
 		buf = &ch->synth->mix_buffer[0];
 		memset(buf, 0, sizeof(float) * SS_MAX_SOUND_CHUNK);
 		owned_buf = false;
@@ -279,7 +279,7 @@ bool ss_voice_render(SS_Voice *v,
 	const double gain_right = pan_right * output_gain;
 
 	for(int i = 0; i < sample_count; i++) {
-		const double s = buf[i];
+		const double s = (double)buf[i];
 		out_left[i] += gain_left * s;
 		out_right[i] += gain_right * s;
 	}
@@ -292,7 +292,7 @@ bool ss_voice_render(SS_Voice *v,
 		return v->is_active;
 	}
 
-	if(ch->synth && ch->synth->delay_active && delay) {
+	if(ch && ch->synth && ch->synth->delay_active && delay) {
 		const int delaySend = (int)(ch->midi_controllers[SS_MIDCON_VARIATION_DEPTH] * v->delay_send);
 		if(delaySend > 0) {
 			const double delayGain =
@@ -308,18 +308,18 @@ bool ss_voice_render(SS_Voice *v,
 
 	if(reverb && reverb_amt > 0) {
 		const double reverb_gain = output_gain * (reverb_amt / 1000.0) *
-		                           (ch->synth ? ch->synth->system_params.reverb_gain : 1.0);
+		                           (ch && ch->synth ? ch->synth->system_params.reverb_gain : 1.0);
 		for(int i = 0; i < sample_count; i++) {
-			float s = buf[i];
+			const double s = (double)buf[i];
 			reverb[i] += s * reverb_gain;
 		}
 	}
 
 	if(chorus && chorus_amt > 0) {
 		const double chorus_gain = output_gain * (chorus_amt / 1000.0) *
-		                           (ch->synth ? ch->synth->system_params.chorus_gain : 1.0);
+		                           (ch && ch->synth ? ch->synth->system_params.chorus_gain : 1.0);
 		for(int i = 0; i < sample_count; i++) {
-			float s = buf[i];
+			const double s = (double)buf[i];
 			chorus[i] += s * chorus_gain;
 		}
 	}
@@ -362,7 +362,7 @@ void ss_channel_render(SS_MIDIChannel *ch,
 		                (int)sample_count, interp,
 		                vol_smoothing, filter_smoothing, pan_smoothing);
 	}
-	int voice_count = ch->voice_count;
+	size_t voice_count = ch->voice_count;
 	ss_channel_remove_finished_voices(ch);
-	if(proc) proc->voice_count -= (proc->voice_count > (int)ch->voice_count) ? (int)(voice_count - ch->voice_count) : 0;
+	if(proc) proc->voice_count -= (proc->voice_count >= (int)ch->voice_count) ? (int)(voice_count - ch->voice_count) : 0;
 }

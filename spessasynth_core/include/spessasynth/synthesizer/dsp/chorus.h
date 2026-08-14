@@ -51,7 +51,7 @@ typedef struct {
 	double feedbackGain;
 } SS_Chorus;
 
-SS_Chorus SPESSASYNTH_EXPORTS *ss_chorus_create(float sampleRate, int maxBufferSize);
+SS_Chorus SPESSASYNTH_EXPORTS *ss_chorus_create(double sampleRate, int maxBufferSize);
 void SPESSASYNTH_EXPORTS ss_chorus_clear(SS_Chorus *chorus);
 void SPESSASYNTH_EXPORTS ss_chorus_free(SS_Chorus *chorus);
 

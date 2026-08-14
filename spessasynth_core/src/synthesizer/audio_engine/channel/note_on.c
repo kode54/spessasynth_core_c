@@ -17,7 +17,7 @@
 #include "spessasynth/synthesizer/synth.h"
 #endif
 
-extern float ss_portamento_time_to_seconds(float portamento_time, float distance);
+extern double ss_portamento_time_to_seconds(double portamento_time, double distance);
 extern void ss_channel_exclusive_release(SS_MIDIChannel *ch, int note, double time);
 extern void ss_channel_remove_finished_voices(SS_MIDIChannel *ch);
 extern void ss_voice_compute_modulators(SS_Voice *v, const SS_MIDIChannel *ch,
@@ -40,7 +40,7 @@ extern void ss_channel_kill_note(SS_MIDIChannel *ch, int note, int release_time,
 
 /* Upstream's killNote default: -12000 timecents, a near-instant release. */
 #define KILL_NOTE_RELEASE_TIME (-12000)
-extern float ss_timecents_to_seconds(int tc);
+extern double ss_timecents_to_seconds(int tc);
 
 static long clamp_long(long val, long min, long max) {
 	if(val < min) return min;
@@ -184,12 +184,12 @@ void ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, b
 		portamento_time > 0; /* Non-instant time? */
 
 	int porta_from_key = -1;
-	float porta_time = 0;
+	double porta_time = 0;
 
 	if(can_apply_portamento) {
 		const int key_distance = abs(note - previous_note);
 		porta_from_key = previous_note;
-		porta_time = ss_portamento_time_to_seconds((float)portamento_time, (float)key_distance);
+		porta_time = ss_portamento_time_to_seconds((double)portamento_time, (double)key_distance);
 		ch->portamento_force = false;
 	}
 
@@ -217,20 +217,20 @@ void ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, b
 	/* Drum parameter checks */
 	int drum_filter_cutoff = -1;
 	int drum_filter_resonance = -1;
-	float drum_pitch_offset = 0.0f;
-	float drum_reverb_send = 1.0f;
-	float drum_chorus_send = 1.0f;
-	float drum_delay_send = 1.0f;
-	float drum_gain = 1.0f;
+	double drum_pitch_offset = 0.0;
+	double drum_reverb_send = 1.0;
+	double drum_chorus_send = 1.0;
+	double drum_delay_send = 1.0;
+	double drum_gain = 1.0;
 	int drum_exclusive_override = 0;
 	bool pan_override_active = false;
-	float pan_override = 0.0f; /* upstream: let panOverride = 0 */
+	double pan_override = 0.0; /* upstream: let panOverride = 0 */
 
 	/* Upstream applies the channel's random pan before the drum block, so a
 	 * drum channel whose key sits at the default pan still pans randomly; the
 	 * drum block only overrides it when the key asks for something. */
 	if(ch->midi_params.random_pan) {
-		pan_override = (float)round(channel_random(ch) * 1000.0 - 500.0);
+		pan_override = round(channel_random(ch) * 1000.0 - 500.0);
 		pan_override_active = true;
 	}
 
@@ -255,11 +255,11 @@ void ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, b
 				pan_override = (float)round(channel_random(ch) * 1000.0 - 500.0);
 				pan_override_active = true;
 			} else {
-				float ch_pan = (float)(ch->midi_controllers[SS_MIDCON_PAN] >> 7) - 64.0f;
-				float target = (float)drum_pan + ch_pan;
-				if(target < -63.0f) target = -63.0f;
-				if(target > 63.0f) target = 63.0f;
-				pan_override = (target / 63.0f) * 500.0f;
+				double ch_pan = (double)(ch->midi_controllers[SS_MIDCON_PAN] >> 7) - 64.0;
+				double target = (double)drum_pan + ch_pan;
+				if(target < -63.0) target = -63.0;
+				if(target > 63.0) target = 63.0;
+				pan_override = (target / 63.0) * 500.0;
 				pan_override_active = true;
 			}
 		}

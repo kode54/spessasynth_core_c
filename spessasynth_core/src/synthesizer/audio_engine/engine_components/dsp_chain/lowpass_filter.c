@@ -15,10 +15,10 @@
 #include "spessasynth/synthesizer/synth.h"
 #endif
 
-#define FILTER_SMOOTHING_FACTOR 0.03f
+#define FILTER_SMOOTHING_FACTOR 0.03
 
-extern float ss_abs_cents_to_hz(int cents);
-extern float ss_centibel_attenuation_to_gain(double cb);
+extern double ss_abs_cents_to_hz(int cents);
+extern double ss_centibel_attenuation_to_gain(double cb);
 
 /* ── Cached coefficient table ───────────────────────────────────────────────
  * Indexed as cache[resonance_cb][cutoff_cents_floor].
@@ -58,7 +58,7 @@ static CachedCoeff *get_cached(int resonance_cb, int cutoff_cents) {
 
 /* ── Coefficient calculation ─────────────────────────────────────────────── */
 
-static void calculate_coefficients(SS_LowpassFilter *f, float cutoff_cents) {
+static void calculate_coefficients(SS_LowpassFilter *f, double cutoff_cents) {
 	int ci = (int)cutoff_cents; /* floor */
 	ss_lowpass_ensure_cache();
 	ss_mutex_enter(coeff_mutex);
@@ -74,29 +74,29 @@ static void calculate_coefficients(SS_LowpassFilter *f, float cutoff_cents) {
 	}
 	ss_mutex_leave(coeff_mutex);
 
-	float cutoff_hz = ss_abs_cents_to_hz(ci);
+	double cutoff_hz = ss_abs_cents_to_hz(ci);
 	if(cutoff_hz > f->max_cutoff) cutoff_hz = f->max_cutoff;
 
-	float q_cb = (float)f->resonance_cb;
-	float res_gain = ss_centibel_attenuation_to_gain(-(q_cb - 3.01f));
-	float q_gain = 1.0f / sqrtf(ss_centibel_attenuation_to_gain(-q_cb));
+	const double q_cb = f->resonance_cb;
+	const double res_gain = ss_centibel_attenuation_to_gain(-(q_cb - 3.01));
+	const double q_gain = 1.0 / sqrt(ss_centibel_attenuation_to_gain(-q_cb));
 
-	double w = (2.0 * M_PI * (double)cutoff_hz) / (double)f->sample_rate;
-	double cosw = cos(w);
-	double alpha = sin(w) / (2.0 * (double)res_gain);
+	const double w = (2.0 * M_PI * cutoff_hz) / (double)f->sample_rate;
+	const double cosw = cos(w);
+	const double alpha = sin(w) / (2.0 * res_gain);
 
-	double b1 = (1.0 - cosw) * (double)q_gain;
-	double b0 = b1 / 2.0;
-	double b2 = b0;
-	double a0 = 1.0 + alpha;
-	double a1 = -2.0 * cosw;
-	double a2 = 1.0 - alpha;
+	const double b1 = (1.0 - cosw) * (double)q_gain;
+	const double b0 = b1 / 2.0;
+	const double b2 = b0;
+	const double a0 = 1.0 + alpha;
+	const double a1 = -2.0 * cosw;
+	const double a2 = 1.0 - alpha;
 
-	double ra0 = b0 / a0;
-	double ra1 = b1 / a0;
-	double ra2 = b2 / a0;
-	double ra3 = a1 / a0;
-	double ra4 = a2 / a0;
+	const double ra0 = b0 / a0;
+	const double ra1 = b1 / a0;
+	const double ra2 = b2 / a0;
+	const double ra3 = a1 / a0;
+	const double ra4 = a2 / a0;
 
 	f->a0 = ra0;
 	f->a1 = ra1;
@@ -121,9 +121,9 @@ static void calculate_coefficients(SS_LowpassFilter *f, float cutoff_cents) {
 void ss_lowpass_filter_init(SS_LowpassFilter *f, uint32_t sample_rate) {
 	memset(f, 0, sizeof(*f));
 	f->sample_rate = sample_rate;
-	f->current_initial_fc = 13500.0f;
-	f->last_target_cutoff = 1e38f; /* effectively Infinity */
-	f->max_cutoff = (float)sample_rate * 0.45f;
+	f->current_initial_fc = 13500.0;
+	f->last_target_cutoff = 1e38; /* effectively Infinity */
+	f->max_cutoff = (double)sample_rate * 0.45;
 	f->initialized = false;
 }
 
@@ -140,7 +140,7 @@ void ss_lowpass_filter_prewarm(uint32_t sample_rate) {
 void ss_lowpass_filter_apply(SS_LowpassFilter *f,
                              const int16_t *mod_gens,
                              float *buffer, int count,
-                             float fc_excursion, float smoothing,
+                             double fc_excursion, double smoothing,
                              double gain, double gain_inc) {
 	int initial_fc = mod_gens[SS_GEN_INITIAL_FILTER_FC];
 
@@ -149,16 +149,16 @@ void ss_lowpass_filter_apply(SS_LowpassFilter *f,
 		 * We only smooth out the initialFc part,
 		 * the modulation envelope and LFO excursions are not smoothed.
 		 */
-		f->current_initial_fc += ((float)initial_fc - f->current_initial_fc) * smoothing;
+		f->current_initial_fc += ((double)initial_fc - f->current_initial_fc) * smoothing;
 	} else {
 		/* Filter initialization, set the current fc to target */
 		f->initialized = true;
-		f->current_initial_fc = (float)initial_fc;
+		f->current_initial_fc = (double)initial_fc;
 	}
 
 	/* The final cutoff for this calculation */
-	float target_cutoff = f->current_initial_fc + fc_excursion;
-	int mod_resonance = mod_gens[SS_GEN_INITIAL_FILTER_Q];
+	const double target_cutoff = f->current_initial_fc + fc_excursion;
+	const int mod_resonance = mod_gens[SS_GEN_INITIAL_FILTER_Q];
 
 	/* Note:
 	 * the check for initialFC is because of the filter optimization
@@ -166,8 +166,8 @@ void ss_lowpass_filter_apply(SS_LowpassFilter *f,
 	 * filter cannot use this optimization if it's dynamic (see #53), and
 	 * the filter can only be dynamic if the initial filter is not open
 	 */
-	if(f->current_initial_fc > 13499.0f && target_cutoff > 13499.0f && mod_resonance == 0) {
-		f->current_initial_fc = 13500.0f;
+	if(f->current_initial_fc > 13499.0 && target_cutoff > 13499.0 && mod_resonance == 0) {
+		f->current_initial_fc = 13500.0;
 		/* Filter is open, apply gain */
 		for(int i = 0; i < count; i++) {
 			buffer[i] = (float)((double)buffer[i] * gain);
@@ -177,7 +177,7 @@ void ss_lowpass_filter_apply(SS_LowpassFilter *f,
 	}
 
 	/* Check if the frequency has changed. if so, calculate new coefficients */
-	if(fabs(f->last_target_cutoff - target_cutoff) > 1.0f || f->resonance_cb != mod_resonance) {
+	if(fabs(f->last_target_cutoff - target_cutoff) > 1.0 || f->resonance_cb != mod_resonance) {
 		f->last_target_cutoff = target_cutoff;
 		f->resonance_cb = mod_resonance;
 		calculate_coefficients(f, target_cutoff);
@@ -189,8 +189,8 @@ void ss_lowpass_filter_apply(SS_LowpassFilter *f,
 	const double a0 = f->a0, a1 = f->a1, a2 = f->a2, a3 = f->a3, a4 = f->a4;
 
 	for(int i = 0; i < count; i++) {
-		double input = (double)buffer[i];
-		double filtered = a0 * input + a1 * x1 + a2 * x2 - a3 * y1 - a4 * y2;
+		const double input = (double)buffer[i];
+		const double filtered = a0 * input + a1 * x1 + a2 * x2 - a3 * y1 - a4 * y2;
 		x2 = x1;
 		x1 = input;
 		y2 = y1;
@@ -199,7 +199,7 @@ void ss_lowpass_filter_apply(SS_LowpassFilter *f,
 		/* Apply filter and THEN gain */
 		/* Per SF2 spec apply order, also see */
 		/* https://github.com/FluidSynth/fluidsynth/issues/1427 */
-		buffer[i] = (float)filtered * gain;
+		buffer[i] = (float)(filtered * gain);
 		gain += gain_inc;
 	}
 

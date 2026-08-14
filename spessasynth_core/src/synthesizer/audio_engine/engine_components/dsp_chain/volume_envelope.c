@@ -17,27 +17,27 @@
 #endif
 
 /* Forward declarations of unit converter functions */
-extern float ss_timecents_to_seconds(int tc);
-extern float ss_centibel_attenuation_to_gain(double db);
+extern double ss_timecents_to_seconds(int tc);
+extern double ss_centibel_attenuation_to_gain(double db);
 
-#define CB_SILENCE 960.0f
-#define PERCEIVED_CB_SILENCE 900.0f
+#define CB_SILENCE 960.0
+#define PERCEIVED_CB_SILENCE 900.0
 
-#define DB_SILENCE 100.0f
-#define PERCEIVED_DB_SILENCE 90.0f
-#define PERCEIVED_GAIN_SILENCE 0.000015f
-#define VOLUME_ENVELOPE_SMOOTHING_FACTOR 0.01f
+#define DB_SILENCE 100.0
+#define PERCEIVED_DB_SILENCE 90.0
+#define PERCEIVED_GAIN_SILENCE 0.000015
+#define VOLUME_ENVELOPE_SMOOTHING_FACTOR 0.01
 
 /* Gain smoothing for rapid volume changes. Must be run EVERY SAMPLE */
 
-#define GAIN_SMOOTHING_FACTOR 0.01f
+#define GAIN_SMOOTHING_FACTOR 0.01
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
 static inline uint64_t timecents_to_samples(int tc, uint32_t sample_rate) {
-	float secs = ss_timecents_to_seconds(tc);
-	if(secs < 0.0f) secs = 0.0f;
-	return (uint64_t)(secs * (float)sample_rate);
+	double secs = ss_timecents_to_seconds(tc);
+	if(secs < 0.0) secs = 0.0;
+	return (uint64_t)(secs * (double)sample_rate);
 }
 
 /* ── ss_volume_envelope_init ─────────────────────────────────────────────── */
@@ -113,8 +113,8 @@ void ss_volume_envelope_start_release(SS_Voice *v,
                                       double start_time) {
 	env->release_start_time_samples = env->sample_time;
 
-	float timecents = v->override_release_vol_env ? (float)v->override_release_vol_env : (float)mod_gens[SS_GEN_RELEASE_VOL_ENV];
-	if(timecents < -7200) timecents = -7200;
+	double timecents = v->override_release_vol_env ? (double)v->override_release_vol_env : (double)mod_gens[SS_GEN_RELEASE_VOL_ENV];
+	if(timecents < -7200.0) timecents = -7200.0;
 
 	env->release_duration = timecents_to_samples((int)timecents, env->sample_rate);
 
@@ -131,7 +131,7 @@ void ss_volume_envelope_start_release(SS_Voice *v,
 
 		double sustain_cb = env->sustain_cb;
 		if(sustain_cb < 0.0)
-			sustain_cb = 0;
+			sustain_cb = 0.0;
 		else if(sustain_cb > CB_SILENCE)
 			sustain_cb = CB_SILENCE;
 		const double fraction = sustain_cb / CB_SILENCE;
@@ -207,7 +207,7 @@ void ss_volume_envelope_start_release(SS_Voice *v,
 /* ── ss_volume_envelope_process ─────────────────────────────────────────── */
 
 bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
-                                int sample_count, float gain_target) {
+                                int sample_count, double gain_target) {
 	const uint64_t release_start_time_samples = env->release_start_time_samples;
 	const double release_start_cb = env->release_start_cb;
 	const uint64_t release_duration = env->release_duration;
@@ -240,7 +240,7 @@ bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
 				if(sample_time < delay_end) {
 					/* Silence */
 					env->attenuation_cb = CB_SILENCE;
-					env->output_gain = 0;
+					env->output_gain = 0.0;
 					return true;
 				}
 				env->state++;
@@ -251,9 +251,9 @@ bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
 				/* Attack phase: ramp from 0 to attenuation */
 				if(sample_time < attack_end) {
 					/* Set current attenuation to peak as its invalid during this phase */
-					env->attenuation_cb = 0;
+					env->attenuation_cb = 0.0;
 					/* Special case: linear gain ramp instead of linear db ramp */
-					const float linear_gain = (float)(1.0 - (double)(attack_end - sample_time) / (double)attack_duration);
+					const double linear_gain = 1.0 - (double)(attack_end - sample_time) / (double)attack_duration;
 					env->output_gain = linear_gain * gain_target;
 					return true;
 				}
@@ -265,7 +265,7 @@ bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
 				/* Hold/peak phase: stay at max volume */
 				if(sample_time < hold_end) {
 					/* Peak, no attenuation */
-					env->attenuation_cb = 0;
+					env->attenuation_cb = 0.0;
 					env->output_gain = gain_target;
 					return true;
 				}
@@ -287,8 +287,8 @@ bool ss_volume_envelope_process(SS_VolumeEnvelope *env,
 				if(env->can_end_on_silent_sustain && sustain_cb >= PERCEIVED_CB_SILENCE) {
 					/* Make sure to fill with silence */
 					/* https://github.com/spessasus/spessasynth_core/issues/57 */
-					env->attenuation_cb = 0;
-					env->output_gain = 0;
+					env->attenuation_cb = 0.0;
+					env->output_gain = 0.0;
 					return false;
 				}
 

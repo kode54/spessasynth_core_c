@@ -24,7 +24,7 @@
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 
-SS_Chorus *ss_chorus_create(float sampleRate, int maxBufferSize) {
+SS_Chorus *ss_chorus_create(double sampleRate, int maxBufferSize) {
 	SS_Chorus *chorus = (SS_Chorus *)calloc(1, sizeof(*chorus));
 	if(!chorus) return NULL;
 
@@ -312,18 +312,22 @@ void ss_chorus_process(SS_Chorus *chorus,
 		bufferR[write] = (float)(inputSample + outR * feedback);
 
 		// Mix outputs
-		*outputL++ += outL * gain;
-		*outputR++ += outR * gain;
+		*outputL = (float)((double)*outputL + outL * gain);
+		*outputR = (float)((double)*outputR + outR * gain);
+		outputL++;
+		outputR++;
 
 		// Mono downmix for effects
 		const double mono = (outL + outR) / 2.0;
 
 		// Mix other effects outputs
 		if(outReverb) {
-			*outputReverb++ += mono * reverbGain;
+			*outputReverb = (float)((double)*outputReverb + mono * reverbGain);
+			outputReverb++;
 		}
 		if(outDelay) {
-			*outputDelay++ += mono * delayGain;
+			*outputDelay = (float)((double)*outputDelay + mono * delayGain);
+			outputDelay++;
 		}
 
 		// Advance pointers

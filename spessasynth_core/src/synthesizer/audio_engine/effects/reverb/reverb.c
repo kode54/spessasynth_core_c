@@ -19,7 +19,7 @@
 #include "spessasynth/synthesizer/dsp/reverb.h"
 #endif
 
-SS_Reverb *ss_reverb_create(float sampleRate, int maxBufferSize) {
+SS_Reverb *ss_reverb_create(double sampleRate, int maxBufferSize) {
 	SS_Reverb *reverb = (SS_Reverb *)calloc(1, sizeof(*reverb));
 	if(!reverb) return NULL;
 
@@ -386,7 +386,7 @@ void ss_reverb_process(SS_Reverb *reverb,
 				for(i = 0; i < sample_count; i++) {
 					const double x = input[i];
 					z += a * (x - z);
-					preLPF[i] = z;
+					preLPF[i] = (float)z;
 				}
 				reverb->preLPFz = z;
 				delayIn = preLPF;
@@ -400,9 +400,11 @@ void ss_reverb_process(SS_Reverb *reverb,
 			const double g = reverb->delayGain;
 			const float *delay = reverb->delayLeftOutput;
 			for(i = 0; i < sample_count; i++) {
-				const double sample = delay[i] * g;
-				*outputL++ += sample;
-				*outputR++ += sample;
+				const double sample = (double)delay[i] * g;
+				*outputL = (float)((double)*outputL + sample);
+				*outputR = (float)((double)*outputR + sample);
+				outputL++;
+				outputR++;
 			}
 			return;
 		}
@@ -418,7 +420,7 @@ void ss_reverb_process(SS_Reverb *reverb,
 				for(i = 0; i < sample_count; i++) {
 					const double x = input[i];
 					z += a * (x - z);
-					preLPF[i] = z;
+					preLPF[i] = (float)z;
 				}
 				reverb->preLPFz = z;
 				delayIn = preLPF;
@@ -432,7 +434,7 @@ void ss_reverb_process(SS_Reverb *reverb,
 			float *delayLeftOutput = reverb->delayLeftOutput;
 			float *delayRightOutput = reverb->delayRightOutput;
 			for(i = 0; i < sample_count; i++) {
-				delayLeftInput[i] = delayIn[i] + delayRightOutput[i] * fb;
+				delayLeftInput[i] = (float)(delayIn[i] + (double)delayRightOutput[i] * fb);
 			}
 			// Process left
 			ss_delay_line_process(reverb->delayLeft, delayLeftInput, delayLeftOutput, sample_count);
@@ -441,8 +443,10 @@ void ss_reverb_process(SS_Reverb *reverb,
 			// Mix
 			const double g = reverb->delayGain;
 			for(i = 0; i < sample_count; i++) {
-				*outputL++ += delayLeftOutput[i] * g;
-				*outputR++ += delayRightOutput[i] * g;
+				*outputL = (float)((double)*outputL + (double)delayLeftOutput[i] * g);
+				*outputR = (float)((double)*outputR + (double)delayRightOutput[i] * g);
+				outputL++;
+				outputR++;
 			}
 			return;
 		}

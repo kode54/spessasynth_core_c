@@ -72,12 +72,12 @@ void ss_phaser_process(SS_InsertionProcessor *self,
 
 		const double outL = (sL + apL * p->mix) * p->level;
 		const double outR = (sR + apR * p->mix) * p->level;
-		oL[start + i] += outL;
-		oR[start + i] += outR;
+		oL[start + i] = (float)((double)oL[start + i] + outL);
+		oR[start + i] = (float)((double)oR[start + i] + outR);
 		const double mono = (outL + outR) * 0.5;
-		if(oRev) oRev[i] += mono * rev;
-		if(oCho) oCho[i] += mono * cho;
-		if(oDel) oDel[i] += mono * del;
+		if(oRev) oRev[i] = (float)((double)oRev[i] + mono * rev);
+		if(oCho) oCho[i] = (float)((double)oCho[i] + mono * cho);
+		if(oDel) oDel[i] = (float)((double)oDel[i] + mono * del);
 	}
 	p->phase = phase;
 	p->prev_l = prevL;
@@ -145,7 +145,7 @@ static void phaser_free(SS_InsertionProcessor *self) {
 
 void ss_phaser_init(SS_PhaserFX *e, uint32_t type, uint32_t sample_rate, bool owned) {
 	e->base.type = type;
-	e->base.send_level_to_reverb = owned ? 40.0f / 127.0f : 0.0f;
+	e->base.send_level_to_reverb = owned ? 40.0 / 127.0 : 0.0;
 	e->base.send_level_to_chorus = 0;
 	e->base.send_level_to_delay = 0;
 	e->base.process = ss_phaser_process;

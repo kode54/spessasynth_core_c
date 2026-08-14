@@ -29,7 +29,7 @@ SS_DelayLine SPESSASYNTH_EXPORTS *ss_delay_line_create(unsigned int maxDelay);
 
 /** Set the delay in samples, clamped to the buffer length and truncated to a
  *  whole sample.  Negative values clamp to zero. */
-void SPESSASYNTH_EXPORTS ss_delay_line_set_time(SS_DelayLine *delayLine, float samples);
+void SPESSASYNTH_EXPORTS ss_delay_line_set_time(SS_DelayLine *delayLine, double samples);
 void SPESSASYNTH_EXPORTS ss_delay_line_process(SS_DelayLine *delayLine,
                                                const float *in, float *out,
                                                int sample_count);

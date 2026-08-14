@@ -47,12 +47,12 @@ extern float ss_pan_table_left[128];
 extern float ss_pan_table_right[128];
 void ss_init_insertion_pan_tables(void);
 
-float ss_compute_lfo(int wave, float phase);
+double ss_compute_lfo(int wave, double phase);
 
 /* Hot-path helpers stay inline: they run per sample. */
 
 static inline double ss_biquad_process(SS_Biquad *c, SS_BiquadState *s, double x) {
-	double y = c->b0 * x + c->b1 * s->x1 + c->b2 * s->x2 - c->a1 * s->y1 - c->a2 * s->y2;
+	const double y = c->b0 * x + c->b1 * s->x1 + c->b2 * s->x2 - c->a1 * s->y1 - c->a2 * s->y2;
 	s->x2 = s->x1;
 	s->x1 = x;
 	s->y2 = s->y1;
@@ -64,12 +64,12 @@ static inline double ss_biquad_process(SS_Biquad *c, SS_BiquadState *s, double x
 static inline double ss_apply_shelves(double x,
                                       SS_Biquad *lc, SS_BiquadState *ls,
                                       SS_Biquad *hc, SS_BiquadState *hs) {
-	double l = lc->b0 * x + lc->b1 * ls->x1 + lc->b2 * ls->x2 - lc->a1 * ls->y1 - lc->a2 * ls->y2;
+	const double l = lc->b0 * x + lc->b1 * ls->x1 + lc->b2 * ls->x2 - lc->a1 * ls->y1 - lc->a2 * ls->y2;
 	ls->x2 = ls->x1;
 	ls->x1 = x;
 	ls->y2 = ls->y1;
 	ls->y1 = l;
-	double h = hc->b0 * l + hc->b1 * hs->x1 + hc->b2 * hs->x2 - hc->a1 * hs->y1 - hc->a2 * hs->y2;
+	const double h = hc->b0 * l + hc->b1 * hs->x1 + hc->b2 * hs->x2 - hc->a1 * hs->y1 - hc->a2 * hs->y2;
 	hs->x2 = hs->x1;
 	hs->x1 = l;
 	hs->y2 = hs->y1;

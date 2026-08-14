@@ -79,13 +79,13 @@ void ss_auto_wah_process(SS_InsertionProcessor *self,
 		double lfo = 2.0 * fabs(phase - 0.5) * depth;
 		if((phase += rate_inc) >= 1.0) phase -= 1.0;
 
-		float lfo_mul;
+		double lfo_mul;
 		if(lfo >= AW_LFO_SMOOTH || pol < 0)
 			lfo_mul = 1.0;
 		else
-			lfo_mul = sin(lfo * (float)M_PI / (2.0 * AW_LFO_SMOOTH));
+			lfo_mul = sin(lfo * M_PI / (2.0 * AW_LFO_SMOOTH));
 
-		double base = e->manual * (1.0 + sens * (float)env * AW_SENS_COEFF);
+		double base = e->manual * (1.0 + sens * env * AW_SENS_COEFF);
 		double fc = base * (1.0 + lfo_mul * lfo);
 		if(fc < 20.0) fc = 20.0;
 		double target = fc < 10.0 ? 10.0 : fc;
@@ -100,11 +100,11 @@ void ss_auto_wah_process(SS_InsertionProcessor *self,
 		}
 		double mono = (float)ss_biquad_process(&e->coeffs, &e->state, proc) * e->level;
 
-		oL[start + i] += mono * gainL;
-		oR[start + i] += mono * gainR;
-		if(oRev) oRev[i] += mono * rev;
-		if(oCho) oCho[i] += mono * cho;
-		if(oDel) oDel[i] += mono * del;
+		oL[start + i] = (float)((double)oL[start + i] + mono * gainL);
+		oR[start + i] = (float)((double)oR[start + i] + mono * gainR);
+		if(oRev) oRev[i] = (float)((double)oRev[i] + mono * rev);
+		if(oCho) oCho[i] = (float)((double)oCho[i] + mono * cho);
+		if(oDel) oDel[i] = (float)((double)oDel[i] + mono * del);
 	}
 	e->phase = phase;
 	e->last_fc = last_fc;
@@ -118,34 +118,34 @@ void ss_auto_wah_set_param(SS_InsertionProcessor *self, int p, int v) {
 			e->fil_type = v;
 			break;
 		case 0x04:
-			e->sens = (float)v;
+			e->sens = (double)v;
 			break;
 		case 0x05:
 			aw_set_manual(e, v);
 			break;
 		case 0x06:
-			e->peak = (float)v;
+			e->peak = (double)v;
 			break;
 		case 0x07:
 			e->rate = ss_ivc_rate1(v);
 			break;
 		case 0x08:
-			e->depth = (float)v;
+			e->depth = (double)v;
 			break;
 		case 0x09:
 			e->polarity = v;
 			break;
 		case 0x13:
-			e->low_gain = (float)(v - 64);
+			e->low_gain = (double)(v - 64);
 			break;
 		case 0x14:
-			e->hi_gain = (float)(v - 64);
+			e->hi_gain = (double)(v - 64);
 			break;
 		case 0x15:
-			e->pan = (float)(v - 64);
+			e->pan = (double)(v - 64);
 			break;
 		case 0x16:
-			e->level = (float)v / 127.0;
+			e->level = (double)v / 127.0;
 			break;
 		default:
 			break;

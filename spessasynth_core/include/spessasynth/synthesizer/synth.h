@@ -92,7 +92,7 @@ void SPESSASYNTH_EXPORTS ss_lowpass_filter_init(SS_LowpassFilter *f, uint32_t sa
 void SPESSASYNTH_EXPORTS ss_lowpass_filter_apply(SS_LowpassFilter *f,
                                                  const int16_t *modulated_generators,
                                                  float *buffer, int count,
-                                                 float fc_excursion, float smoothing,
+                                                 double fc_excursion, double smoothing,
                                                  double gain, double gain_inc);
 
 /* ── Volume envelope ─────────────────────────────────────────────────────── */
@@ -147,15 +147,15 @@ typedef struct {
 /* ── Per-key drum parameters (XG / GS) ───────────────────────────────────── */
 
 typedef struct {
-	float pitch; /* pitch offset in cents (default 0) */
-	float gain; /* gain multiplier (default 1) */
+	double pitch; /* pitch offset in cents (default 0) */
+	double gain; /* gain multiplier (default 1) */
 	uint8_t exclusive_class; /* exclusive class override (default 0 = off) */
 	uint8_t pan; /* pan 1-127 (64=center, 0=random), default 64 */
 	uint8_t filter_cutoff; /* filter cutoff frequency, default 64 */
 	uint8_t filter_resonance; /* filter resonance, default 0 */
-	float reverb_gain; /* reverb send multiplier (default 0) */
-	float chorus_gain; /* chorus send multiplier (default 1) */
-	float delay_gain; /* delay send multiplier (default 1) */
+	double reverb_gain; /* reverb send multiplier (default 0) */
+	double chorus_gain; /* chorus send multiplier (default 1) */
+	double delay_gain; /* delay send multiplier (default 1) */
 	bool rx_note_on; /* receive note on (default true) */
 	bool rx_note_off; /* receive note off, fast-kill on off (default false) */
 } SS_DrumParameters;
@@ -342,11 +342,11 @@ typedef struct {
 	int voice_cap; /* maximum number of simultaneous voices */
 	bool auto_allocate_voices; /* allocate instead of stealing at the cap */
 
-	float reverb_gain; /* 0..n, 1 == 100% reverb */
+	double reverb_gain; /* 0..n, 1 == 100% reverb */
 	bool reverb_lock; /* prevent MIDI edits of the reverb */
-	float chorus_gain; /* 0..n, 1 == 100% chorus */
+	double chorus_gain; /* 0..n, 1 == 100% chorus */
 	bool chorus_lock; /* prevent MIDI edits of the chorus */
-	float delay_gain; /* 0..n, 1 == 100% delay */
+	double delay_gain; /* 0..n, 1 == 100% delay */
 	bool delay_lock; /* prevent MIDI edits of the delay */
 	bool insertion_effect_lock; /* prevent MIDI edits of the insertion EFX */
 	bool drum_lock; /* prevent MIDI edits of the drum parameters */
@@ -355,10 +355,10 @@ typedef struct {
 	int device_id; /* SysEx device ID, -1 accepts all */
 
 	/* Shared with channel: summed into the channel current_* aggregates. */
-	float gain; /* master gain, 1 == 100% */
-	float pan; /* master pan, -1 left .. 1 right */
-	float key_shift; /* global key shift in semitones (drums ignore) */
-	float fine_tune; /* global tuning in cents (drums ignore) */
+	double gain; /* master gain, 1 == 100% */
+	double pan; /* master pan, -1 left .. 1 right */
+	double key_shift; /* global key shift in semitones (drums ignore) */
+	double fine_tune; /* global tuning in cents (drums ignore) */
 
 	SS_InterpolationType interpolation_type;
 	bool nrpn_param_lock; /* prevent changing parameters via NRPN */
@@ -370,10 +370,10 @@ typedef struct {
  */
 typedef struct {
 	SS_MIDISystem system; /* GM, GM2, GS, XG */
-	float key_shift; /* global key shift in semitones (drums ignore) */
-	float fine_tune; /* global tuning in cents (drums ignore) */
-	float gain; /* global volume gain */
-	float pan; /* global panning, -1 left .. 1 right */
+	double key_shift; /* global key shift in semitones (drums ignore) */
+	double fine_tune; /* global tuning in cents (drums ignore) */
+	double gain; /* global volume gain */
+	double pan; /* global panning, -1 left .. 1 right */
 } SS_GlobalMIDIParameter;
 
 /**
@@ -385,10 +385,10 @@ typedef struct {
 	bool is_muted; /* whether the channel is muted */
 
 	/* Shared with the synth: summed into the channel current_* aggregates. */
-	float gain; /* channel gain, 1 == 100% */
-	float pan; /* channel pan, -1 left .. 1 right */
-	float key_shift; /* channel key shift in semitones */
-	float fine_tune; /* channel tuning in cents */
+	double gain; /* channel gain, 1 == 100% */
+	double pan; /* channel pan, -1 left .. 1 right */
+	double key_shift; /* channel key shift in semitones */
+	double fine_tune; /* channel tuning in cents */
 
 	int interpolation_type; /* SS_InterpolationType, or SS_PARAM_UNSET */
 	int8_t nrpn_param_lock; /* tri-state, SS_PARAM_UNSET = inherit */
@@ -406,8 +406,8 @@ typedef struct {
 typedef struct {
 	int rx_channel; /* receive channel override (-1 == off) */
 	bool poly_mode; /* true = polyphonic, false = monophonic */
-	float fine_tune; /* RPN/SysEx fine tuning in cents */
-	float key_shift; /* RPN#2/SysEx key shift in semitones */
+	double fine_tune; /* RPN/SysEx fine tuning in cents */
+	double key_shift; /* RPN#2/SysEx key shift in semitones */
 	bool random_pan; /* random panning for every note */
 	int assign_mode; /* voice assignment mode (0=Single, 2=FullMulti) */
 	bool efx_assign; /* route voices through the insertion EFX */
@@ -509,7 +509,7 @@ typedef struct SS_MIDIChannel {
 	/* Aggregates recomputed by ss_channel_update_internal_params() from the
 	 * four parameter structs; consumed on the hot rendering path. */
 	double current_gain; /* output gain multiplier */
-	float current_pan; /* added pan offset in the -500..500 range */
+	double current_pan; /* added pan offset in the -500..500 range */
 	double current_tuning; /* added tuning in cents */
 	int current_key_shift; /* added key shift in semitones */
 
@@ -675,7 +675,7 @@ typedef void (*SS_EventCallback)(const SS_SynthEvent *event, void *userdata);
 
 typedef struct {
 	int midi_note;
-	float cent_tuning;
+	double cent_tuning;
 } SS_TuningEntry;
 
 /* ── Processor (synthesis engine) ────────────────────────────────────────── */
@@ -740,7 +740,7 @@ typedef struct SS_Processor {
 	SS_GlobalSystemParameter system_params;
 	SS_GlobalMIDIParameter midi_params;
 	SS_TuningEntry **tunings; /* [128][128] MTS tuning grid, or NULL */
-	float pan_left, pan_right;
+	double pan_left, pan_right;
 	double volume_envelope_smoothing_factor;
 	double filter_smoothing_factor;
 	double pan_smoothing_factor;

@@ -51,12 +51,12 @@ static void tremolo_process(SS_InsertionProcessor *self,
 
 		double outL = sL * e->level * cur_gain;
 		double outR = sR * e->level * cur_gain;
-		oL[start + i] += outL;
-		oR[start + i] += outR;
+		oL[start + i] = (float)((double)oL[start + i] + outL);
+		oR[start + i] = (float)((double)oR[start + i] + outR);
 		double mono = (outL + outR) * 0.5;
-		if(oRev) oRev[i] += mono * rev;
-		if(oCho) oCho[i] += mono * cho;
-		if(oDel) oDel[i] += mono * del;
+		if(oRev) oRev[i] = (float)((double)oRev[i] + mono * rev);
+		if(oCho) oCho[i] = (float)((double)oCho[i] + mono * cho);
+		if(oDel) oDel[i] = (float)((double)oDel[i] + mono * del);
 	}
 	e->phase = phase;
 	e->current_gain = cur_gain;
@@ -72,16 +72,16 @@ static void tremolo_set_param(SS_InsertionProcessor *self, int p, int v) {
 			e->mod_rate = ss_ivc_rate1(v);
 			break;
 		case 0x05:
-			e->mod_depth = (float)v;
+			e->mod_depth = (double)v;
 			break;
 		case 0x13:
-			e->low_gain = (float)(v - 64);
+			e->low_gain = (double)(v - 64);
 			break;
 		case 0x14:
-			e->hi_gain = (float)(v - 64);
+			e->hi_gain = (double)(v - 64);
 			break;
 		case 0x16:
-			e->level = (float)v / 127.0;
+			e->level = (double)v / 127.0;
 			break;
 		default:
 			break;
@@ -111,7 +111,6 @@ static void tremolo_free(SS_InsertionProcessor *self) {
 
 SS_InsertionProcessor *ss_insertion_tremolo_create(uint32_t type, uint32_t sample_rate,
                                 uint32_t max_buf_size) {
-	(void)sample_rate;
 	(void)max_buf_size;
 	SS_TremoloFX *e = (SS_TremoloFX *)calloc(1, sizeof(SS_TremoloFX));
 	if(!e) return NULL;
