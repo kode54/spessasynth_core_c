@@ -18,11 +18,15 @@ static bool get_sample_nearest(SS_Voice *v, float *out, int count, double step) 
 	SS_AudioSample *s = &v->sample;
 	double cur = s->cursor;
 	const float *data = s->sample_data;
+	bool has_looped = s->has_looped;
 
 	if(s->is_looping) {
 		double loop_len = (double)(s->loop_end - s->loop_start);
 		for(int i = 0; i < count; i++) {
-			while(cur >= (double)s->loop_end) cur -= loop_len;
+			while(cur >= (double)s->loop_end) {
+				cur -= loop_len;
+				has_looped = true;
+			}
 			int floor_i = (int)cur;
 			out[i] = data[floor_i];
 			cur += step;
@@ -39,6 +43,7 @@ static bool get_sample_nearest(SS_Voice *v, float *out, int count, double step) 
 		}
 	}
 	s->cursor = cur;
+	s->has_looped = has_looped;
 	return true;
 }
 
@@ -48,11 +53,15 @@ static bool get_sample_linear(SS_Voice *v, float *out, int count, double step) {
 	SS_AudioSample *s = &v->sample;
 	double cur = s->cursor;
 	const float *data = s->sample_data;
+	bool has_looped = s->has_looped;
 
 	if(s->is_looping) {
 		double loop_len = (double)(s->loop_end - s->loop_start);
 		for(int i = 0; i < count; i++) {
-			while(cur >= (double)s->loop_end) cur -= loop_len;
+			while(cur >= (double)s->loop_end) {
+				cur -= loop_len;
+				has_looped = true;
+			}
 			int floor_i = (int)cur;
 			int ceil_i = floor_i + 1;
 			while(ceil_i >= (int)s->loop_end) ceil_i -= (int)loop_len;
@@ -78,6 +87,7 @@ static bool get_sample_linear(SS_Voice *v, float *out, int count, double step) {
 		}
 	}
 	s->cursor = cur;
+	s->has_looped = has_looped;
 	return true;
 }
 
@@ -87,11 +97,15 @@ static bool get_sample_hermite(SS_Voice *v, float *out, int count, double step) 
 	SS_AudioSample *s = &v->sample;
 	double cur = s->cursor;
 	const float *data = s->sample_data;
+	bool has_looped = s->has_looped;
 
 	if(s->is_looping) {
 		int loop_len = (int)(s->loop_end - s->loop_start);
 		for(int i = 0; i < count; i++) {
-			while(cur >= (double)s->loop_end) cur -= (double)loop_len;
+			while(cur >= (double)s->loop_end) {
+				cur -= (double)loop_len;
+				has_looped = true;
+			}
 			int y0 = (int)cur;
 			int y1 = y0 + 1, y2 = y0 + 2, y3 = y0 + 3;
 			const double t = cur - (double)y0;
@@ -133,6 +147,7 @@ static bool get_sample_hermite(SS_Voice *v, float *out, int count, double step) 
 		}
 	}
 	s->cursor = cur;
+	s->has_looped = has_looped;
 	return true;
 }
 
@@ -242,7 +257,7 @@ static inline void sinc_span(double step, double *scale_out, int *half_out) {
  * the buffer instead of wrapping. */
 static float itpSinc(const float *buf, double pos, double step,
                      size_t loop_start, size_t loop_end, size_t loop_length,
-                     size_t buffer_length) {
+                     size_t buffer_length, bool has_looped) {
 	const double base_f = floor(pos);
 	const long base = (long)base_f;
 	const double fraction = pos - base_f;
@@ -265,16 +280,14 @@ static float itpSinc(const float *buf, double pos, double step,
 			if(at >= (long)loop_end) {
 				at = (long)loop_start +
 				     (long)(((size_t)(at - (long)loop_start)) % loop_length);
-			} else if(at < (long)loop_start) {
+			} else if(has_looped && at < (long)loop_start) {
 				const long behind = (long)loop_start - at;
 				const long wrapped = (long)(((size_t)(behind - 1)) % loop_length);
 				at = (long)loop_end - 1 - wrapped;
 			}
-		} else {
-			if(at < 0) at = 0;
-			if(buffer_length && at >= (long)buffer_length) at = (long)buffer_length - 1;
 		}
 		if(at < 0) continue;
+		if(buffer_length && at >= buffer_length) break;
 
 		sum += (double)buf[at] * w;
 		density += w;
@@ -288,13 +301,17 @@ static bool get_sample_sinc(SS_Voice *v, float *out, int count, double step) {
 	SS_AudioSample *s = &v->sample;
 	double cur = s->cursor;
 	const float *data = s->sample_data;
+	bool has_looped = s->has_looped;
 
 	if(s->is_looping) {
 		int loop_len = (int)(s->loop_end - s->loop_start);
 		for(int i = 0; i < count; i++) {
-			while(cur >= (double)s->loop_end) cur -= (double)loop_len;
+			while(cur >= (double)s->loop_end) {
+				cur -= (double)loop_len;
+				has_looped = true;
+			}
 			out[i] = itpSinc(data, cur, step, s->loop_start, s->loop_end,
-			                 (size_t)loop_len, s->sample_data_len);
+			                 (size_t)loop_len, s->sample_data_len, has_looped);
 			cur += step;
 		}
 	} else {
@@ -303,11 +320,12 @@ static bool get_sample_sinc(SS_Voice *v, float *out, int count, double step) {
 				memset(out + i, 0, (count - i) * sizeof(float));
 				return false;
 			}
-			out[i] = itpSinc(data, cur, step, 0, 0, 0, s->sample_data_len);
+			out[i] = itpSinc(data, cur, step, 0, 0, 0, s->sample_data_len, false);
 			cur += step;
 		}
 	}
 	s->cursor = cur;
+	s->has_looped = has_looped;
 	return true;
 }
 

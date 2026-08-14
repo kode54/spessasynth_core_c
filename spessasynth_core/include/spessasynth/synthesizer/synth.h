@@ -62,6 +62,7 @@ typedef struct {
 	size_t end; /* last valid sample index */
 	SS_SampleLoopingMode looping_mode;
 	bool is_looping;
+	bool has_looped;
 } SS_AudioSample;
 
 /* ── Timing constants ────────────────────────────────────────────────────── */

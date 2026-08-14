@@ -343,6 +343,7 @@ void ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, b
 		audio.looping_mode = (SS_SampleLoopingMode)generators[SS_GEN_SAMPLE_MODES];
 		audio.is_looping = (audio.looping_mode == SS_LOOP_LOOP ||
 		                    audio.looping_mode == SS_LOOP_LOOP_RELEASE);
+		/* audio.has_looped = false; */
 
 		/* Playback step */
 		uint32_t sr = proc ? proc->sample_rate : 44100;
@@ -455,6 +456,7 @@ void ss_channel_note_on_ex(SS_MIDIChannel *ch, int note, int vel, double time, b
 		}
 		voice->sample.is_looping = (voice->sample.looping_mode == SS_LOOP_LOOP ||
 		                            voice->sample.looping_mode == SS_LOOP_LOOP_RELEASE);
+		voice->sample.has_looped = false;
 
 		voice->note_id = note_id;
 
