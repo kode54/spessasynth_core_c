@@ -247,6 +247,12 @@ void SPESSASYNTH_EXPORTS ss_sequencer_set_skip_to_first_note_on(SS_Sequencer *se
  */
 bool SPESSASYNTH_EXPORTS ss_sequencer_is_lead_in(const SS_Sequencer *seq);
 
+/** Start playback at the first note-on instead of tick 0, skipping a
+ *  setup-only lead-in.  Default: true, matching upstream.  Pass false to
+ *  play files with their exact original timing.  Takes effect on the next
+ *  load or seek. */
+void SPESSASYNTH_EXPORTS ss_sequencer_set_skip_to_first_note_on(SS_Sequencer *seq, bool skip);
+
 /** Configure the post-loop fade duration in seconds.  Only used when
  *  loop_count is finite, the MIDI has loop markers and the loop-end
  *  behavior is SS_LOOP_END_FADE.  Default: 7.0. */
