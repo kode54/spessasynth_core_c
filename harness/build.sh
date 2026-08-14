@@ -71,6 +71,12 @@ esac
 
 "$CC" -O2 -g -std=c11 -Wall -Wextra \
     -I"$CORE_SRC/include" \
+    -o "$BUILD_DIR/chan_probe" \
+    "$HERE/tools/chan_probe.c" \
+    "$LIB" "${RPATH[@]}" "${EXTRA_LIBS[@]}"
+
+"$CC" -O2 -g -std=c11 -Wall -Wextra \
+    -I"$CORE_SRC/include" \
     -o "$BUILD_DIR/sinc_test" \
     "$HERE/tools/sinc_test.c" \
     "$LIB" "${RPATH[@]}" "${EXTRA_LIBS[@]}"
@@ -80,4 +86,5 @@ echo "Built $BUILD_DIR/callback_lead_in_test"
 echo "Built $BUILD_DIR/seek_test"
 echo "Built $BUILD_DIR/midi_convert"
 echo "Built $BUILD_DIR/event_queue_test"
+echo "Built $BUILD_DIR/chan_probe"
 echo "Built $BUILD_DIR/sinc_test"

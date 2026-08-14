@@ -204,6 +204,15 @@ typedef struct SS_BasicPreset {
 
 void SPESSASYNTH_EXPORTS ss_preset_free(SS_BasicPreset *p);
 
+/**
+ * Whether a bank MSB is one of the XG drum banks.
+ * 126 (XG SFX drums) is deliberately omitted: it is unwanted most of the
+ * time, and a direct bank match will find it anyway.
+ */
+static inline bool ss_bank_msb_is_xg_drum(unsigned int bank_msb) {
+	return bank_msb == 120 || bank_msb == 127;
+}
+
 bool SPESSASYNTH_EXPORTS ss_preset_is_xg_drum(const SS_BasicPreset *p);
 bool SPESSASYNTH_EXPORTS ss_preset_is_drum(const SS_BasicPreset *p);
 

@@ -1011,7 +1011,7 @@ SS_BasicPreset *ss_soundbanks_find_preset(SS_SoundBank **banks,
 		bank_msb = midi_system == SS_SYSTEM_GM2 ? 120 : 127;
 	}
 
-	const bool xgDrums = (bank_msb == 120 || bank_msb == 127) && isXG;
+	const bool xgDrums = ss_bank_msb_is_xg_drum(bank_msb) && isXG;
 
 	for(size_t b = 0; b < bank_count; b++) {
 		SS_SoundBank *bank = banks[b];
@@ -1265,7 +1265,7 @@ SS_BasicPreset *ss_filtered_banks_find_preset(SS_FilteredBank *const *fbanks,
 		bank_msb = midi_system == SS_SYSTEM_GM2 ? 120 : 127;
 	}
 
-	const bool xgDrums = (bank_msb == 120 || bank_msb == 127) && isXG;
+	const bool xgDrums = ss_bank_msb_is_xg_drum(bank_msb) && isXG;
 
 	for(size_t b = 0; b < fbank_count; b++) {
 		SS_FilteredBank *fb = fbanks[b];
@@ -1467,7 +1467,7 @@ static void soundbank_parse(SS_SoundBank *bank) {
 
 	for(size_t i = 0; i < bank->preset_count; i++) {
 		SS_BasicPreset *p = &bank->presets[i];
-		if(p->bank_msb == 120 || p->bank_msb == 127) {
+		if(ss_bank_msb_is_xg_drum(p->bank_msb)) {
 			bank->is_xg_bank = true;
 			if(p->program < 128 && !allowedPrograms[p->program]) {
 				// Not valid!
@@ -1533,9 +1533,16 @@ void ss_preset_precache(SS_BasicPreset *p) {
 }
 
 bool ss_preset_is_xg_drum(const SS_BasicPreset *p) {
-	return p->bank_msb == 120 || p->bank_msb == 127;
+	/* An XG drum preset is any drum preset that is not a GM/GS one. */
+	return ss_preset_is_drum(p) && !p->is_gm_gs_drum;
 }
 
 bool ss_preset_is_drum(const SS_BasicPreset *p) {
-	return p->is_gm_gs_drum || ss_preset_is_xg_drum(p);
+	/* Bank MSB 120/127 only means drums when the parent bank is a valid XG
+	 * bank.  Plenty of GS banks put melodic "MT" presets on bank 127, and
+	 * treating those as drums makes a drum channel pick a piano.
+	 * Testcase: 4gmgsmt-sf2_04-compat.sf2, TyrolandGS30 (bank 127 = CM-64). */
+	return p->is_gm_gs_drum ||
+	       (p->parent_bank && p->parent_bank->is_xg_bank &&
+	        ss_bank_msb_is_xg_drum(p->bank_msb));
 }
