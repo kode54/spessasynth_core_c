@@ -4,6 +4,7 @@
  * Direct port of wavetable_oscillator.ts.
  */
 
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <string.h>
 #if __has_include(<spessasynth_core/spessasynth.h>)
