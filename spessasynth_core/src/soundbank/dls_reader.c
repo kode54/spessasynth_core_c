@@ -1615,12 +1615,17 @@ static bool parse_wave_pool(SS_File *waves_file,
 
 		if(!pcm_data || pcm_len == 0) continue;
 
+		const size_t bytes_per_sample = (bits_per_sample + 7) / 8;
+		const size_t bytes_per_frame = bytes_per_sample * num_channels;
+		if(block_align < bytes_per_frame) {
+			block_align = bytes_per_frame;
+		}
+
 		s->sample_rate = sample_rate;
 		s->sample_type = SS_SAMPLE_TYPE_MONO;
 		s->audio_file_block_align = block_align;
 
-		size_t bytes_per_sample = bits_per_sample / 8;
-		size_t total_frames = pcm_len / (bytes_per_sample * num_channels);
+		const size_t total_frames = pcm_len / block_align;
 
 		if(fmt_tag == 1 && bits_per_sample == 16) {
 			s->audio_file = pcm_data;
