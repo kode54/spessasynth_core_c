@@ -618,6 +618,9 @@ void ss_processor_process_message(SS_Processor *proc, const uint8_t *data,
 		/* Dropping a scheduled message would desynchronize the song far worse
 		 * than applying it a block early, so fall back to immediate dispatch. */
 		if(!grown) { process_message_internal(proc, data, length, channel_offset); return; }
+		/* Initialize the new elements to zero in case of failure anywhere */
+		memset(grown + proc->event_queue_allocated, 0,
+		       (want - proc->event_queue_allocated) * sizeof(*grown));
 		proc->event_queue = grown;
 		proc->event_queue_allocated = want;
 	}
