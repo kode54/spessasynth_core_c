@@ -423,8 +423,6 @@ static void scan_loops(SS_MIDIFile *m) {
 }
 
 static void scan_loops_form2(SS_MIDIFile *m) {
-	assert(m->format == 2);
-
 	const bool any_emidi = ss_midi_has_emidi(m);
 
 	for(size_t ti = 0; ti < m->track_count; ti++) {
