@@ -23,6 +23,19 @@
 extern "C" {
 #endif
 
+/* ── Loop points ─────────────────────────────────────────────────────────── */
+
+typedef enum {
+	SS_LOOP_TYPE_HARD = 0,
+	SS_LOOP_TYPE_SOFT = 1
+} SS_MIDILoopType;
+
+typedef struct {
+	size_t start;
+	size_t end;
+	SS_MIDILoopType type;
+} SS_MIDILoop;
+
 /* ── A single MIDI event ─────────────────────────────────────────────────── */
 
 typedef struct {
@@ -46,6 +59,7 @@ typedef struct {
 	SS_MIDIMessage *events;
 	size_t event_count;
 	size_t event_capacity;
+	SS_MIDILoop loop;
 } SS_MIDITrack;
 
 SS_MIDITrack SPESSASYNTH_EXPORTS *ss_midi_track_new(void);
@@ -59,19 +73,6 @@ typedef struct {
 	size_t ticks;
 	double tempo; /* BPM */
 } SS_TempoChange;
-
-/* ── Loop points ─────────────────────────────────────────────────────────── */
-
-typedef enum {
-	SS_LOOP_TYPE_HARD = 0,
-	SS_LOOP_TYPE_SOFT = 1
-} SS_MIDILoopType;
-
-typedef struct {
-	size_t start;
-	size_t end;
-	SS_MIDILoopType type;
-} SS_MIDILoop;
 
 /* ── RMID info fields ─────────────────────────────────────────────────────── */
 

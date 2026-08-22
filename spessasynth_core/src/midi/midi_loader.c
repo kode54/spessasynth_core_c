@@ -422,6 +422,108 @@ static void scan_loops(SS_MIDIFile *m) {
 	m->loop.type = loop_type;
 }
 
+static void scan_loops_form2(SS_MIDIFile *m) {
+	assert(m->format == 2);
+
+	const bool any_emidi = ss_midi_has_emidi(m);
+
+	for(size_t ti = 0; ti < m->track_count; ti++) {
+		size_t loop_start = LOOP_UNSET;
+		size_t loop_end = LOOP_UNSET;
+		SS_MIDILoopType loop_type = SS_LOOP_TYPE_HARD;
+
+		const SS_MIDITrack *t = &m->tracks[ti];
+
+		bool any_designation = false; /* CC 110 at the head of a track */
+		size_t leapfrog_start = LOOP_UNSET; /* earliest CC 110 within the song */
+		if(!any_emidi) {
+			for(size_t ei = 0; ei < t->event_count; ei++) {
+				const SS_MIDIMessage *e = &t->events[ei];
+				if(!is_cc(e) || e->data[0] != 110) continue;
+				if(e->ticks <= 1) {
+					any_designation = true;
+				} else if(leapfrog_start == LOOP_UNSET ||
+				          e->ticks < leapfrog_start) {
+					leapfrog_start = e->ticks;
+				}
+			}
+		}
+		const bool leapfrog = leapfrog_start != LOOP_UNSET;
+
+		if(!any_emidi && !any_designation && !leapfrog) {
+			for(size_t ei = 0; ei < t->event_count; ei++) {
+				const SS_MIDIMessage *e = &t->events[ei];
+				if(!is_cc(e) || e->data[0] != 111 || e->data[1] != 0) continue;
+				if(loop_start == LOOP_UNSET || e->ticks < loop_start)
+					loop_start = e->ticks;
+			}
+		}
+
+		if(leapfrog) {
+			if(loop_start == LOOP_UNSET || leapfrog_start < loop_start)
+				loop_start = leapfrog_start;
+			size_t lf_end = LOOP_UNSET;
+			for(size_t ei = 0; ei < t->event_count; ei++) {
+				const SS_MIDIMessage *e = &t->events[ei];
+				if(!is_cc(e) || e->data[0] != 111) continue;
+				if(e->ticks < leapfrog_start) continue;
+				if(lf_end == LOOP_UNSET || e->ticks > lf_end)
+					lf_end = e->ticks;
+			}
+			if(lf_end != LOOP_UNSET) {
+				if(loop_end == LOOP_UNSET || lf_end > loop_end)
+					loop_end = lf_end;
+				loop_type = SS_LOOP_TYPE_SOFT;
+			}
+		}
+
+		for(size_t ei = 0; ei < t->event_count; ei++) {
+			const SS_MIDIMessage *e = &t->events[ei];
+			if(!is_cc(e)) continue;
+			uint8_t cc = e->data[0];
+			if(cc == 0x74 || cc == 0x76) {
+				if(loop_start == LOOP_UNSET || e->ticks < loop_start)
+					loop_start = e->ticks;
+			} else if(cc == 0x75 || cc == 0x77) {
+				if(loop_end == LOOP_UNSET || e->ticks > loop_end)
+					loop_end = e->ticks;
+				loop_type = SS_LOOP_TYPE_SOFT;
+			}
+		}
+
+		for(size_t ei = 0; ei < t->event_count; ei++) {
+			const SS_MIDIMessage *e = &t->events[ei];
+			if(e->status_byte != SS_META_MARKER) continue;
+			char lower[64];
+			str_lower_trim((const char *)e->data,
+			               e->data_length < 63 ? e->data_length : 63,
+			               lower, sizeof(lower));
+			if(strcmp(lower, "loopstart") == 0 || strcmp(lower, "start") == 0) {
+				if(loop_start == LOOP_UNSET || e->ticks < loop_start)
+					loop_start = e->ticks;
+			} else if(strcmp(lower, "loopend") == 0) {
+				if(loop_end == LOOP_UNSET || e->ticks > loop_end)
+					loop_end = e->ticks;
+			}
+		}
+
+		if(loop_start != LOOP_UNSET) {
+			if(loop_start == loop_end ||
+			   loop_start == m->last_voice_event_tick) {
+				loop_start = LOOP_UNSET;
+				loop_end = LOOP_UNSET;
+			}
+		}
+
+		if(loop_start != LOOP_UNSET && loop_end == LOOP_UNSET)
+			loop_end = m->last_voice_event_tick;
+
+		m->tracks[ti].loop.start = (loop_start != LOOP_UNSET) ? loop_start : 0;
+		m->tracks[ti].loop.end = (loop_end != LOOP_UNSET) ? loop_end : 0;
+		m->tracks[ti].loop.type = loop_type;
+	}
+}
+
 /* ── Port resolution ─────────────────────────────────────────────────────── */
 
 /*
@@ -760,7 +862,10 @@ static void midi_parse_internal(SS_MIDIFile *m) {
 	}
 
 	/* Run the four loop scanners now that last_voice_event_tick is known. */
-	scan_loops(m);
+	if(m->format != 2)
+		scan_loops(m);
+	else
+		scan_loops_form2(m);
 
 	/* Compute duration */
 	m->duration = ss_midi_ticks_to_seconds(m, m->last_voice_event_tick);
