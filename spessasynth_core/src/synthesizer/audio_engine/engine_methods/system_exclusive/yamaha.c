@@ -27,11 +27,11 @@ extern void ss_channel_set_pitch_wheel_range(SS_MIDIChannel *ch, int value);
 /**
  * Handles a Yamaha XG system exclusive
  * http://www.studio4all.de/htmle/main91.html
- * @param proc
- * @param syx
- * @param len
- * @param t
- * @param channel_offset
+ * @param proc           the processor the message is for.
+ * @param syx            message bytes after 0xF0, manufacturer ID first.
+ * @param len            length of @p syx in bytes.
+ * @param t              seconds on the engine clock.
+ * @param channel_offset added to the message's channel, for multi-port setups.
  */
 void ss_sysex_yamaha(SS_Processor *proc, const uint8_t *syx, size_t len, double t, int channel_offset) {
 	/*  data[0]=0x43, data[1]=0x10 (parameter change), data[2]=0x4c (XG),

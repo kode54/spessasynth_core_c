@@ -22,11 +22,11 @@ void ss_processor_set_midi_volume(SS_Processor *proc, double volume);
 
 /**
  * Handles a Universal system exclusive (realtime/non-realtime)
- * @param proc
- * @param syx
- * @param len
- * @param t
- * @param channel_offset
+ * @param proc           the processor the message is for.
+ * @param syx            message bytes after 0xF0, manufacturer ID first.
+ * @param len            length of @p syx in bytes.
+ * @param t              seconds on the engine clock.
+ * @param channel_offset added to the message's channel, for multi-port setups.
  */
 void ss_sysex_universal(SS_Processor *proc, const uint8_t *syx, size_t len, double t, int channel_offset) {
 	if(len < 4) return;
