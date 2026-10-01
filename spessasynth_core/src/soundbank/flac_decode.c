@@ -6,7 +6,16 @@
 
 #ifdef SS_HAVE_LIBFLAC
 
+/* libFLAC's header documents a parameter under the wrong name, which
+   clang's -Wdocumentation reports in every file including it. */
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdocumentation"
+#endif
 #include <FLAC/stream_decoder.h>
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 #include <stdlib.h>
 #include <string.h>
 #if __has_include(<spessasynth_core/spessasynth.h>)
