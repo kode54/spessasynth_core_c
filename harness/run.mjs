@@ -60,7 +60,7 @@ const FALLBACK_SF = path.join(
  * capitalization is load-bearing on Linux and forgiven on macOS, so it is
  * written once here rather than per path.
  */
-const CORPUS_SF_NAME = "TyrolandGS30finalfixed.sf2";
+const CORPUS_SF_NAME = "TyrolandGS30finalfixedupDrums.sf2";
 const CORPUS_SF_DIRS = [
     "/Users/Shared/SoundFonts", // macOS development
     "/usr/share/soundfonts" // Linux
