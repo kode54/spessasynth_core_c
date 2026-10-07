@@ -110,9 +110,12 @@ static bool get_sample_hermite(SS_Voice *v, float *out, int count, double step) 
 			int y0 = (int)cur;
 			int y1 = y0 + 1, y2 = y0 + 2, y3 = y0 + 3;
 			const double t = cur - (double)y0;
-			if(y1 >= (int)s->loop_end) y1 -= loop_len;
-			if(y2 >= (int)s->loop_end) y2 -= loop_len;
-			if(y3 >= (int)s->loop_end) y3 -= loop_len;
+			/* A single subtraction is not enough when the loop is shorter than
+			 * the interpolation window (e.g. OmegaGMGS2.sf2 Crash Cymbal, loop
+			 * length 1) */
+			while(y1 >= (int)s->loop_end) y1 -= loop_len;
+			while(y2 >= (int)s->loop_end) y2 -= loop_len;
+			while(y3 >= (int)s->loop_end) y3 -= loop_len;
 			const double xm1 = data[y0];
 			const double x0 = data[y1];
 			const double x1 = data[y2];
